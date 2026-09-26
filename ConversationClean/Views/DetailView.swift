@@ -164,6 +164,8 @@ struct DetailView: View {
             return "未在 Zed 存储目录检测到 AI 助手会话。"
         case .openHands:
             return "未在 OpenHands/OpenDevin 目录检测到会话记录。"
+        case .antigravity:
+            return "未在 ~/.gemini/antigravity/ 检测到 Antigravity 会话记录。"
         }
     }
 }
@@ -185,6 +187,7 @@ func categoryColor(_ category: ConversationCategory) -> Color {
     case .openViking: return .brown
     case .zed: return .gray
     case .openHands: return .orange
+    case .antigravity: return .purple
     }
 }
 

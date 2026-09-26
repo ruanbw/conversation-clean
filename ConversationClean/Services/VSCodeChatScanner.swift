@@ -155,12 +155,24 @@ final class VSCodeChatScanner: AgentScanner, @unchecked Sendable {
         guard !items.isEmpty else { return 0 }
 
         var totalFreed: Int64 = 0
+        var stateDbToSessions: [URL: Set<String>] = [:]
 
         for item in items {
             totalFreed += item.sizeInBytes
             for path in item.associatedPaths {
+                let fileURL = URL(fileURLWithPath: path)
+                if path.contains("chatSessions") {
+                    let wsDir = fileURL.deletingLastPathComponent().deletingLastPathComponent()
+                    let stateDbURL = wsDir.appendingPathComponent("state.vscdb")
+                    stateDbToSessions[stateDbURL, default: []].insert(item.sessionId)
+                }
                 _ = FileSizeHelper.removeIfExists(path: path)
             }
+        }
+
+        // Atomically sync state.vscdb indexes so VS Code Chat history never leaves ghost sessions
+        for (stateDbURL, sessionIds) in stateDbToSessions {
+            VSCDBHelper.removeChatSessions(from: stateDbURL, sessionIds: sessionIds)
         }
 
         // Clean empty directories in workspaceStorage
@@ -204,6 +216,12 @@ final class VSCodeChatScanner: AgentScanner, @unchecked Sendable {
                     if FileSizeHelper.removeIfExists(path: copilotDir.path) {
                         freed += sz
                     }
+                }
+
+                // Clean and vacuum state.vscdb chat indexes
+                let stateDb = wsDir.appendingPathComponent("state.vscdb")
+                if fileManager.fileExists(atPath: stateDb.path) {
+                    VSCDBHelper.clearAllChatSessions(from: stateDb)
                 }
             }
         }

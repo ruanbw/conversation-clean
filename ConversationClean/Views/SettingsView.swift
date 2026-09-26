@@ -25,7 +25,7 @@ struct SettingsView: View {
             }
 
             Form {
-                Section("受支持的 Local Agents (14 款)") {
+                Section("受支持的 Local Agents (15 款)") {
                     AgentPathRow(
                         name: "Claude Code",
                         icon: "terminal.fill",
@@ -125,6 +125,13 @@ struct SettingsView: View {
                         color: .orange,
                         path: OpenHandsScanner().storageURL.path
                     )
+
+                    AgentPathRow(
+                        name: "Antigravity",
+                        icon: "sparkles.rectangle.stack",
+                        color: .purple,
+                        path: AntigravityScanner().storageURL.path
+                    )
                 }
             }
             .padding(20)
@@ -142,7 +149,7 @@ struct SettingsView: View {
                 Text("版本 1.0.0")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Text("全面支持 14 款本地 CLI、IDE 插件、AI 原生编辑器及自主 Agent 框架（Claude Code、Codex、Pi Agent、Cline、Roo Code、Continue、GitHub Copilot、Cursor、Windsurf、Trae、Aider、OpenViking、Zed AI、OpenHands）的会话扫描与安全清理。")
+                Text("全面支持 15 款本地 CLI、IDE 插件、AI 原生编辑器及自主 Agent 框架（Claude Code、Codex、Pi Agent、Cline、Roo Code、Continue、GitHub Copilot、Cursor、Windsurf、Trae、Aider、OpenViking、Zed AI、OpenHands、Antigravity）的会话扫描与安全清理。")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)

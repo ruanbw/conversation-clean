@@ -16,6 +16,7 @@ enum ConversationCategory: String, CaseIterable, Identifiable {
     case openViking = "OpenViking"
     case zed = "Zed AI"
     case openHands = "OpenHands"
+    case antigravity = "Antigravity"
 
     var id: String { rawValue }
 
@@ -51,6 +52,8 @@ enum ConversationCategory: String, CaseIterable, Identifiable {
             return "character.textbox"
         case .openHands:
             return "hand.raised.fill"
+        case .antigravity:
+            return "sparkles.rectangle.stack"
         }
     }
 }

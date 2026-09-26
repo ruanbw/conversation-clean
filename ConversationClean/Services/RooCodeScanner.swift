@@ -1,6 +1,6 @@
 import Foundation
 
-final class RooCodeScanner: ClineScanner {
+final class RooCodeScanner: ClineScanner, @unchecked Sendable {
     override var category: ConversationCategory { .rooCode }
 
     override var envVarName: String { "ROO_CODE_HOME" }

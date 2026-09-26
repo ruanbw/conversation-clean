@@ -31,6 +31,8 @@
 		CC0100232D00000100000001 /* CursorScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200232D00000100000001 /* CursorScanner.swift */; };
 		CC0100242D00000100000001 /* WindsurfScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200242D00000100000001 /* WindsurfScanner.swift */; };
 		CC0100252D00000100000001 /* TraeScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200252D00000100000001 /* TraeScanner.swift */; };
+		CC0100262D00000100000001 /* VSCDBHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200262D00000100000001 /* VSCDBHelper.swift */; };
+		CC0100272D00000100000001 /* AntigravityScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200272D00000100000001 /* AntigravityScanner.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -60,6 +62,8 @@
 		CC0200232D00000100000001 /* CursorScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorScanner.swift; sourceTree = "<group>"; };
 		CC0200242D00000100000001 /* WindsurfScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindsurfScanner.swift; sourceTree = "<group>"; };
 		CC0200252D00000100000001 /* TraeScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TraeScanner.swift; sourceTree = "<group>"; };
+		CC0200262D00000100000001 /* VSCDBHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VSCDBHelper.swift; sourceTree = "<group>"; };
+		CC0200272D00000100000001 /* AntigravityScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AntigravityScanner.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -141,6 +145,8 @@
 				CC0200232D00000100000001 /* CursorScanner.swift */,
 				CC0200242D00000100000001 /* WindsurfScanner.swift */,
 				CC0200252D00000100000001 /* TraeScanner.swift */,
+				CC0200262D00000100000001 /* VSCDBHelper.swift */,
+				CC0200272D00000100000001 /* AntigravityScanner.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -245,6 +251,8 @@
 				CC0100232D00000100000001 /* CursorScanner.swift in Sources */,
 				CC0100242D00000100000001 /* WindsurfScanner.swift in Sources */,
 				CC0100252D00000100000001 /* TraeScanner.swift in Sources */,
+				CC0100262D00000100000001 /* VSCDBHelper.swift in Sources */,
+				CC0100272D00000100000001 /* AntigravityScanner.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

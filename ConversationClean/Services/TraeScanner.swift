@@ -143,12 +143,24 @@ final class TraeScanner: AgentScanner, @unchecked Sendable {
         guard !items.isEmpty else { return 0 }
 
         var totalFreed: Int64 = 0
+        var stateDbToSessions: [URL: Set<String>] = [:]
 
         for item in items {
             totalFreed += item.sizeInBytes
             for path in item.associatedPaths {
+                let fileURL = URL(fileURLWithPath: path)
+                if path.contains("chatSessions") {
+                    let wsDir = fileURL.deletingLastPathComponent().deletingLastPathComponent()
+                    let stateDbURL = wsDir.appendingPathComponent("state.vscdb")
+                    stateDbToSessions[stateDbURL, default: []].insert(item.sessionId)
+                }
                 _ = FileSizeHelper.removeIfExists(path: path)
             }
+        }
+
+        // Atomically sync state.vscdb indexes to prevent ghost sessions in Trae
+        for (stateDbURL, sessionIds) in stateDbToSessions {
+            VSCDBHelper.removeChatSessions(from: stateDbURL, sessionIds: sessionIds)
         }
 
         cleanEmptyWorkspaceStorageDirs()
@@ -186,6 +198,12 @@ final class TraeScanner: AgentScanner, @unchecked Sendable {
                     if FileSizeHelper.removeIfExists(path: editDir.path) {
                         freed += sz
                     }
+                }
+
+                // Clean and vacuum state.vscdb chat indexes
+                let stateDb = wsDir.appendingPathComponent("state.vscdb")
+                if fileManager.fileExists(atPath: stateDb.path) {
+                    VSCDBHelper.clearAllChatSessions(from: stateDb)
                 }
             }
         }

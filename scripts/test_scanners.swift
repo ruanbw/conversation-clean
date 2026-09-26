@@ -1886,7 +1886,7 @@ func testMockAiderScanner() async {
     TestRunner.assertTest(scanner.isInstalled, "Mock scanner isInstalled is true", testName: testName)
 
     do {
-        var items = try await scanner.scan()
+        let items = try await scanner.scan()
         TestRunner.assertTest(!items.isEmpty, "Detected project Aider item", testName: testName)
 
         if let item = items.first(where: { $0.projectPath == projDir.path }) {
@@ -2160,6 +2160,408 @@ func testMockOpenHandsScanner() async {
     }
 }
 
+// MARK: - Test: Real Antigravity Scanner (READ-ONLY)
+
+func testRealAntigravityScannerReadOnly() async {
+    TestRunner.printSection("Test: Real Antigravity Scanner (READ-ONLY)")
+    let testName = "RealAntigravityReadOnly"
+
+    let realScanner = AntigravityScanner()
+
+    TestRunner.printSubSection("Checking Installation and Storage URL")
+    let homePath = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent(".gemini/antigravity").path
+    TestRunner.assertTest(TestRunner.canonicalPath(realScanner.storageURL.path) == TestRunner.canonicalPath(homePath), "storageURL correctly points to ~/.gemini/antigravity", testName: testName)
+    TestRunner.assertTest(realScanner.category == .antigravity, "Category is .antigravity", testName: testName)
+
+    let isRealInstalled = FileManager.default.fileExists(atPath: realScanner.storageURL.path)
+    TestRunner.assertTest(realScanner.isInstalled == isRealInstalled, "isInstalled matches filesystem check (\(isRealInstalled))", testName: testName)
+
+    if !isRealInstalled {
+        print("  \u{001B}[33m[INFO] ~/.gemini/antigravity not found on system. Skipping real file scan checks.\u{001B}[0m")
+        return
+    }
+
+    TestRunner.printSubSection("Scanning Real Local Antigravity Sessions (READ-ONLY)")
+    do {
+        let items = try await realScanner.scan()
+        TestRunner.assertTest(true, "scan() executed without throwing an error", testName: testName)
+        print("  \u{001B}[34m[INFO] Scanned \(items.count) sessions from real Antigravity\u{001B}[0m")
+        TestRunner.assertTest(!items.isEmpty, "Detected real Antigravity sessions (count: \(items.count))", testName: testName)
+
+        let allAntigravity = items.allSatisfy { $0.category == .antigravity }
+        TestRunner.assertTest(allAntigravity, "All items have category .antigravity", testName: testName)
+
+        let allHaveSessionId = items.allSatisfy { !$0.sessionId.isEmpty }
+        TestRunner.assertTest(allHaveSessionId, "All items have valid non-empty sessionId", testName: testName)
+
+        // Verify descending sort order by updatedAt
+        var isSorted = true
+        for i in 0..<(items.count - 1) {
+            if items[i].updatedAt < items[i + 1].updatedAt {
+                isSorted = false
+                break
+            }
+        }
+        TestRunner.assertTest(isSorted, "Items are sorted by updatedAt descending", testName: testName)
+
+        // Verify associated paths exist on disk
+        var associatedPathsValid = true
+        for item in items {
+            for path in item.associatedPaths {
+                if !FileManager.default.fileExists(atPath: path) {
+                    associatedPathsValid = false
+                    break
+                }
+            }
+            if !associatedPathsValid { break }
+        }
+        TestRunner.assertTest(associatedPathsValid, "All associatedPaths exist on the real filesystem", testName: testName)
+
+        // Active conversation preservation
+        TestRunner.printSubSection("Verifying Active Conversation Preservation")
+        TestRunner.assertTest(realScanner.activeConversationId != nil, "activeConversationId is non-nil", testName: testName)
+        if let activeId = realScanner.activeConversationId,
+           let activeItem = items.first(where: { $0.sessionId == activeId }) {
+            TestRunner.assertTest(true, "Found active conversation in scanned items (id: \(activeId))", testName: testName)
+
+            // Attempting delete on active conversation must be safely rejected / return 0
+            let freed = try await realScanner.delete(items: [activeItem])
+            TestRunner.assertTest(freed == 0, "Deleting active conversation safely returns 0 freed bytes (preservation check)", testName: testName)
+
+            // Ensure active conversation associated paths still exist
+            let activePathsStillExist = activeItem.associatedPaths.allSatisfy { FileManager.default.fileExists(atPath: $0) }
+            TestRunner.assertTest(activePathsStillExist, "Active conversation files remain intact on disk", testName: testName)
+        } else {
+            TestRunner.assertTest(true, "Active conversation checked", testName: testName)
+        }
+    } catch {
+        TestRunner.assertTest(false, "scan() threw unexpected error: \(error)", testName: testName)
+    }
+}
+
+// MARK: - Test: Mock Antigravity Scanner
+
+func testMockAntigravityScanner() async {
+    TestRunner.printSection("Test: Mock Antigravity Scanner (Fixture Directory)")
+    let testName = "MockAntigravityScan"
+
+    let fm = FileManager.default
+    let tempDir = TestRunner.createTempDirectory(prefix: "mock_antigravity_scan")
+    defer { try? fm.removeItem(at: tempDir) }
+
+    TestRunner.printSubSection("Setting up Mock Antigravity Structure")
+    let brainDir = tempDir.appendingPathComponent("brain")
+    let conversationsDir = tempDir.appendingPathComponent("conversations")
+    let annotationsDir = tempDir.appendingPathComponent("annotations")
+    let dbURL = tempDir.appendingPathComponent("conversation_summaries.db")
+
+    try? fm.createDirectory(at: brainDir, withIntermediateDirectories: true)
+    try? fm.createDirectory(at: conversationsDir, withIntermediateDirectories: true)
+    try? fm.createDirectory(at: annotationsDir, withIntermediateDirectories: true)
+
+    let sid1 = "mock-antigravity-001"
+    let sid2 = "mock-antigravity-002"
+    let sidOrphan = "mock-antigravity-orphan-003"
+
+    // Session 1: brain directory, conversation db, wal, annotation
+    let brain1 = brainDir.appendingPathComponent(sid1)
+    try? fm.createDirectory(at: brain1, withIntermediateDirectories: true)
+    try? "brain artifact s1".write(to: brain1.appendingPathComponent("artifact.txt"), atomically: true, encoding: .utf8)
+
+    let conv1 = conversationsDir.appendingPathComponent("\(sid1).db")
+    try? "mock sqlite s1 db".write(to: conv1, atomically: true, encoding: .utf8)
+    let conv1Wal = conversationsDir.appendingPathComponent("\(sid1).db-wal")
+    try? "mock sqlite s1 wal".write(to: conv1Wal, atomically: true, encoding: .utf8)
+
+    let annot1 = annotationsDir.appendingPathComponent("\(sid1).pbtxt")
+    try? "annotations: { id: 1 }".write(to: annot1, atomically: true, encoding: .utf8)
+
+    // Session 2: brain directory and conversation db
+    let brain2 = brainDir.appendingPathComponent(sid2)
+    try? fm.createDirectory(at: brain2, withIntermediateDirectories: true)
+    try? "brain artifact s2".write(to: brain2.appendingPathComponent("notes.md"), atomically: true, encoding: .utf8)
+
+    let conv2 = conversationsDir.appendingPathComponent("\(sid2).db")
+    try? "mock sqlite s2 db".write(to: conv2, atomically: true, encoding: .utf8)
+
+    // Orphaned session in brain/ (not in conversation_summaries.db)
+    let brainOrphan = brainDir.appendingPathComponent(sidOrphan)
+    try? fm.createDirectory(at: brainOrphan, withIntermediateDirectories: true)
+    try? "orphan brain artifact".write(to: brainOrphan.appendingPathComponent("data.bin"), atomically: true, encoding: .utf8)
+
+    // Create SQLite database conversation_summaries.db
+    var db: OpaquePointer?
+    if sqlite3_open(dbURL.path, &db) == SQLITE_OK, let db = db {
+        let createSQL = """
+        CREATE TABLE conversation_summaries (
+            conversation_id TEXT PRIMARY KEY,
+            title TEXT NOT NULL DEFAULT '',
+            preview TEXT NOT NULL DEFAULT '',
+            step_count INTEGER NOT NULL DEFAULT 0,
+            last_modified_time DATETIME NOT NULL,
+            workspace_uris TEXT NOT NULL DEFAULT ''
+        );
+        """
+        sqlite3_exec(db, createSQL, nil, nil, nil)
+
+        let insertSQL = "INSERT INTO conversation_summaries (conversation_id, title, preview, step_count, last_modified_time, workspace_uris) VALUES (?, ?, ?, ?, ?, ?);"
+        var stmt: OpaquePointer?
+        if sqlite3_prepare_v2(db, insertSQL, -1, &stmt, nil) == SQLITE_OK {
+            // Row 1
+            sqlite3_bind_text(stmt, 1, (sid1 as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 2, ("Antigravity Code Generation" as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 3, ("Implement unit tests in Swift" as NSString).utf8String, -1, nil)
+            sqlite3_bind_int(stmt, 4, 12)
+            sqlite3_bind_text(stmt, 5, ("2026-09-26T10:00:00.000Z" as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 6, ("file:///Users/tester/antigravity-project" as NSString).utf8String, -1, nil)
+            sqlite3_step(stmt)
+            sqlite3_reset(stmt)
+
+            // Row 2
+            sqlite3_bind_text(stmt, 1, (sid2 as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 2, ("Refactor Database Service" as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 3, ("Sync VSCDB state keys" as NSString).utf8String, -1, nil)
+            sqlite3_bind_int(stmt, 4, 6)
+            sqlite3_bind_text(stmt, 5, ("2026-09-26T11:00:00.000Z" as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 6, ("[\"file:///Users/tester/vscdb-project\"]" as NSString).utf8String, -1, nil)
+            sqlite3_step(stmt)
+            sqlite3_finalize(stmt)
+        }
+        sqlite3_close(db)
+    }
+
+    TestRunner.printSubSection("Executing Mock Antigravity Scanner")
+    let scanner = AntigravityScanner(baseURL: tempDir)
+    TestRunner.assertTest(scanner.isInstalled, "scanner.isInstalled is true for fixture directory", testName: testName)
+    TestRunner.assertTest(scanner.category == .antigravity, "Category is .antigravity", testName: testName)
+
+    do {
+        var items = try await scanner.scan()
+        TestRunner.assertTest(items.count == 3, "Detected 3 sessions (2 from DB + 1 orphan, found: \(items.count))", testName: testName)
+
+        // Verify Session 1
+        if let item1 = items.first(where: { $0.sessionId == sid1 }) {
+            TestRunner.assertTest(item1.title == "Antigravity Code Generation", "Session 1 title matches DB (\(item1.title))", testName: testName)
+            TestRunner.assertTest(item1.projectPath == "/Users/tester/antigravity-project", "Session 1 projectPath parsed correctly (\(item1.projectPath ?? "nil"))", testName: testName)
+            TestRunner.assertTest(item1.messageCount == 12, "Session 1 messageCount is 12", testName: testName)
+            TestRunner.assertTest(item1.snippet == "Implement unit tests in Swift", "Session 1 snippet matches DB preview", testName: testName)
+            TestRunner.assertTest(item1.associatedPaths.contains(brain1.path), "Session 1 associatedPaths contains brain dir", testName: testName)
+            TestRunner.assertTest(item1.associatedPaths.contains(conv1.path), "Session 1 associatedPaths contains conversation db", testName: testName)
+            TestRunner.assertTest(item1.associatedPaths.contains(conv1Wal.path), "Session 1 associatedPaths contains db-wal", testName: testName)
+            TestRunner.assertTest(item1.associatedPaths.contains(annot1.path), "Session 1 associatedPaths contains annotation file", testName: testName)
+        } else {
+            TestRunner.assertTest(false, "Session 1 not found in scan results", testName: testName)
+        }
+
+        // Verify Session 2
+        if let item2 = items.first(where: { $0.sessionId == sid2 }) {
+            TestRunner.assertTest(item2.title == "Refactor Database Service", "Session 2 title matches DB", testName: testName)
+            TestRunner.assertTest(item2.projectPath == "/Users/tester/vscdb-project", "Session 2 projectPath parsed from JSON array URI", testName: testName)
+            TestRunner.assertTest(item2.messageCount == 6, "Session 2 messageCount is 6", testName: testName)
+        } else {
+            TestRunner.assertTest(false, "Session 2 not found in scan results", testName: testName)
+        }
+
+        // Verify Orphan Session
+        if let orphan = items.first(where: { $0.sessionId == sidOrphan }) {
+            TestRunner.assertTest(orphan.title.contains("孤立的 Antigravity 记忆工件"), "Orphan session has expected title", testName: testName)
+            TestRunner.assertTest(orphan.associatedPaths.contains(brainOrphan.path), "Orphan session associatedPaths contains brain folder", testName: testName)
+        } else {
+            TestRunner.assertTest(false, "Orphan session not found in scan results", testName: testName)
+        }
+
+        // Test Single Session Deletion: Delete Session 1
+        TestRunner.printSubSection("Testing Single Session Deletion and DB Row Removal")
+        if let item1 = items.first(where: { $0.sessionId == sid1 }) {
+            let freed1 = try await scanner.delete(items: [item1])
+            TestRunner.assertTest(freed1 == item1.sizeInBytes, "Freed bytes matches item 1 size (\(freed1) == \(item1.sizeInBytes))", testName: testName)
+
+            // Verify files on disk removed for session 1
+            TestRunner.assertTest(!fm.fileExists(atPath: brain1.path), "Session 1 brain folder removed from disk", testName: testName)
+            TestRunner.assertTest(!fm.fileExists(atPath: conv1.path), "Session 1 conversation db removed from disk", testName: testName)
+            TestRunner.assertTest(!fm.fileExists(atPath: conv1Wal.path), "Session 1 conversation wal removed from disk", testName: testName)
+            TestRunner.assertTest(!fm.fileExists(atPath: annot1.path), "Session 1 annotation file removed from disk", testName: testName)
+
+            // Verify session 2 and orphan files still exist
+            TestRunner.assertTest(fm.fileExists(atPath: brain2.path), "Session 2 brain folder still exists", testName: testName)
+            TestRunner.assertTest(fm.fileExists(atPath: conv2.path), "Session 2 conversation db still exists", testName: testName)
+            TestRunner.assertTest(fm.fileExists(atPath: brainOrphan.path), "Orphan brain folder still exists", testName: testName)
+
+            // Verify row in conversation_summaries.db is physically deleted via SELECT * FROM conversation_summaries WHERE conversation_id = ?
+            var checkDb: OpaquePointer?
+            if sqlite3_open_v2(dbURL.path, &checkDb, SQLITE_OPEN_READONLY, nil) == SQLITE_OK, let checkDb = checkDb {
+                let querySQL = "SELECT * FROM conversation_summaries WHERE conversation_id = ?;"
+                var qStmt: OpaquePointer?
+                if sqlite3_prepare_v2(checkDb, querySQL, -1, &qStmt, nil) == SQLITE_OK {
+                    sqlite3_bind_text(qStmt, 1, (sid1 as NSString).utf8String, -1, nil)
+                    let stepResult = sqlite3_step(qStmt)
+                    TestRunner.assertTest(stepResult == SQLITE_DONE, "Session 1 row physically deleted from conversation_summaries.db (step returned SQLITE_DONE)", testName: testName)
+                    sqlite3_reset(qStmt)
+
+                    sqlite3_bind_text(qStmt, 1, (sid2 as NSString).utf8String, -1, nil)
+                    let stepResult2 = sqlite3_step(qStmt)
+                    TestRunner.assertTest(stepResult2 == SQLITE_ROW, "Session 2 row still present in conversation_summaries.db (step returned SQLITE_ROW)", testName: testName)
+                    sqlite3_finalize(qStmt)
+                }
+                sqlite3_close(checkDb)
+            }
+        }
+
+        // Test cleanAll()
+        TestRunner.printSubSection("Testing cleanAll()")
+        let allFreed = try await scanner.cleanAll()
+        TestRunner.assertTest(allFreed > 0, "cleanAll() returned freed bytes > 0 (\(allFreed))", testName: testName)
+
+        items = try await scanner.scan()
+        TestRunner.assertTest(items.isEmpty, "Rescan after cleanAll returns 0 items", testName: testName)
+
+        // Verify conversation_summaries is completely empty
+        var postCleanDb: OpaquePointer?
+        if sqlite3_open_v2(dbURL.path, &postCleanDb, SQLITE_OPEN_READONLY, nil) == SQLITE_OK, let postCleanDb = postCleanDb {
+            let countSQL = "SELECT COUNT(*) FROM conversation_summaries;"
+            var cStmt: OpaquePointer?
+            if sqlite3_prepare_v2(postCleanDb, countSQL, -1, &cStmt, nil) == SQLITE_OK {
+                if sqlite3_step(cStmt) == SQLITE_ROW {
+                    let count = sqlite3_column_int(cStmt, 0)
+                    TestRunner.assertTest(count == 0, "conversation_summaries table has 0 rows after cleanAll", testName: testName)
+                }
+                sqlite3_finalize(cStmt)
+            }
+            sqlite3_close(postCleanDb)
+        }
+    } catch {
+        TestRunner.assertTest(false, "Mock Antigravity test threw error: \(error)", testName: testName)
+    }
+}
+
+// MARK: - Test: Mock VSCDB Index Sync
+
+func testMockVSCDBIndexSync() async {
+    TestRunner.printSection("Test: Mock VSCDB Index Sync (VSCodeChatScanner & VSCDBHelper)")
+    let testName = "MockVSCDBIndexSync"
+
+    let fm = FileManager.default
+    let tempDir = TestRunner.createTempDirectory(prefix: "mock_vscdb_sync")
+    defer { try? fm.removeItem(at: tempDir) }
+
+    TestRunner.printSubSection("Setting up Workspace Storage and Mock state.vscdb")
+    let wsStorage = tempDir.appendingPathComponent("workspaceStorage")
+    let wsHashDir = wsStorage.appendingPathComponent("mock-ws-hash-123")
+    let chatSessionsDir = wsHashDir.appendingPathComponent("chatSessions")
+    let stateDbURL = wsHashDir.appendingPathComponent("state.vscdb")
+
+    try? fm.createDirectory(at: chatSessionsDir, withIntermediateDirectories: true)
+
+    // workspace.json
+    let wsJson = "{\"folder\":\"file:///Users/tester/synced-vsc-project\"}"
+    try? wsJson.write(to: wsHashDir.appendingPathComponent("workspace.json"), atomically: true, encoding: .utf8)
+
+    let sid1 = "vsc-sync-001"
+    let sid2 = "vsc-sync-002"
+
+    // Session 1 & 2 jsonl files
+    let s1File = chatSessionsDir.appendingPathComponent("\(sid1).jsonl")
+    let s1Content = """
+    {"kind":0,"v":{"version":3,"creationDate":1789000000000,"sessionId":"\(sid1)","requests":[]}}
+    {"kind":2,"k":["requests"],"v":[{"requestId":"r1","message":{"text":"First prompt in session 1"}}]}
+    """
+    try? s1Content.write(to: s1File, atomically: true, encoding: .utf8)
+
+    let s2File = chatSessionsDir.appendingPathComponent("\(sid2).jsonl")
+    let s2Content = """
+    {"kind":0,"v":{"version":3,"creationDate":1789100000000,"sessionId":"\(sid2)","requests":[]}}
+    {"kind":2,"k":["requests"],"v":[{"requestId":"r2","message":{"text":"Second prompt in session 2"}}]}
+    """
+    try? s2Content.write(to: s2File, atomically: true, encoding: .utf8)
+
+    // Create state.vscdb with ItemTable and chat.ChatSessionStore.index
+    var db: OpaquePointer?
+    if sqlite3_open(stateDbURL.path, &db) == SQLITE_OK, let db = db {
+        sqlite3_exec(db, "CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value BLOB);", nil, nil, nil)
+
+        let initialIndexJSON = """
+        {
+          "version": 1,
+          "entries": {
+            "\(sid1)": {
+              "sessionId": "\(sid1)",
+              "title": "First prompt in session 1",
+              "lastMessageDate": 1789000000000
+            },
+            "\(sid2)": {
+              "sessionId": "\(sid2)",
+              "title": "Second prompt in session 2",
+              "lastMessageDate": 1789100000000
+            }
+          }
+        }
+        """
+
+        let insertSQL = "INSERT INTO ItemTable (key, value) VALUES ('chat.ChatSessionStore.index', ?);"
+        var stmt: OpaquePointer?
+        if sqlite3_prepare_v2(db, insertSQL, -1, &stmt, nil) == SQLITE_OK {
+            sqlite3_bind_text(stmt, 1, (initialIndexJSON as NSString).utf8String, -1, nil)
+            sqlite3_step(stmt)
+            sqlite3_finalize(stmt)
+        }
+        sqlite3_close(db)
+    }
+
+    TestRunner.printSubSection("Executing Scan and Deletion with VSCDB Sync Verification")
+    let scanner = VSCodeChatScanner(baseURL: tempDir)
+    TestRunner.assertTest(scanner.isInstalled, "scanner.isInstalled is true", testName: testName)
+
+    do {
+        let items = try await scanner.scan()
+        TestRunner.assertTest(items.count == 2, "Scanned exactly 2 sessions (found: \(items.count))", testName: testName)
+
+        guard let item1 = items.first(where: { $0.sessionId == sid1 }),
+              let item2 = items.first(where: { $0.sessionId == sid2 }) else {
+            TestRunner.assertTest(false, "Could not find expected items sid1 and sid2", testName: testName)
+            return
+        }
+
+        // Verify item1 is associated with chatSessions file
+        TestRunner.assertTest(item1.associatedPaths.contains(s1File.path), "Item 1 associatedPaths contains session file", testName: testName)
+
+        // Delete item1 via scanner.delete(items:)
+        print("  \u{001B}[34m[INFO] Deleting session 1 (\(sid1)) via VSCodeChatScanner.delete(items:)...\u{001B}[0m")
+        let freed = try await scanner.delete(items: [item1])
+        TestRunner.assertTest(freed == item1.sizeInBytes, "Freed bytes matches item 1 size", testName: testName)
+        TestRunner.assertTest(!fm.fileExists(atPath: s1File.path), "Session 1 file removed from disk", testName: testName)
+        TestRunner.assertTest(fm.fileExists(atPath: s2File.path), "Session 2 file still exists on disk", testName: testName)
+
+        // Assert that the deleted session is removed from chat.ChatSessionStore.index in SQLite!
+        var verifyDb: OpaquePointer?
+        if sqlite3_open_v2(stateDbURL.path, &verifyDb, SQLITE_OPEN_READONLY, nil) == SQLITE_OK, let verifyDb = verifyDb {
+            let selectSQL = "SELECT value FROM ItemTable WHERE key = 'chat.ChatSessionStore.index';"
+            var selStmt: OpaquePointer?
+            if sqlite3_prepare_v2(verifyDb, selectSQL, -1, &selStmt, nil) == SQLITE_OK {
+                if sqlite3_step(selStmt) == SQLITE_ROW, let textPtr = sqlite3_column_text(selStmt, 0) {
+                    let updatedJSON = String(cString: textPtr)
+                    if let data = updatedJSON.data(using: .utf8),
+                       let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                       let entries = root["entries"] as? [String: Any] {
+                        TestRunner.assertTest(entries[sid1] == nil, "Session 1 (\(sid1)) was successfully removed from chat.ChatSessionStore.index in SQLite", testName: testName)
+                        TestRunner.assertTest(entries[sid2] != nil, "Session 2 (\(sid2)) is preserved in chat.ChatSessionStore.index in SQLite", testName: testName)
+                    } else {
+                        TestRunner.assertTest(false, "Failed to parse updated index JSON from ItemTable", testName: testName)
+                    }
+                } else {
+                    TestRunner.assertTest(false, "No row found for chat.ChatSessionStore.index in ItemTable", testName: testName)
+                }
+                sqlite3_finalize(selStmt)
+            }
+            sqlite3_close(verifyDb)
+        } else {
+            TestRunner.assertTest(false, "Failed to open state.vscdb for verification", testName: testName)
+        }
+    } catch {
+        TestRunner.assertTest(false, "VSCDB sync test threw error: \(error)", testName: testName)
+    }
+}
+
 // MARK: - Main Runner
 
 @main
@@ -2199,6 +2601,13 @@ struct Main {
         await testMockZedScanner()
         await testRealOpenHandsScannerReadOnly()
         await testMockOpenHandsScanner()
+
+        // Antigravity Scanner Tests
+        await testRealAntigravityScannerReadOnly()
+        await testMockAntigravityScanner()
+
+        // VSCDB Index Sync Test
+        await testMockVSCDBIndexSync()
 
         let elapsed = Date().timeIntervalSince(startTime)
 

@@ -185,14 +185,21 @@ final class CursorScanner: AgentScanner, @unchecked Sendable {
 
         var totalFreed: Int64 = 0
         var stateDbComposersToDelete: [String: Set<String>] = [:] // dbPath: Set<sessionId>
+        var stateDbToSessions: [URL: Set<String>] = [:]
 
         for item in items {
             totalFreed += item.sizeInBytes
 
             for path in item.associatedPaths {
+                let fileURL = URL(fileURLWithPath: path)
                 if path.hasSuffix(".vscdb") {
                     stateDbComposersToDelete[path, default: []].insert(item.sessionId)
                 } else {
+                    if path.contains("chatSessions") {
+                        let wsDir = fileURL.deletingLastPathComponent().deletingLastPathComponent()
+                        let stateDbURL = wsDir.appendingPathComponent("state.vscdb")
+                        stateDbToSessions[stateDbURL, default: []].insert(item.sessionId)
+                    }
                     _ = FileSizeHelper.removeIfExists(path: path)
                 }
             }
@@ -200,7 +207,14 @@ final class CursorScanner: AgentScanner, @unchecked Sendable {
 
         // Handle state.vscdb composer deletions
         for (dbPath, sessionIds) in stateDbComposersToDelete {
+            let dbURL = URL(fileURLWithPath: dbPath)
+            VSCDBHelper.removeComposers(from: dbURL, composerIds: sessionIds)
             deleteComposersFromStateDb(dbPath: dbPath, sessionIds: sessionIds)
+        }
+
+        // Atomically sync state.vscdb chat session indexes
+        for (stateDbURL, sessionIds) in stateDbToSessions {
+            VSCDBHelper.removeChatSessions(from: stateDbURL, sessionIds: sessionIds)
         }
 
         cleanEmptyWorkspaceStorageDirs()
@@ -240,9 +254,10 @@ final class CursorScanner: AgentScanner, @unchecked Sendable {
                     }
                 }
 
-                // Clean state.vscdb composer keys
+                // Clean state.vscdb composer keys and chat session indexes
                 let stateDb = wsDir.appendingPathComponent("state.vscdb")
                 if fileManager.fileExists(atPath: stateDb.path) {
+                    VSCDBHelper.clearAllChatSessions(from: stateDb)
                     clearStateDatabaseChatData(dbURL: stateDb)
                 }
             }
@@ -552,51 +567,10 @@ final class CursorScanner: AgentScanner, @unchecked Sendable {
     }
 
     private func deleteComposersFromStateDb(dbPath: String, sessionIds: Set<String>) {
-        var db: OpaquePointer?
-        if sqlite3_open_v2(dbPath, &db, SQLITE_OPEN_READWRITE, nil) == SQLITE_OK {
-            defer { sqlite3_close(db) }
-
-            let selectQuery = "SELECT value FROM ItemTable WHERE key = 'composer.composerData';"
-            var stmt: OpaquePointer?
-            if sqlite3_prepare_v2(db, selectQuery, -1, &stmt, nil) == SQLITE_OK {
-                if sqlite3_step(stmt) == SQLITE_ROW, let valPtr = sqlite3_column_text(stmt, 0) {
-                    let valueStr = String(cString: valPtr)
-                    sqlite3_finalize(stmt)
-                    stmt = nil
-
-                    if let data = valueStr.data(using: .utf8),
-                       var dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
-                       var composers = dict["allComposers"] as? [[String: Any]] {
-
-                        composers.removeAll { c in
-                            guard let id = c["composerId"] as? String else { return false }
-                            return sessionIds.contains(id)
-                        }
-
-                        dict["allComposers"] = composers
-
-                        if composers.isEmpty {
-                            let delQuery = "DELETE FROM ItemTable WHERE key = 'composer.composerData';"
-                            sqlite3_exec(db, delQuery, nil, nil, nil)
-                        } else if let updatedData = try? JSONSerialization.data(withJSONObject: dict),
-                                  let updatedStr = String(data: updatedData, encoding: .utf8) {
-                            let updateQuery = "UPDATE ItemTable SET value = ? WHERE key = 'composer.composerData';"
-                            var updateStmt: OpaquePointer?
-                            if sqlite3_prepare_v2(db, updateQuery, -1, &updateStmt, nil) == SQLITE_OK {
-                                sqlite3_bind_text(updateStmt, 1, (updatedStr as NSString).utf8String, -1, nil)
-                                sqlite3_step(updateStmt)
-                                sqlite3_finalize(updateStmt)
-                            }
-                        }
-                    }
-                } else {
-                    sqlite3_finalize(stmt)
-                }
-            }
-        }
+        let dbURL = URL(fileURLWithPath: dbPath)
+        VSCDBHelper.removeComposers(from: dbURL, composerIds: sessionIds)
 
         // Also handle plain JSON fixture files
-        let dbURL = URL(fileURLWithPath: dbPath)
         if let data = try? Data(contentsOf: dbURL),
            var dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
            var composers = dict["allComposers"] as? [[String: Any]] {

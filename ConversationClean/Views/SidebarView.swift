@@ -133,6 +133,7 @@ struct SidebarView: View {
         case .openViking: return .brown
         case .zed: return .gray
         case .openHands: return .orange
+        case .antigravity: return .purple
         }
     }
 }

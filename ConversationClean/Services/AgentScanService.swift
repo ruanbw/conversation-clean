@@ -34,7 +34,8 @@ final class AgentScanService {
             OpenVikingScanner(),
             AiderScanner(),
             ZedScanner(),
-            OpenHandsScanner()
+            OpenHandsScanner(),
+            AntigravityScanner()
         ]
     }
 
