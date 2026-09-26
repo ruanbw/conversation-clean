@@ -23,6 +23,14 @@
 		CC0100152D00000100000001 /* RooCodeScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200152D00000100000001 /* RooCodeScanner.swift */; };
 		CC0100162D00000100000001 /* ContinueScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200162D00000100000001 /* ContinueScanner.swift */; };
 		CC0100172D00000100000001 /* PiAgentScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200172D00000100000001 /* PiAgentScanner.swift */; };
+		CC0100182D00000100000001 /* OpenVikingScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200182D00000100000001 /* OpenVikingScanner.swift */; };
+		CC0100192D00000100000001 /* AiderScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200192D00000100000001 /* AiderScanner.swift */; };
+		CC0100202D00000100000001 /* ZedScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200202D00000100000001 /* ZedScanner.swift */; };
+		CC0100212D00000100000001 /* OpenHandsScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200212D00000100000001 /* OpenHandsScanner.swift */; };
+		CC0100222D00000100000001 /* VSCodeChatScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200222D00000100000001 /* VSCodeChatScanner.swift */; };
+		CC0100232D00000100000001 /* CursorScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200232D00000100000001 /* CursorScanner.swift */; };
+		CC0100242D00000100000001 /* WindsurfScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200242D00000100000001 /* WindsurfScanner.swift */; };
+		CC0100252D00000100000001 /* TraeScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200252D00000100000001 /* TraeScanner.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -44,6 +52,14 @@
 		CC0200152D00000100000001 /* RooCodeScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RooCodeScanner.swift; sourceTree = "<group>"; };
 		CC0200162D00000100000001 /* ContinueScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContinueScanner.swift; sourceTree = "<group>"; };
 		CC0200172D00000100000001 /* PiAgentScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PiAgentScanner.swift; sourceTree = "<group>"; };
+		CC0200182D00000100000001 /* OpenVikingScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenVikingScanner.swift; sourceTree = "<group>"; };
+		CC0200192D00000100000001 /* AiderScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AiderScanner.swift; sourceTree = "<group>"; };
+		CC0200202D00000100000001 /* ZedScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZedScanner.swift; sourceTree = "<group>"; };
+		CC0200212D00000100000001 /* OpenHandsScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenHandsScanner.swift; sourceTree = "<group>"; };
+		CC0200222D00000100000001 /* VSCodeChatScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VSCodeChatScanner.swift; sourceTree = "<group>"; };
+		CC0200232D00000100000001 /* CursorScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorScanner.swift; sourceTree = "<group>"; };
+		CC0200242D00000100000001 /* WindsurfScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindsurfScanner.swift; sourceTree = "<group>"; };
+		CC0200252D00000100000001 /* TraeScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TraeScanner.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -117,6 +133,14 @@
 				CC0200152D00000100000001 /* RooCodeScanner.swift */,
 				CC0200162D00000100000001 /* ContinueScanner.swift */,
 				CC0200172D00000100000001 /* PiAgentScanner.swift */,
+				CC0200182D00000100000001 /* OpenVikingScanner.swift */,
+				CC0200192D00000100000001 /* AiderScanner.swift */,
+				CC0200202D00000100000001 /* ZedScanner.swift */,
+				CC0200212D00000100000001 /* OpenHandsScanner.swift */,
+				CC0200222D00000100000001 /* VSCodeChatScanner.swift */,
+				CC0200232D00000100000001 /* CursorScanner.swift */,
+				CC0200242D00000100000001 /* WindsurfScanner.swift */,
+				CC0200252D00000100000001 /* TraeScanner.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -213,6 +237,14 @@
 				CC0100152D00000100000001 /* RooCodeScanner.swift in Sources */,
 				CC0100162D00000100000001 /* ContinueScanner.swift in Sources */,
 				CC0100172D00000100000001 /* PiAgentScanner.swift in Sources */,
+				CC0100182D00000100000001 /* OpenVikingScanner.swift in Sources */,
+				CC0100192D00000100000001 /* AiderScanner.swift in Sources */,
+				CC0100202D00000100000001 /* ZedScanner.swift in Sources */,
+				CC0100212D00000100000001 /* OpenHandsScanner.swift in Sources */,
+				CC0100222D00000100000001 /* VSCodeChatScanner.swift in Sources */,
+				CC0100232D00000100000001 /* CursorScanner.swift in Sources */,
+				CC0100242D00000100000001 /* WindsurfScanner.swift in Sources */,
+				CC0100252D00000100000001 /* TraeScanner.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

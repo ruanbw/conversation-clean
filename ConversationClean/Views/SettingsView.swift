@@ -25,7 +25,7 @@ struct SettingsView: View {
             }
 
             Form {
-                Section("受支持的 Local Agents") {
+                Section("受支持的 Local Agents (14 款)") {
                     AgentPathRow(
                         name: "Claude Code",
                         icon: "terminal.fill",
@@ -40,6 +40,13 @@ struct SettingsView: View {
                         path: (ProcessInfo.processInfo.environment["CODEX_HOME"] != nil)
                             ? ProcessInfo.processInfo.environment["CODEX_HOME"]!
                             : FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex").path
+                    )
+
+                    AgentPathRow(
+                        name: "Pi Agent",
+                        icon: "cpu",
+                        color: .pink,
+                        path: PiAgentScanner().storageURL.path
                     )
 
                     AgentPathRow(
@@ -64,10 +71,59 @@ struct SettingsView: View {
                     )
 
                     AgentPathRow(
-                        name: "Pi Agent",
-                        icon: "cpu",
-                        color: .pink,
-                        path: PiAgentScanner().storageURL.path
+                        name: "Copilot / VS Code",
+                        icon: "bubble.left.and.exclamationmark.bubble.right.fill",
+                        color: .indigo,
+                        path: VSCodeChatScanner().storageURL.path
+                    )
+
+                    AgentPathRow(
+                        name: "Cursor",
+                        icon: "cursorarrow.rays",
+                        color: .teal,
+                        path: CursorScanner().storageURL.path
+                    )
+
+                    AgentPathRow(
+                        name: "Windsurf",
+                        icon: "wind",
+                        color: .mint,
+                        path: WindsurfScanner().storageURL.path
+                    )
+
+                    AgentPathRow(
+                        name: "Trae",
+                        icon: "bolt.ring.closed",
+                        color: .yellow,
+                        path: TraeScanner().storageURL.path
+                    )
+
+                    AgentPathRow(
+                        name: "Aider",
+                        icon: "terminal",
+                        color: .red,
+                        path: AiderScanner().storageURL.path
+                    )
+
+                    AgentPathRow(
+                        name: "OpenViking",
+                        icon: "shield.lefthalf.filled",
+                        color: .brown,
+                        path: OpenVikingScanner().storageURL.path
+                    )
+
+                    AgentPathRow(
+                        name: "Zed AI",
+                        icon: "character.textbox",
+                        color: .gray,
+                        path: ZedScanner().storageURL.path
+                    )
+
+                    AgentPathRow(
+                        name: "OpenHands",
+                        icon: "hand.raised.fill",
+                        color: .orange,
+                        path: OpenHandsScanner().storageURL.path
                     )
                 }
             }
@@ -86,7 +142,7 @@ struct SettingsView: View {
                 Text("版本 1.0.0")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Text("一键扫描并清理本地 AI Agent（Claude Code、Codex、Cline、Roo Code、Continue、Pi Agent）产生的会话历史、上下文快照与缓存垃圾。")
+                Text("全面支持 14 款本地 CLI、IDE 插件、AI 原生编辑器及自主 Agent 框架（Claude Code、Codex、Pi Agent、Cline、Roo Code、Continue、GitHub Copilot、Cursor、Windsurf、Trae、Aider、OpenViking、Zed AI、OpenHands）的会话扫描与安全清理。")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -97,7 +153,7 @@ struct SettingsView: View {
                 Label("关于", systemImage: "info.circle")
             }
         }
-        .frame(width: 480, height: 320)
+        .frame(width: 520, height: 420)
     }
 }
 

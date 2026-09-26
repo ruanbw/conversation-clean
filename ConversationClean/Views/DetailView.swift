@@ -140,27 +140,51 @@ struct DetailView: View {
             return "未在 ~/.claude/projects/ 检测到 Claude Code 会话历史记录。"
         case .codex:
             return "未在 ~/.codex/sessions/ 检测到 OpenAI Codex 会话历史记录。"
+        case .piAgent:
+            return "未在 ~/.pi/agent/sessions/ 检测到 Pi Agent 会话历史记录。"
         case .cline:
             return "未在 Cline 存储目录检测到会话任务记录。"
         case .rooCode:
             return "未在 Roo Code 存储目录检测到会话任务记录。"
         case .continueDev:
             return "未在 ~/.continue/sessions/ 检测到 Continue.dev 会话记录。"
-        case .piAgent:
-            return "未在 ~/.pi/agent/sessions/ 检测到 Pi Agent 会话历史记录。"
+        case .copilotChat:
+            return "未在 VS Code 工作区检测到 GitHub Copilot / VS Code 聊天记录。"
+        case .cursor:
+            return "未在 Cursor 存储目录检测到会话记录。"
+        case .windsurf:
+            return "未在 Windsurf 存储目录检测到会话记录。"
+        case .trae:
+            return "未在 Trae 存储目录检测到会话记录。"
+        case .aider:
+            return "未在本地检测到 Aider 历史记录或标签缓存。"
+        case .openViking:
+            return "未在 ~/.openviking/ 检测到 OpenViking 会话记录。"
+        case .zed:
+            return "未在 Zed 存储目录检测到 AI 助手会话。"
+        case .openHands:
+            return "未在 OpenHands/OpenDevin 目录检测到会话记录。"
         }
     }
+}
 
-    private func categoryColor(_ category: ConversationCategory) -> Color {
-        switch category {
-        case .all: return .accentColor
-        case .claudeCode: return .orange
-        case .codex: return .green
-        case .cline: return .blue
-        case .rooCode: return .purple
-        case .continueDev: return .cyan
-        case .piAgent: return .pink
-        }
+func categoryColor(_ category: ConversationCategory) -> Color {
+    switch category {
+    case .all: return .accentColor
+    case .claudeCode: return .orange
+    case .codex: return .green
+    case .piAgent: return .pink
+    case .cline: return .blue
+    case .rooCode: return .purple
+    case .continueDev: return .cyan
+    case .copilotChat: return .indigo
+    case .cursor: return .teal
+    case .windsurf: return .mint
+    case .trae: return .yellow
+    case .aider: return .red
+    case .openViking: return .brown
+    case .zed: return .gray
+    case .openHands: return .orange
     }
 }
 
@@ -248,26 +272,10 @@ struct ConversationRowView: View {
     }
 
     private var tagBackground: Color {
-        switch item.category {
-        case .all: return .accentColor.opacity(0.15)
-        case .claudeCode: return .orange.opacity(0.18)
-        case .codex: return .green.opacity(0.18)
-        case .cline: return .blue.opacity(0.18)
-        case .rooCode: return .purple.opacity(0.18)
-        case .continueDev: return .cyan.opacity(0.18)
-        case .piAgent: return .pink.opacity(0.18)
-        }
+        categoryColor(item.category).opacity(0.18)
     }
 
     private var tagForeground: Color {
-        switch item.category {
-        case .all: return .accentColor
-        case .claudeCode: return .orange
-        case .codex: return .green
-        case .cline: return .blue
-        case .rooCode: return .purple
-        case .continueDev: return .cyan
-        case .piAgent: return .pink
-        }
+        categoryColor(item.category)
     }
 }

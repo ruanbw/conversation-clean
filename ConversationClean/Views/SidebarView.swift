@@ -121,10 +121,18 @@ struct SidebarView: View {
         case .all: return .accentColor
         case .claudeCode: return .orange
         case .codex: return .green
+        case .piAgent: return .pink
         case .cline: return .blue
         case .rooCode: return .purple
         case .continueDev: return .cyan
-        case .piAgent: return .pink
+        case .copilotChat: return .indigo
+        case .cursor: return .teal
+        case .windsurf: return .mint
+        case .trae: return .yellow
+        case .aider: return .red
+        case .openViking: return .brown
+        case .zed: return .gray
+        case .openHands: return .orange
         }
     }
 }

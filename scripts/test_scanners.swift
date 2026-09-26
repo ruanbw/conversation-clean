@@ -1,4 +1,5 @@
 import Foundation
+import SQLite3
 
 // ============================================================================
 // Agent Scanner Test & Quality Verification Suite
@@ -1327,6 +1328,838 @@ func testMockPiAgentScanner() async {
     }
 }
 
+// MARK: - Test: Real VS Code Chat Scanner (READ-ONLY)
+
+func testRealVSCodeChatScannerReadOnly() async {
+    TestRunner.printSection("Test: Real VS Code Chat Scanner (READ-ONLY)")
+    let testName = "RealVSCodeReadOnly"
+
+    let scanner = VSCodeChatScanner()
+    TestRunner.assertTest(scanner.category == .copilotChat, "Category is .copilotChat", testName: testName)
+
+    let homePath = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent("Library/Application Support/Code/User").path
+    TestRunner.assertTest(TestRunner.canonicalPath(scanner.storageURL.path) == TestRunner.canonicalPath(homePath), "storageURL correctly points to Code/User directory", testName: testName)
+    TestRunner.assertTest(scanner.isInstalled, "scanner.isInstalled is true on this Mac", testName: testName)
+
+    do {
+        let items = try await scanner.scan()
+        TestRunner.assertTest(!items.isEmpty, "Detected real VS Code Chat sessions (count: \(items.count))", testName: testName)
+        TestRunner.assertTest(items.count >= 44, "Detected at least 44 sessions (found: \(items.count))", testName: testName)
+
+        let allCopilot = items.allSatisfy { $0.category == .copilotChat }
+        TestRunner.assertTest(allCopilot, "All scanned items have category .copilotChat", testName: testName)
+
+        // Find active session fc6c5632
+        if let active = items.first(where: { $0.sessionId.contains("fc6c5632") }) {
+            TestRunner.assertTest(active.title == "将这个文件改为中文。", "Session fc6c5632 title is '将这个文件改为中文。' (found: '\(active.title)')", testName: testName)
+            TestRunner.assertTest(active.messageCount == 2, "Session fc6c5632 messageCount is 2 (found: \(active.messageCount))", testName: testName)
+            TestRunner.assertTest(active.projectPath != nil && active.projectPath!.contains("video-play-frontend"), "Session fc6c5632 projectPath matches video-play-frontend (found: '\(active.projectPath ?? "nil")')", testName: testName)
+            TestRunner.assertTest(active.associatedPaths.count >= 2, "Session fc6c5632 associatedPaths includes chatSessions and chatEditingSessions", testName: testName)
+        } else {
+            TestRunner.assertTest(false, "Session fc6c5632 not found in real scan", testName: testName)
+        }
+
+        // Verify all associated paths exist
+        var pathsExist = true
+        for item in items.prefix(20) {
+            for p in item.associatedPaths {
+                if !FileManager.default.fileExists(atPath: p) {
+                    pathsExist = false
+                    break
+                }
+            }
+        }
+        TestRunner.assertTest(pathsExist, "Sampled sessions associated paths exist on disk", testName: testName)
+    } catch {
+        TestRunner.assertTest(false, "Real VS Code scan threw error: \(error)", testName: testName)
+    }
+}
+
+// MARK: - Test: Mock VS Code Chat Scanner
+
+func testMockVSCodeChatScanner() async {
+    TestRunner.printSection("Test: Mock VS Code Chat Scanner (Fixture Directory)")
+    let testName = "MockVSCodeChat"
+
+    let fm = FileManager.default
+    let tempDir = TestRunner.createTempDirectory(prefix: "mock_vscode_chat")
+    defer { try? fm.removeItem(at: tempDir) }
+
+    let wsStorage = tempDir.appendingPathComponent("workspaceStorage")
+    let globalStorage = tempDir.appendingPathComponent("globalStorage")
+    let emptyWindow = globalStorage.appendingPathComponent("emptyWindowChatSessions")
+    let wsA = wsStorage.appendingPathComponent("hashA123")
+    let wsAChat = wsA.appendingPathComponent("chatSessions")
+    let wsAEdit = wsA.appendingPathComponent("chatEditingSessions")
+
+    try? fm.createDirectory(at: wsAChat, withIntermediateDirectories: true)
+    try? fm.createDirectory(at: wsAEdit, withIntermediateDirectories: true)
+    try? fm.createDirectory(at: emptyWindow, withIntermediateDirectories: true)
+
+    // workspace.json with folder URI
+    let wsJson = "{\"folder\":\"file:///Users/tester/mock-web-app\"}"
+    try? wsJson.write(to: wsA.appendingPathComponent("workspace.json"), atomically: true, encoding: .utf8)
+
+    // Session 1 in workspace A: has prompt and matching editing session folder
+    let sid1 = "session-vs-001"
+    let s1File = wsAChat.appendingPathComponent("\(sid1).jsonl")
+    let s1Content = """
+    {"kind":0,"v":{"version":3,"creationDate":1789000000000,"sessionId":"\(sid1)","requests":[]}}
+    {"kind":2,"k":["requests"],"v":[{"requestId":"r1","message":{"text":"Refactor SwiftUI navigation view"}}]}
+    """
+    try? s1Content.write(to: s1File, atomically: true, encoding: .utf8)
+
+    let s1EditDir = wsAEdit.appendingPathComponent(sid1)
+    try? fm.createDirectory(at: s1EditDir, withIntermediateDirectories: true)
+    try? "state data".write(to: s1EditDir.appendingPathComponent("state.json"), atomically: true, encoding: .utf8)
+
+    // Session 2 in emptyWindow: empty session
+    let sid2 = "session-vs-002"
+    let s2File = emptyWindow.appendingPathComponent("\(sid2).jsonl")
+    let s2Content = """
+    {"kind":0,"v":{"version":3,"creationDate":1789100000000,"sessionId":"\(sid2)","requests":[]}}
+    """
+    try? s2Content.write(to: s2File, atomically: true, encoding: .utf8)
+
+    let scanner = VSCodeChatScanner(baseURL: tempDir)
+    TestRunner.assertTest(scanner.isInstalled, "scanner.isInstalled is true for fixture", testName: testName)
+    TestRunner.assertTest(scanner.category == .copilotChat, "Category is .copilotChat", testName: testName)
+
+    do {
+        var items = try await scanner.scan()
+        TestRunner.assertTest(items.count == 2, "Detected 2 mock sessions (found: \(items.count))", testName: testName)
+
+        if let item1 = items.first(where: { $0.sessionId == sid1 }) {
+            TestRunner.assertTest(item1.title == "Refactor SwiftUI navigation view", "Session 1 title matches prompt (\(item1.title))", testName: testName)
+            TestRunner.assertTest(item1.projectPath == "/Users/tester/mock-web-app", "Session 1 projectPath matches workspace.json", testName: testName)
+            TestRunner.assertTest(item1.messageCount == 1, "Session 1 messageCount is 1", testName: testName)
+            TestRunner.assertTest(item1.associatedPaths.contains(s1File.path), "Session 1 associatedPaths contains jsonl", testName: testName)
+            TestRunner.assertTest(item1.associatedPaths.contains(s1EditDir.path), "Session 1 associatedPaths contains editing folder", testName: testName)
+        } else {
+            TestRunner.assertTest(false, "Session 1 not found", testName: testName)
+        }
+
+        if let item2 = items.first(where: { $0.sessionId == sid2 }) {
+            TestRunner.assertTest(item2.title == "GitHub Copilot 对话", "Session 2 has fallback title 'GitHub Copilot 对话'", testName: testName)
+            TestRunner.assertTest(item2.projectPath == nil, "Session 2 has nil projectPath", testName: testName)
+        } else {
+            TestRunner.assertTest(false, "Session 2 not found", testName: testName)
+        }
+
+        // Test delete item1
+        if let item1 = items.first(where: { $0.sessionId == sid1 }) {
+            let freed = try await scanner.delete(items: [item1])
+            TestRunner.assertTest(freed == item1.sizeInBytes, "Freed bytes matches item 1 size", testName: testName)
+            TestRunner.assertTest(!fm.fileExists(atPath: s1File.path), "Session 1 jsonl removed from disk", testName: testName)
+            TestRunner.assertTest(!fm.fileExists(atPath: s1EditDir.path), "Session 1 editing dir removed from disk", testName: testName)
+            TestRunner.assertTest(fm.fileExists(atPath: s2File.path), "Session 2 jsonl still exists", testName: testName)
+        }
+
+        // Test cleanAll
+        let allFreed = try await scanner.cleanAll()
+        TestRunner.assertTest(allFreed > 0, "cleanAll freed bytes > 0", testName: testName)
+        items = try await scanner.scan()
+        TestRunner.assertTest(items.isEmpty, "Rescan after cleanAll returns 0 items", testName: testName)
+    } catch {
+        TestRunner.assertTest(false, "Mock VS Code Chat scan threw error: \(error)", testName: testName)
+    }
+}
+
+// MARK: - Test: Mock Cursor Scanner
+
+func testMockCursorScanner() async {
+    TestRunner.printSection("Test: Mock Cursor Scanner (Fixture Directory)")
+    let testName = "MockCursor"
+
+    let fm = FileManager.default
+    let tempDir = TestRunner.createTempDirectory(prefix: "mock_cursor")
+    defer { try? fm.removeItem(at: tempDir) }
+
+    let userDir = tempDir.appendingPathComponent("User")
+    let wsStorage = userDir.appendingPathComponent("workspaceStorage")
+    let wsA = wsStorage.appendingPathComponent("wsCursor123")
+    let wsAChat = wsA.appendingPathComponent("chatSessions")
+    let dotCursor = tempDir.appendingPathComponent(".cursor")
+    let dotChats = dotCursor.appendingPathComponent("chats")
+
+    try? fm.createDirectory(at: wsAChat, withIntermediateDirectories: true)
+    try? fm.createDirectory(at: dotChats, withIntermediateDirectories: true)
+
+    // workspace.json
+    try? "{\"folder\":\"file:///Users/tester/cursor-project\"}".write(to: wsA.appendingPathComponent("workspace.json"), atomically: true, encoding: .utf8)
+
+    // Session 1 in chatSessions/
+    let cid1 = "cursor-chat-001"
+    let c1File = wsAChat.appendingPathComponent("\(cid1).jsonl")
+    let c1Content = """
+    {"kind":0,"v":{"version":3,"creationDate":1789200000000,"sessionId":"\(cid1)","requests":[]}}
+    {"kind":2,"k":["requests"],"v":[{"requestId":"r1","message":{"text":"Cursor compose prompt 1"}}]}
+    """
+    try? c1Content.write(to: c1File, atomically: true, encoding: .utf8)
+
+    // Session 2 in state.vscdb mock composer
+    let stateDbURL = wsA.appendingPathComponent("state.vscdb")
+    let composerJson = """
+    {
+      "allComposers": [
+        {
+          "composerId": "composer-001",
+          "name": "Implement Cursor Composer Feature",
+          "createdAt": 1789300000000,
+          "conversation": [{"role":"user","text":"Implement feature"}]
+        }
+      ]
+    }
+    """
+    try? composerJson.write(to: stateDbURL, atomically: true, encoding: .utf8)
+
+    // Session 3 in ~/.cursor/chats/
+    let cid3 = "cursor-dot-001"
+    let c3File = dotChats.appendingPathComponent("\(cid3).json")
+    try? "{\"id\":\"\(cid3)\"}".write(to: c3File, atomically: true, encoding: .utf8)
+
+    let scanner = CursorScanner(baseURL: tempDir)
+    TestRunner.assertTest(scanner.isInstalled, "CursorScanner.isInstalled is true for fixture", testName: testName)
+    TestRunner.assertTest(scanner.category == .cursor, "Category is .cursor", testName: testName)
+
+    do {
+        var items = try await scanner.scan()
+        TestRunner.assertTest(items.count == 3, "Detected 3 Cursor sessions across workspace, state.vscdb, and .cursor (found: \(items.count))", testName: testName)
+
+        if let item1 = items.first(where: { $0.sessionId == cid1 }) {
+            TestRunner.assertTest(item1.title == "Cursor compose prompt 1", "Session 1 title matches prompt", testName: testName)
+            TestRunner.assertTest(item1.projectPath == "/Users/tester/cursor-project", "Session 1 projectPath matches workspace.json", testName: testName)
+        } else {
+            TestRunner.assertTest(false, "Session 1 not found", testName: testName)
+        }
+
+        if let item2 = items.first(where: { $0.sessionId == "composer-001" }) {
+            TestRunner.assertTest(item2.title == "Implement Cursor Composer Feature", "Composer session parsed from state.vscdb", testName: testName)
+            TestRunner.assertTest(item2.projectPath == "/Users/tester/cursor-project", "Composer projectPath matches workspace.json", testName: testName)
+        } else {
+            TestRunner.assertTest(false, "Composer session not found", testName: testName)
+        }
+
+        // Delete item 1
+        if let item1 = items.first(where: { $0.sessionId == cid1 }) {
+            let freed = try await scanner.delete(items: [item1])
+            TestRunner.assertTest(freed == item1.sizeInBytes, "Freed size matches item 1", testName: testName)
+            TestRunner.assertTest(!fm.fileExists(atPath: c1File.path), "Session 1 file removed", testName: testName)
+        }
+
+        // cleanAll
+        let allFreed = try await scanner.cleanAll()
+        TestRunner.assertTest(allFreed > 0, "cleanAll freed bytes > 0", testName: testName)
+        items = try await scanner.scan()
+        TestRunner.assertTest(items.isEmpty, "Rescan after cleanAll returns 0 items", testName: testName)
+    } catch {
+        TestRunner.assertTest(false, "Mock Cursor scan threw error: \(error)", testName: testName)
+    }
+}
+
+// MARK: - Test: Mock Windsurf Scanner
+
+func testMockWindsurfScanner() async {
+    TestRunner.printSection("Test: Mock Windsurf Scanner (Fixture Directory)")
+    let testName = "MockWindsurf"
+
+    let fm = FileManager.default
+    let tempDir = TestRunner.createTempDirectory(prefix: "mock_windsurf")
+    defer { try? fm.removeItem(at: tempDir) }
+
+    let userDir = tempDir.appendingPathComponent("User")
+    let wsStorage = userDir.appendingPathComponent("workspaceStorage")
+    let wsA = wsStorage.appendingPathComponent("wsWindsurf123")
+    let wsAChat = wsA.appendingPathComponent("chatSessions")
+    let codeiumWindsurf = tempDir.appendingPathComponent(".codeium/windsurf")
+    let cascadesDir = codeiumWindsurf.appendingPathComponent("cascades")
+
+    try? fm.createDirectory(at: wsAChat, withIntermediateDirectories: true)
+    try? fm.createDirectory(at: cascadesDir, withIntermediateDirectories: true)
+
+    // workspace.json
+    try? "{\"folder\":\"file:///Users/tester/windsurf-app\"}".write(to: wsA.appendingPathComponent("workspace.json"), atomically: true, encoding: .utf8)
+
+    // Session 1 in workspaceStorage
+    let wid1 = "windsurf-chat-001"
+    let w1File = wsAChat.appendingPathComponent("\(wid1).jsonl")
+    let w1Content = """
+    {"kind":0,"v":{"version":3,"creationDate":1789400000000,"sessionId":"\(wid1)","requests":[]}}
+    {"kind":2,"k":["requests"],"v":[{"requestId":"r1","message":{"text":"Generate Windsurf cascade rule"}}]}
+    """
+    try? w1Content.write(to: w1File, atomically: true, encoding: .utf8)
+
+    // Session 2 in cascades/
+    let cid2 = "cascade-session-002"
+    let cascadeDir = cascadesDir.appendingPathComponent(cid2)
+    try? fm.createDirectory(at: cascadeDir, withIntermediateDirectories: true)
+    let metaContent = """
+    {"title":"Optimize React components with memo","cwd":"/Users/tester/react-frontend"}
+    """
+    try? metaContent.write(to: cascadeDir.appendingPathComponent("meta.json"), atomically: true, encoding: .utf8)
+
+    let scanner = WindsurfScanner(baseURL: tempDir)
+    TestRunner.assertTest(scanner.isInstalled, "WindsurfScanner.isInstalled is true for fixture", testName: testName)
+    TestRunner.assertTest(scanner.category == .windsurf, "Category is .windsurf", testName: testName)
+
+    do {
+        var items = try await scanner.scan()
+        TestRunner.assertTest(items.count == 2, "Detected 2 Windsurf sessions (found: \(items.count))", testName: testName)
+
+        if let item1 = items.first(where: { $0.sessionId == wid1 }) {
+            TestRunner.assertTest(item1.title == "Generate Windsurf cascade rule", "Session 1 title matches prompt", testName: testName)
+            TestRunner.assertTest(item1.projectPath == "/Users/tester/windsurf-app", "Session 1 projectPath matches workspace.json", testName: testName)
+        } else {
+            TestRunner.assertTest(false, "Session 1 not found", testName: testName)
+        }
+
+        if let item2 = items.first(where: { $0.sessionId == cid2 }) {
+            TestRunner.assertTest(item2.title == "Optimize React components with memo", "Cascade session title parsed from meta.json", testName: testName)
+            TestRunner.assertTest(item2.projectPath == "/Users/tester/react-frontend", "Cascade session projectPath matches meta cwd", testName: testName)
+        } else {
+            TestRunner.assertTest(false, "Cascade session 2 not found", testName: testName)
+        }
+
+        // Delete item 1
+        if let item1 = items.first(where: { $0.sessionId == wid1 }) {
+            let freed = try await scanner.delete(items: [item1])
+            TestRunner.assertTest(freed == item1.sizeInBytes, "Freed size matches item 1", testName: testName)
+            TestRunner.assertTest(!fm.fileExists(atPath: w1File.path), "Session 1 file removed", testName: testName)
+        }
+
+        // cleanAll
+        let allFreed = try await scanner.cleanAll()
+        TestRunner.assertTest(allFreed > 0, "cleanAll freed bytes > 0", testName: testName)
+        items = try await scanner.scan()
+        TestRunner.assertTest(items.isEmpty, "Rescan after cleanAll returns 0 items", testName: testName)
+    } catch {
+        TestRunner.assertTest(false, "Mock Windsurf scan threw error: \(error)", testName: testName)
+    }
+}
+
+// MARK: - Test: Mock Trae Scanner
+
+func testMockTraeScanner() async {
+    TestRunner.printSection("Test: Mock Trae Scanner (Fixture Directory)")
+    let testName = "MockTrae"
+
+    let fm = FileManager.default
+    let tempDir = TestRunner.createTempDirectory(prefix: "mock_trae")
+    defer { try? fm.removeItem(at: tempDir) }
+
+    let userDir = tempDir.appendingPathComponent("User")
+    let wsStorage = userDir.appendingPathComponent("workspaceStorage")
+    let wsA = wsStorage.appendingPathComponent("wsTrae123")
+    let wsAChat = wsA.appendingPathComponent("chatSessions")
+    let globalStorage = userDir.appendingPathComponent("globalStorage")
+    let emptyWindow = globalStorage.appendingPathComponent("emptyWindowChatSessions")
+
+    try? fm.createDirectory(at: wsAChat, withIntermediateDirectories: true)
+    try? fm.createDirectory(at: emptyWindow, withIntermediateDirectories: true)
+
+    // workspace.json
+    try? "{\"folder\":\"file:///Users/tester/trae-project\"}".write(to: wsA.appendingPathComponent("workspace.json"), atomically: true, encoding: .utf8)
+
+    // Session 1 in workspace
+    let tid1 = "trae-chat-001"
+    let t1File = wsAChat.appendingPathComponent("\(tid1).jsonl")
+    let t1Content = """
+    {"kind":0,"v":{"version":3,"creationDate":1789500000000,"sessionId":"\(tid1)","requests":[]}}
+    {"kind":2,"k":["requests"],"v":[{"requestId":"r1","message":{"text":"Trae create microservice"}},{"requestId":"r2","message":{"text":"Next prompt"}}]}
+    """
+    try? t1Content.write(to: t1File, atomically: true, encoding: .utf8)
+
+    // Session 2 in emptyWindow
+    let tid2 = "trae-empty-002"
+    let t2File = emptyWindow.appendingPathComponent("\(tid2).jsonl")
+    let t2Content = """
+    {"kind":0,"v":{"version":3,"creationDate":1789600000000,"sessionId":"\(tid2)","requests":[]}}
+    """
+    try? t2Content.write(to: t2File, atomically: true, encoding: .utf8)
+
+    let scanner = TraeScanner(baseURL: tempDir)
+    TestRunner.assertTest(scanner.isInstalled, "TraeScanner.isInstalled is true for fixture", testName: testName)
+    TestRunner.assertTest(scanner.category == .trae, "Category is .trae", testName: testName)
+
+    do {
+        var items = try await scanner.scan()
+        TestRunner.assertTest(items.count == 2, "Detected 2 Trae sessions (found: \(items.count))", testName: testName)
+
+        if let item1 = items.first(where: { $0.sessionId == tid1 }) {
+            TestRunner.assertTest(item1.title == "Trae create microservice", "Session 1 title matches prompt", testName: testName)
+            TestRunner.assertTest(item1.messageCount == 2, "Session 1 messageCount is 2", testName: testName)
+            TestRunner.assertTest(item1.projectPath == "/Users/tester/trae-project", "Session 1 projectPath matches workspace.json", testName: testName)
+        } else {
+            TestRunner.assertTest(false, "Session 1 not found", testName: testName)
+        }
+
+        if let item2 = items.first(where: { $0.sessionId == tid2 }) {
+            TestRunner.assertTest(item2.title == "Trae 对话", "Session 2 has fallback title 'Trae 对话'", testName: testName)
+            TestRunner.assertTest(item2.projectPath == nil, "Session 2 has nil projectPath", testName: testName)
+        } else {
+            TestRunner.assertTest(false, "Session 2 not found", testName: testName)
+        }
+
+        // Delete item 1
+        if let item1 = items.first(where: { $0.sessionId == tid1 }) {
+            let freed = try await scanner.delete(items: [item1])
+            TestRunner.assertTest(freed == item1.sizeInBytes, "Freed size matches item 1", testName: testName)
+            TestRunner.assertTest(!fm.fileExists(atPath: t1File.path), "Session 1 file removed", testName: testName)
+        }
+
+        // cleanAll
+        let allFreed = try await scanner.cleanAll()
+        TestRunner.assertTest(allFreed > 0, "cleanAll freed bytes > 0", testName: testName)
+        items = try await scanner.scan()
+        TestRunner.assertTest(items.isEmpty, "Rescan after cleanAll returns 0 items", testName: testName)
+    } catch {
+        TestRunner.assertTest(false, "Mock Trae scan threw error: \(error)", testName: testName)
+    }
+}
+
+// MARK: - Test: Real OpenViking Scanner (READ-ONLY)
+
+func testRealOpenVikingScannerReadOnly() async {
+    TestRunner.printSection("Test: Real Local ~/.openviking Scanner (READ-ONLY)")
+    let testName = "RealOpenVikingReadOnly"
+
+    let scanner = OpenVikingScanner()
+    TestRunner.assertTest(scanner.category == .openViking, "Category is .openViking", testName: testName)
+
+    let homePath = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".openviking").path
+    TestRunner.assertTest(TestRunner.canonicalPath(scanner.storageURL.path) == TestRunner.canonicalPath(homePath), "storageURL correctly points to ~/.openviking", testName: testName)
+    TestRunner.assertTest(scanner.isInstalled, "scanner.isInstalled is true on this Mac", testName: testName)
+
+    do {
+        let items = try await scanner.scan()
+        TestRunner.assertTest(!items.isEmpty, "Detected real OpenViking sessions (count: \(items.count))", testName: testName)
+        TestRunner.assertTest(items.count == 28, "Detected exactly 28 sessions from 975 files (found: \(items.count))", testName: testName)
+
+        let totalMessages = items.reduce(0) { $0 + $1.messageCount }
+        TestRunner.assertTest(totalMessages == 975, "Total message count matches 975 files in pending/ (found: \(totalMessages))", testName: testName)
+
+        let allOpenViking = items.allSatisfy { $0.category == .openViking }
+        TestRunner.assertTest(allOpenViking, "All scanned items have category .openViking", testName: testName)
+
+        let allHaveSessionId = items.allSatisfy { !$0.sessionId.isEmpty }
+        TestRunner.assertTest(allHaveSessionId, "All items have non-empty sessionId", testName: testName)
+
+        var isSorted = true
+        for i in 0..<(items.count - 1) {
+            if items[i].updatedAt < items[i + 1].updatedAt {
+                isSorted = false
+                break
+            }
+        }
+        TestRunner.assertTest(isSorted, "Items are sorted by updatedAt descending", testName: testName)
+
+        if let sample = items.first {
+            print("  \u{001B}[34m[INFO] Sample OpenViking Session:\u{001B}[0m")
+            print("    ID: \(sample.sessionId)")
+            print("    Title: \(sample.title)")
+            print("    Project: \(sample.displayProjectPath)")
+            print("    Messages: \(sample.messageCount)")
+            print("    Size: \(sample.formattedSize)")
+            print("    Date: \(sample.formattedDate)")
+            print("    Paths: \(sample.associatedPaths.count) path(s)")
+        }
+    } catch {
+        TestRunner.assertTest(false, "Real OpenViking scan threw error: \(error)", testName: testName)
+    }
+}
+
+// MARK: - Test: Mock OpenViking Scanner
+
+func testMockOpenVikingScanner() async {
+    TestRunner.printSection("Test: Mock OpenViking Scanner (Fixture Directory)")
+    let testName = "MockOpenViking"
+
+    let fm = FileManager.default
+    let tempDir = TestRunner.createTempDirectory(prefix: "mock_openviking")
+    defer { try? fm.removeItem(at: tempDir) }
+
+    let pendingDir = tempDir.appendingPathComponent("pending")
+    try? fm.createDirectory(at: pendingDir, withIntermediateDirectories: true)
+
+    let sid1 = "dsh-session-test-0001"
+    let sid2 = "dsh-session-test-0002"
+
+    let f1Content = """
+    {"type":"addMessage","sessionId":"\(sid1)","payload":{"role":"user","parts":[{"type":"text","text":"Optimize database queries"}],"peer_id":"-Users-tester-projects-backend"},"createdAt":1786888290000}
+    """
+    try? f1Content.write(to: pendingDir.appendingPathComponent("f1.json"), atomically: true, encoding: .utf8)
+
+    let f2Content = """
+    {"type":"addMessage","sessionId":"\(sid1)","payload":{"role":"assistant","parts":[{"type":"tool","tool_name":"bash"}]},"createdAt":1786888300000}
+    """
+    try? f2Content.write(to: pendingDir.appendingPathComponent("f2.json"), atomically: true, encoding: .utf8)
+
+    let f3Content = """
+    {"type":"commitSession","sessionId":"\(sid2)","payload":{"keep_recent_count":5},"createdAt":1786888400000}
+    """
+    try? f3Content.write(to: pendingDir.appendingPathComponent("f3.json"), atomically: true, encoding: .utf8)
+
+    let scanner = OpenVikingScanner(storageURL: tempDir)
+    TestRunner.assertTest(scanner.isInstalled, "Mock scanner isInstalled is true", testName: testName)
+
+    do {
+        var items = try await scanner.scan()
+        TestRunner.assertTest(items.count == 2, "Detected 2 mock sessions (found: \(items.count))", testName: testName)
+
+        if let item1 = items.first(where: { $0.sessionId == sid1 }) {
+            TestRunner.assertTest(item1.title == "Optimize database queries", "Session 1 title matches user prompt", testName: testName)
+            TestRunner.assertTest(item1.messageCount == 2, "Session 1 message count is 2", testName: testName)
+            TestRunner.assertTest(item1.associatedPaths.count == 2, "Session 1 associatedPaths has 2 files", testName: testName)
+            TestRunner.assertTest(item1.sizeInBytes > 0, "Session 1 size > 0", testName: testName)
+        } else {
+            TestRunner.assertTest(false, "Session 1 not found", testName: testName)
+        }
+
+        if let item1 = items.first(where: { $0.sessionId == sid1 }) {
+            let freed = try await scanner.delete(items: [item1])
+            TestRunner.assertTest(freed == item1.sizeInBytes, "Freed size matches item1 size", testName: testName)
+            TestRunner.assertTest(!fm.fileExists(atPath: pendingDir.appendingPathComponent("f1.json").path), "f1.json removed", testName: testName)
+            TestRunner.assertTest(!fm.fileExists(atPath: pendingDir.appendingPathComponent("f2.json").path), "f2.json removed", testName: testName)
+            TestRunner.assertTest(fm.fileExists(atPath: pendingDir.appendingPathComponent("f3.json").path), "f3.json still exists", testName: testName)
+        }
+
+        let allFreed = try await scanner.cleanAll()
+        TestRunner.assertTest(allFreed > 0, "cleanAll freed bytes > 0", testName: testName)
+        items = try await scanner.scan()
+        TestRunner.assertTest(items.isEmpty, "Rescan after cleanAll returns 0 items", testName: testName)
+        TestRunner.assertTest(fm.fileExists(atPath: pendingDir.path), "pending/ folder recreated", testName: testName)
+    } catch {
+        TestRunner.assertTest(false, "Mock OpenViking test threw error: \(error)", testName: testName)
+    }
+}
+
+// MARK: - Test: Real Aider Scanner (READ-ONLY)
+
+func testRealAiderScannerReadOnly() async {
+    TestRunner.printSection("Test: Real Local Aider Scanner (READ-ONLY)")
+    let testName = "RealAiderReadOnly"
+
+    let scanner = AiderScanner()
+    TestRunner.assertTest(scanner.category == .aider, "Category is .aider", testName: testName)
+    do {
+        let items = try await scanner.scan()
+        TestRunner.assertTest(true, "Aider scan() executed successfully without throwing error", testName: testName)
+        print("  \u{001B}[34m[INFO] Scanned \(items.count) Aider sessions on current machine\u{001B}[0m")
+    } catch {
+        TestRunner.assertTest(false, "Real Aider scan threw error: \(error)", testName: testName)
+    }
+}
+
+// MARK: - Test: Mock Aider Scanner
+
+func testMockAiderScanner() async {
+    TestRunner.printSection("Test: Mock Aider Scanner (Fixture Directory)")
+    let testName = "MockAider"
+
+    let fm = FileManager.default
+    let tempDir = TestRunner.createTempDirectory(prefix: "mock_aider")
+    defer { try? fm.removeItem(at: tempDir) }
+
+    let projDir = tempDir.appendingPathComponent("projects/my-web-app")
+    try? fm.createDirectory(at: projDir, withIntermediateDirectories: true)
+
+    let chatFile = projDir.appendingPathComponent(".aider.chat.history.md")
+    let inputFile = projDir.appendingPathComponent(".aider.input.history")
+    let tagsFile = projDir.appendingPathComponent(".aider.tags.cache.v3")
+    let confFile = projDir.appendingPathComponent(".aider.conf.yml")
+    let sourceCodeFile = projDir.appendingPathComponent("App.swift")
+
+    let chatContent = """
+    # aider chat started at 2026-09-20 10:00:00
+
+    #### Add user authentication middleware with JWT tokens
+    > Applied edit to Auth.swift
+    """
+    try? chatContent.write(to: chatFile, atomically: true, encoding: .utf8)
+    try? "git status\nadd auth middleware\n".write(to: inputFile, atomically: true, encoding: .utf8)
+    try? "ctags-cache-v3-binary-data".write(to: tagsFile, atomically: true, encoding: .utf8)
+    try? "model: gpt-4o\nauto-commits: false\n".write(to: confFile, atomically: true, encoding: .utf8)
+    try? "import SwiftUI\nstruct App {}\n".write(to: sourceCodeFile, atomically: true, encoding: .utf8)
+
+    let scanner = AiderScanner(storageURL: tempDir)
+    TestRunner.assertTest(scanner.isInstalled, "Mock scanner isInstalled is true", testName: testName)
+
+    do {
+        var items = try await scanner.scan()
+        TestRunner.assertTest(!items.isEmpty, "Detected project Aider item", testName: testName)
+
+        if let item = items.first(where: { $0.projectPath == projDir.path }) {
+            TestRunner.assertTest(item.category == .aider, "Item category is .aider", testName: testName)
+            TestRunner.assertTest(item.title.contains("Add user authentication middleware"), "Title parsed from chat history prompt (found: '\(item.title)')", testName: testName)
+            TestRunner.assertTest(item.associatedPaths.contains(chatFile.path), "associatedPaths contains .aider.chat.history.md", testName: testName)
+            TestRunner.assertTest(item.associatedPaths.contains(inputFile.path), "associatedPaths contains .aider.input.history", testName: testName)
+            TestRunner.assertTest(item.associatedPaths.contains(tagsFile.path), "associatedPaths contains .aider.tags.cache.v3", testName: testName)
+            TestRunner.assertTest(!item.associatedPaths.contains(confFile.path), "associatedPaths does NOT contain .aider.conf.yml", testName: testName)
+            TestRunner.assertTest(!item.associatedPaths.contains(sourceCodeFile.path), "associatedPaths does NOT contain user source code", testName: testName)
+
+            let freed = try await scanner.delete(items: [item])
+            TestRunner.assertTest(freed == item.sizeInBytes, "Freed size matches item size", testName: testName)
+
+            TestRunner.assertTest(!fm.fileExists(atPath: chatFile.path), ".aider.chat.history.md removed", testName: testName)
+            TestRunner.assertTest(!fm.fileExists(atPath: inputFile.path), ".aider.input.history removed", testName: testName)
+            TestRunner.assertTest(!fm.fileExists(atPath: tagsFile.path), ".aider.tags.cache.v3 removed", testName: testName)
+
+            TestRunner.assertTest(fm.fileExists(atPath: confFile.path), "SAFETY PASS: .aider.conf.yml was PRESERVED", testName: testName)
+            TestRunner.assertTest(fm.fileExists(atPath: sourceCodeFile.path), "SAFETY PASS: App.swift repository code was PRESERVED", testName: testName)
+        } else {
+            TestRunner.assertTest(false, "Project Aider item not found", testName: testName)
+        }
+
+        let allFreed = try await scanner.cleanAll()
+        TestRunner.assertTest(allFreed >= 0, "cleanAll completed safely", testName: testName)
+    } catch {
+        TestRunner.assertTest(false, "Mock Aider test threw error: \(error)", testName: testName)
+    }
+}
+
+// MARK: - Test: Real Zed Scanner (READ-ONLY)
+
+func testRealZedScannerReadOnly() async {
+    TestRunner.printSection("Test: Real Local Zed AI Scanner (READ-ONLY)")
+    let testName = "RealZedReadOnly"
+
+    let scanner = ZedScanner()
+    TestRunner.assertTest(scanner.category == .zed, "Category is .zed", testName: testName)
+
+    let homePath = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent("Library/Application Support/Zed").path
+    TestRunner.assertTest(TestRunner.canonicalPath(scanner.storageURL.path) == TestRunner.canonicalPath(homePath), "storageURL correctly points to Zed directory", testName: testName)
+    TestRunner.assertTest(scanner.isInstalled, "scanner.isInstalled is true on this Mac", testName: testName)
+
+    do {
+        let items = try await scanner.scan()
+        TestRunner.assertTest(true, "Zed scan() executed without throwing error", testName: testName)
+        print("  \u{001B}[34m[INFO] Scanned \(items.count) Zed items from real filesystem\u{001B}[0m")
+
+        if let hangItem = items.first(where: { $0.sessionId == "zed-hang-traces" }) {
+            TestRunner.assertTest(hangItem.category == .zed, "Hang traces item category is .zed", testName: testName)
+            TestRunner.assertTest(hangItem.messageCount >= 4, "Detected at least 4 hang trace files on machine (found: \(hangItem.messageCount))", testName: testName)
+            print("  \u{001B}[34m[INFO] Real Hang Traces: \(hangItem.title), Size: \(hangItem.formattedSize)\u{001B}[0m")
+        }
+    } catch {
+        TestRunner.assertTest(false, "Real Zed scan threw error: \(error)", testName: testName)
+    }
+}
+
+// MARK: - Test: Mock Zed Scanner
+
+func testMockZedScanner() async {
+    TestRunner.printSection("Test: Mock Zed Scanner (Fixture Directory)")
+    let testName = "MockZed"
+
+    let fm = FileManager.default
+    let tempDir = TestRunner.createTempDirectory(prefix: "mock_zed")
+    defer { try? fm.removeItem(at: tempDir) }
+
+    let threadsDir = tempDir.appendingPathComponent("threads")
+    let convDir = tempDir.appendingPathComponent("conversations")
+    let hangDir = tempDir.appendingPathComponent("hang_traces")
+
+    try? fm.createDirectory(at: threadsDir, withIntermediateDirectories: true)
+    try? fm.createDirectory(at: convDir, withIntermediateDirectories: true)
+    try? fm.createDirectory(at: hangDir, withIntermediateDirectories: true)
+
+    let dbURL = threadsDir.appendingPathComponent("threads.db")
+    var db: OpaquePointer?
+    if sqlite3_open_v2(dbURL.path, &db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, nil) == SQLITE_OK {
+        let schema = """
+        CREATE TABLE threads (
+            id TEXT PRIMARY KEY,
+            summary TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            data_type TEXT NOT NULL,
+            data BLOB NOT NULL,
+            parent_id TEXT,
+            folder_paths TEXT,
+            folder_paths_order TEXT,
+            created_at TEXT
+        );
+        INSERT INTO threads (id, summary, updated_at, data_type, data, folder_paths, created_at)
+        VALUES ('zed-th-001', 'Build AST Parser in Rust', '2026-09-26T17:00:00Z', 'text', 'dummyblob', '["/Users/tester/ast-parser"]', '2026-09-26T16:00:00Z');
+        INSERT INTO threads (id, summary, updated_at, data_type, data, folder_paths, created_at)
+        VALUES ('zed-th-002', 'Optimize Metal rendering backend', '2026-09-26T17:30:00Z', 'text', 'dummyblob2', '["/Users/tester/metal-engine"]', '2026-09-26T17:15:00Z');
+        """
+        var errMsg: UnsafeMutablePointer<CChar>?
+        sqlite3_exec(db, schema, nil, nil, &errMsg)
+        if let errMsg = errMsg { sqlite3_free(errMsg) }
+        sqlite3_close(db)
+    }
+
+    let conv1 = convDir.appendingPathComponent("conv-001.json")
+    try? "{\"id\":\"conv-001\",\"title\":\"Fix tree-sitter syntax highlighting\",\"messages\":[{},{}]}".write(to: conv1, atomically: true, encoding: .utf8)
+
+    let hang1 = hangDir.appendingPathComponent("hang-2026-09-26_17-47-36.miniprof.json")
+    try? "[{\"thread_name\":\"main\",\"timings\":[]}]".write(to: hang1, atomically: true, encoding: .utf8)
+
+    let scanner = ZedScanner(storageURL: tempDir)
+    TestRunner.assertTest(scanner.isInstalled, "Mock scanner isInstalled is true", testName: testName)
+
+    do {
+        var items = try await scanner.scan()
+        TestRunner.assertTest(items.count == 4, "Detected exactly 4 Zed items (2 DB threads, 1 conv, 1 hang traces group, found: \(items.count))", testName: testName)
+
+        if let th1 = items.first(where: { $0.sessionId == "zed-th-001" }) {
+            TestRunner.assertTest(th1.title == "Build AST Parser in Rust", "Thread 1 title matches summary", testName: testName)
+            TestRunner.assertTest(th1.projectPath == "/Users/tester/ast-parser", "Thread 1 projectPath matches folder_paths", testName: testName)
+        } else {
+            TestRunner.assertTest(false, "Thread zed-th-001 not found", testName: testName)
+        }
+
+        if let cItem = items.first(where: { $0.sessionId == "conv-001" }) {
+            TestRunner.assertTest(cItem.title == "Fix tree-sitter syntax highlighting", "Conv title matches", testName: testName)
+            TestRunner.assertTest(cItem.messageCount == 2, "Conv message count is 2", testName: testName)
+        } else {
+            TestRunner.assertTest(false, "Conversation conv-001 not found", testName: testName)
+        }
+
+        if let th1 = items.first(where: { $0.sessionId == "zed-th-001" }) {
+            let freed = try await scanner.delete(items: [th1])
+            TestRunner.assertTest(freed == th1.sizeInBytes, "Freed size matches th1 size", testName: testName)
+
+            if sqlite3_open_v2(dbURL.path, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK {
+                var stmt: OpaquePointer?
+                sqlite3_prepare_v2(db, "SELECT count(*) FROM threads WHERE id = 'zed-th-001';", -1, &stmt, nil)
+                if sqlite3_step(stmt) == SQLITE_ROW {
+                    let count = sqlite3_column_int(stmt, 0)
+                    TestRunner.assertTest(count == 0, "Thread zed-th-001 deleted from SQLite DB", testName: testName)
+                }
+                sqlite3_finalize(stmt)
+
+                sqlite3_prepare_v2(db, "SELECT count(*) FROM threads WHERE id = 'zed-th-002';", -1, &stmt, nil)
+                if sqlite3_step(stmt) == SQLITE_ROW {
+                    let count = sqlite3_column_int(stmt, 0)
+                    TestRunner.assertTest(count == 1, "Thread zed-th-002 still preserved in DB", testName: testName)
+                }
+                sqlite3_finalize(stmt)
+                sqlite3_close(db)
+            }
+        }
+
+        let allFreed = try await scanner.cleanAll()
+        TestRunner.assertTest(allFreed > 0, "cleanAll freed bytes > 0", testName: testName)
+        items = try await scanner.scan()
+        TestRunner.assertTest(items.isEmpty, "Rescan after cleanAll returns 0 items", testName: testName)
+    } catch {
+        TestRunner.assertTest(false, "Mock Zed test threw error: \(error)", testName: testName)
+    }
+}
+
+// MARK: - Test: Real OpenHands Scanner (READ-ONLY)
+
+func testRealOpenHandsScannerReadOnly() async {
+    TestRunner.printSection("Test: Real Local OpenHands Scanner (READ-ONLY)")
+    let testName = "RealOpenHandsReadOnly"
+
+    let scanner = OpenHandsScanner()
+    TestRunner.assertTest(scanner.category == .openHands, "Category is .openHands", testName: testName)
+    do {
+        let items = try await scanner.scan()
+        TestRunner.assertTest(true, "OpenHands scan() executed without throwing error", testName: testName)
+        print("  \u{001B}[34m[INFO] Scanned \(items.count) OpenHands items on current machine\u{001B}[0m")
+    } catch {
+        TestRunner.assertTest(false, "Real OpenHands scan threw error: \(error)", testName: testName)
+    }
+}
+
+// MARK: - Test: Mock OpenHands Scanner
+
+func testMockOpenHandsScanner() async {
+    TestRunner.printSection("Test: Mock OpenHands Scanner (Fixture Directory)")
+    let testName = "MockOpenHands"
+
+    let fm = FileManager.default
+    let tempDir = TestRunner.createTempDirectory(prefix: "mock_openhands")
+    defer { try? fm.removeItem(at: tempDir) }
+
+    let sessionsDir = tempDir.appendingPathComponent("sessions")
+    let logsDir = tempDir.appendingPathComponent("logs")
+    let wsDir = tempDir.appendingPathComponent("workspace")
+
+    try? fm.createDirectory(at: sessionsDir, withIntermediateDirectories: true)
+    try? fm.createDirectory(at: logsDir, withIntermediateDirectories: true)
+    try? fm.createDirectory(at: wsDir, withIntermediateDirectories: true)
+
+    let sid1 = "session-oh-001"
+    let s1Dir = sessionsDir.appendingPathComponent(sid1)
+    try? fm.createDirectory(at: s1Dir, withIntermediateDirectories: true)
+
+    let s1Meta = """
+    {"session_id":"\(sid1)","title":"Implement Stripe webhook handler","directory":"/Users/tester/payment-api","created_at":"2026-09-20T10:00:00Z"}
+    """
+    try? s1Meta.write(to: s1Dir.appendingPathComponent("metadata.json"), atomically: true, encoding: .utf8)
+
+    let s1Events = """
+    {"action":"message","args":{"content":"Please implement stripe webhook verification"},"timestamp":"2026-09-20T10:00:05Z"}
+    {"action":"run","args":{"command":"go test ./..."},"timestamp":"2026-09-20T10:00:10Z"}
+    """
+    try? s1Events.write(to: s1Dir.appendingPathComponent("events.jsonl"), atomically: true, encoding: .utf8)
+
+    let s1Log = logsDir.appendingPathComponent("\(sid1).log")
+    try? "session log entry line 1\nline 2\n".write(to: s1Log, atomically: true, encoding: .utf8)
+
+    let s1Ws = wsDir.appendingPathComponent(sid1)
+    try? fm.createDirectory(at: s1Ws, withIntermediateDirectories: true)
+    try? "package main".write(to: s1Ws.appendingPathComponent("webhook.go"), atomically: true, encoding: .utf8)
+
+    let sid2 = "session-oh-002"
+    let s2File = sessionsDir.appendingPathComponent("\(sid2).json")
+    let s2Json = """
+    {"session_id":"\(sid2)","title":"Fix CSS grid responsiveness","events":[{},{},{}]}
+    """
+    try? s2Json.write(to: s2File, atomically: true, encoding: .utf8)
+
+    let serverLog = logsDir.appendingPathComponent("openhands-server.log")
+    try? "server starting on :3000\nready\n".write(to: serverLog, atomically: true, encoding: .utf8)
+
+    let scanner = OpenHandsScanner(storageURL: tempDir)
+    TestRunner.assertTest(scanner.isInstalled, "Mock scanner isInstalled is true", testName: testName)
+
+    do {
+        var items = try await scanner.scan()
+        TestRunner.assertTest(items.count == 3, "Detected 3 items (2 sessions + 1 orphaned log group, found: \(items.count))", testName: testName)
+
+        if let item1 = items.first(where: { $0.sessionId == sid1 }) {
+            TestRunner.assertTest(item1.title == "Implement Stripe webhook handler", "Session 1 title matches metadata", testName: testName)
+            TestRunner.assertTest(item1.projectPath == "/Users/tester/payment-api", "Session 1 projectPath matches metadata", testName: testName)
+            TestRunner.assertTest(item1.messageCount == 2, "Session 1 messageCount is 2", testName: testName)
+            TestRunner.assertTest(item1.associatedPaths.contains(s1Dir.path), "Session 1 associatedPaths contains session dir", testName: testName)
+            TestRunner.assertTest(item1.associatedPaths.contains(s1Log.path), "Session 1 associatedPaths contains log file", testName: testName)
+            TestRunner.assertTest(item1.associatedPaths.contains(s1Ws.path), "Session 1 associatedPaths contains workspace dir", testName: testName)
+        } else {
+            TestRunner.assertTest(false, "Session 1 not found", testName: testName)
+        }
+
+        if let logItem = items.first(where: { $0.sessionId.hasPrefix("openhands-logs") }) {
+            TestRunner.assertTest(logItem.associatedPaths.contains(serverLog.path), "Orphaned log group contains server log", testName: testName)
+        } else {
+            TestRunner.assertTest(false, "Orphaned log item not found", testName: testName)
+        }
+
+        if let item1 = items.first(where: { $0.sessionId == sid1 }) {
+            let freed = try await scanner.delete(items: [item1])
+            TestRunner.assertTest(freed == item1.sizeInBytes, "Freed size matches item1 size", testName: testName)
+            TestRunner.assertTest(!fm.fileExists(atPath: s1Dir.path), "Session 1 dir removed", testName: testName)
+            TestRunner.assertTest(!fm.fileExists(atPath: s1Log.path), "Session 1 log removed", testName: testName)
+            TestRunner.assertTest(!fm.fileExists(atPath: s1Ws.path), "Session 1 workspace removed", testName: testName)
+            TestRunner.assertTest(fm.fileExists(atPath: s2File.path), "Session 2 file still exists", testName: testName)
+            TestRunner.assertTest(fm.fileExists(atPath: serverLog.path), "server.log still exists", testName: testName)
+        }
+
+        let allFreed = try await scanner.cleanAll()
+        TestRunner.assertTest(allFreed > 0, "cleanAll freed bytes > 0", testName: testName)
+        items = try await scanner.scan()
+        TestRunner.assertTest(items.isEmpty, "Rescan after cleanAll returns 0 items", testName: testName)
+    } catch {
+        TestRunner.assertTest(false, "Mock OpenHands test threw error: \(error)", testName: testName)
+    }
+}
+
 // MARK: - Main Runner
 
 @main
@@ -1350,6 +2183,23 @@ struct Main {
         await testMockPiAgentScanner()
         await testUnifiedMultiAgentScan()
 
+        // 4 IDE Agent Scanners
+        await testRealVSCodeChatScannerReadOnly()
+        await testMockVSCodeChatScanner()
+        await testMockCursorScanner()
+        await testMockWindsurfScanner()
+        await testMockTraeScanner()
+
+        // 4 New Agent Scanners (OpenViking, Aider, Zed, OpenHands)
+        await testRealOpenVikingScannerReadOnly()
+        await testMockOpenVikingScanner()
+        await testRealAiderScannerReadOnly()
+        await testMockAiderScanner()
+        await testRealZedScannerReadOnly()
+        await testMockZedScanner()
+        await testRealOpenHandsScannerReadOnly()
+        await testMockOpenHandsScanner()
+
         let elapsed = Date().timeIntervalSince(startTime)
 
         print("\n\u{001B}[1;35m==================================================================")
@@ -1371,4 +2221,5 @@ struct Main {
         }
     }
 }
+
 

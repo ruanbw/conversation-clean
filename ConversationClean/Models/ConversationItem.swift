@@ -4,10 +4,18 @@ enum ConversationCategory: String, CaseIterable, Identifiable {
     case all = "全部会话"
     case claudeCode = "Claude Code"
     case codex = "Codex"
+    case piAgent = "Pi Agent"
     case cline = "Cline"
     case rooCode = "Roo Code"
     case continueDev = "Continue"
-    case piAgent = "Pi Agent"
+    case copilotChat = "Copilot / VS Code"
+    case cursor = "Cursor"
+    case windsurf = "Windsurf"
+    case trae = "Trae"
+    case aider = "Aider"
+    case openViking = "OpenViking"
+    case zed = "Zed AI"
+    case openHands = "OpenHands"
 
     var id: String { rawValue }
 
@@ -19,14 +27,30 @@ enum ConversationCategory: String, CaseIterable, Identifiable {
             return "terminal.fill"
         case .codex:
             return "chevron.left.forwardslash.chevron.right"
+        case .piAgent:
+            return "cpu"
         case .cline:
             return "bolt.horizontal.fill"
         case .rooCode:
             return "sparkles"
         case .continueDev:
             return "play.rectangle.fill"
-        case .piAgent:
-            return "cpu"
+        case .copilotChat:
+            return "bubble.left.and.exclamationmark.bubble.right.fill"
+        case .cursor:
+            return "cursorarrow.rays"
+        case .windsurf:
+            return "wind"
+        case .trae:
+            return "bolt.ring.closed"
+        case .aider:
+            return "terminal"
+        case .openViking:
+            return "shield.lefthalf.filled"
+        case .zed:
+            return "character.textbox"
+        case .openHands:
+            return "hand.raised.fill"
         }
     }
 }

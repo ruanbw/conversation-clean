@@ -26,7 +26,15 @@ final class AgentScanService {
             ClineScanner(),
             RooCodeScanner(),
             ContinueScanner(),
-            PiAgentScanner()
+            PiAgentScanner(),
+            VSCodeChatScanner(),
+            CursorScanner(),
+            WindsurfScanner(),
+            TraeScanner(),
+            OpenVikingScanner(),
+            AiderScanner(),
+            ZedScanner(),
+            OpenHandsScanner()
         ]
     }
 
