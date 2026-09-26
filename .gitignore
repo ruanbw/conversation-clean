@@ -35,3 +35,6 @@ Icon
 *.mode1v3
 *.mode2v3
 *.perspectivev3
+
+# Pi agent 后台任务输出
+.pi/tasks/

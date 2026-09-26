@@ -98,8 +98,8 @@ final class CodexScanner: AgentScanner, @unchecked Sendable {
 
         cleanSessionIndex(excludingSessionIds: deletedSessionIds)
         cleanGlobalState(excludingSessionIds: deletedSessionIds)
-        cleanEmptyDirectories(in: storageURL.appendingPathComponent("sessions"))
-        cleanEmptyDirectories(in: storageURL.appendingPathComponent("archived_sessions"))
+        DirectoryCleaner.cleanEmptyDirectories(in: storageURL.appendingPathComponent("sessions"))
+        DirectoryCleaner.cleanEmptyDirectories(in: storageURL.appendingPathComponent("archived_sessions"))
 
         return totalBytesFreed
     }
@@ -366,26 +366,6 @@ final class CodexScanner: AgentScanner, @unchecked Sendable {
                     try? updatedData.write(to: stateURL, options: .atomic)
                 }
             }
-        }
-    }
-
-    private func cleanEmptyDirectories(in rootURL: URL) {
-        let fileManager = FileManager.default
-        guard fileManager.fileExists(atPath: rootURL.path),
-              let enumerator = fileManager.enumerator(at: rootURL, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles]) else {
-            return
-        }
-
-        var dirs: [URL] = []
-        while let url = enumerator.nextObject() as? URL {
-            var isDir: ObjCBool = false
-            if fileManager.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue {
-                dirs.append(url)
-            }
-        }
-
-        for dir in dirs.reversed() {
-            FileSizeHelper.removeIfEmptyDirectory(path: dir.path)
         }
     }
 }

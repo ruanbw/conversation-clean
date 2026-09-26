@@ -1,7 +1,7 @@
 import Foundation
 
-final class WindsurfScanner: AgentScanner, @unchecked Sendable {
-    let category: ConversationCategory = .windsurf
+final class TraeScanner: AgentScanner, @unchecked Sendable {
+    let category: ConversationCategory = .trae
     let customStorageURL: URL?
 
     init(baseURL: URL? = nil) {
@@ -16,11 +16,11 @@ final class WindsurfScanner: AgentScanner, @unchecked Sendable {
         let base: URL
         if let custom = customStorageURL {
             base = custom
-        } else if let env = ProcessInfo.processInfo.environment["WINDSURF_HOME"], !env.isEmpty {
+        } else if let env = ProcessInfo.processInfo.environment["TRAE_HOME"], !env.isEmpty {
             base = URL(fileURLWithPath: env)
         } else {
             base = FileManager.default.homeDirectoryForCurrentUser
-                .appendingPathComponent("Library/Application Support/Windsurf")
+                .appendingPathComponent("Library/Application Support/Trae")
         }
         return (try? base.resourceValues(forKeys: [.canonicalPathKey]).canonicalPath).map { URL(fileURLWithPath: $0) } ?? base.standardized
     }
@@ -37,32 +37,9 @@ final class WindsurfScanner: AgentScanner, @unchecked Sendable {
         return directUser
     }
 
-    var codeiumWindsurfURL: URL {
-        if let custom = customStorageURL {
-            let candidate1 = custom.appendingPathComponent(".codeium/windsurf")
-            if FileManager.default.fileExists(atPath: candidate1.path) {
-                return candidate1
-            }
-            let candidate2 = custom.appendingPathComponent("codeium/windsurf")
-            if FileManager.default.fileExists(atPath: candidate2.path) {
-                return candidate2
-            }
-        }
-        return FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".codeium/windsurf")
-    }
-
     var isInstalled: Bool {
         let fm = FileManager.default
-        if fm.fileExists(atPath: storageURL.path) {
-            return true
-        }
-        if customStorageURL != nil {
-            return false
-        }
-        let dotCodeium = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".codeium/windsurf")
-        return fm.fileExists(atPath: dotCodeium.path)
+        return fm.fileExists(atPath: storageURL.path)
     }
 
     // MARK: - Scan
@@ -82,7 +59,7 @@ final class WindsurfScanner: AgentScanner, @unchecked Sendable {
         let userDir = userDirectoryURL
         let workspaceStorageDir = userDir.appendingPathComponent("workspaceStorage")
 
-        // 1. Scan User/workspaceStorage/*/
+        // 1. Scan User/workspaceStorage/*/chatSessions/
         if fileManager.fileExists(atPath: workspaceStorageDir.path),
            let wsEntries = try? fileManager.contentsOfDirectory(
                at: workspaceStorageDir,
@@ -157,13 +134,6 @@ final class WindsurfScanner: AgentScanner, @unchecked Sendable {
             }
         }
 
-        // 3. Scan ~/.codeium/windsurf/
-        let codeiumDir = codeiumWindsurfURL
-        if fileManager.fileExists(atPath: codeiumDir.path) {
-            let cascadeItems = scanCodeiumWindsurfDirectory(codeiumDir: codeiumDir)
-            items.append(contentsOf: cascadeItems)
-        }
-
         return items.sorted(by: { $0.updatedAt > $1.updatedAt })
     }
 
@@ -180,8 +150,6 @@ final class WindsurfScanner: AgentScanner, @unchecked Sendable {
 
         for item in items {
             totalFreed += item.sizeInBytes
-
-            // 1. Remove associated paths and ensure cascade folders are completely removed
             for path in item.associatedPaths {
                 let fileURL = URL(fileURLWithPath: path)
                 if path.contains("chatSessions") {
@@ -192,39 +160,11 @@ final class WindsurfScanner: AgentScanner, @unchecked Sendable {
                     let globalDb = userDir.appendingPathComponent("globalStorage/state.vscdb")
                     stateDbToSessions[globalDb, default: []].insert(item.sessionId)
                 }
-
-                var isDir: ObjCBool = false
-                if fileManager.fileExists(atPath: path, isDirectory: &isDir) {
-                    _ = FileSizeHelper.removeIfExists(path: path)
-
-                    // If a single file inside a cascade folder was removed, ensure the parent cascade folder is cleaned
-                    if !isDir.boolValue {
-                        let parentDir = fileURL.deletingLastPathComponent()
-                        let metaFile = parentDir.appendingPathComponent("meta.json")
-                        let cascadeFile = parentDir.appendingPathComponent("cascade.json")
-                        if !fileManager.fileExists(atPath: metaFile.path) && !fileManager.fileExists(atPath: cascadeFile.path) {
-                            FileSizeHelper.removeIfEmptyDirectory(path: parentDir.path)
-                        }
-                    }
-                }
-            }
-
-            // Also check standard cascade storage locations to ensure the entire cascade folder (with meta.json and cascade.json) is removed
-            let codeiumDir = codeiumWindsurfURL
-            let cascadeFolders = ["cascades", "cascade", "chats"]
-            for sub in cascadeFolders {
-                let cascadeDir = codeiumDir.appendingPathComponent(sub).appendingPathComponent(item.sessionId)
-                if fileManager.fileExists(atPath: cascadeDir.path) {
-                    _ = FileSizeHelper.removeIfExists(path: cascadeDir.path)
-                }
-                let cascadeJsonFile = codeiumDir.appendingPathComponent(sub).appendingPathComponent("\(item.sessionId).json")
-                if fileManager.fileExists(atPath: cascadeJsonFile.path) {
-                    _ = FileSizeHelper.removeIfExists(path: cascadeJsonFile.path)
-                }
+                _ = FileSizeHelper.removeIfExists(path: path)
             }
         }
 
-        // Atomically sync state.vscdb indexes so Windsurf's chat dropdown never shows ghost sessions
+        // Atomically sync state.vscdb indexes to prevent ghost sessions in Trae
         for (stateDbURL, sessionIds) in stateDbToSessions {
             VSCDBHelper.removeChatSessions(from: stateDbURL, sessionIds: sessionIds)
         }
@@ -250,7 +190,7 @@ final class WindsurfScanner: AgentScanner, @unchecked Sendable {
             VSCDBHelper.removeChatSessions(from: globalStateDb, sessionIds: allSessionIds)
         }
 
-        cleanEmptyWorkspaceStorageDirs()
+        DirectoryCleaner.cleanEmptyWorkspaceStorageDirs(under: userDirectoryURL)
 
         return totalFreed
     }
@@ -263,7 +203,7 @@ final class WindsurfScanner: AgentScanner, @unchecked Sendable {
         let userDir = userDirectoryURL
         let workspaceStorageDir = userDir.appendingPathComponent("workspaceStorage")
 
-        // Clean workspaceStorage chatSessions & chatEditingSessions
+        // Clean chatSessions & chatEditingSessions in workspaceStorage
         if fileManager.fileExists(atPath: workspaceStorageDir.path),
            let wsEntries = try? fileManager.contentsOfDirectory(
                at: workspaceStorageDir,
@@ -312,21 +252,26 @@ final class WindsurfScanner: AgentScanner, @unchecked Sendable {
             VSCDBHelper.clearAllChatSessions(from: globalStateDb)
         }
 
-        // Clean ~/.codeium/windsurf cascades, chats, memories
-        let codeiumDir = codeiumWindsurfURL
-        let dirsToClean = ["cascades", "chats", "memories", "cascade"]
-        for sub in dirsToClean {
-            let subURL = codeiumDir.appendingPathComponent(sub)
-            if fileManager.fileExists(atPath: subURL.path) {
-                let sz = FileSizeHelper.sizeOf(path: subURL.path)
-                if FileSizeHelper.removeIfExists(path: subURL.path) {
-                    freed += sz
-                    try? fileManager.createDirectory(at: subURL, withIntermediateDirectories: true)
+        // Clean Trae extension caches in globalStorage
+        if fileManager.fileExists(atPath: globalStorageDir.path),
+           let globalEntries = try? fileManager.contentsOfDirectory(
+               at: globalStorageDir,
+               includingPropertiesForKeys: [.isDirectoryKey],
+               options: [.skipsHiddenFiles]
+           ) {
+            for entry in globalEntries {
+                let name = entry.lastPathComponent.lowercased()
+                if name.contains("trae") || name.contains("chat") {
+                    let sz = FileSizeHelper.sizeOf(path: entry.path)
+                    if FileSizeHelper.removeIfExists(path: entry.path) {
+                        freed += sz
+                        try? fileManager.createDirectory(at: entry, withIntermediateDirectories: true)
+                    }
                 }
             }
         }
 
-        cleanEmptyWorkspaceStorageDirs()
+        DirectoryCleaner.cleanEmptyWorkspaceStorageDirs(under: userDirectoryURL)
 
         return freed
     }
@@ -411,12 +356,12 @@ final class WindsurfScanner: AgentScanner, @unchecked Sendable {
         let finalTitle: String
         if let prompt = firstUserPrompt, !prompt.isEmpty {
             let singleLine = prompt.components(separatedBy: .newlines).first?.trimmingCharacters(in: .whitespaces) ?? prompt
-            finalTitle = singleLine.isEmpty ? "Windsurf 对话" : String(singleLine.prefix(80))
+            finalTitle = singleLine.isEmpty ? "Trae 对话" : String(singleLine.prefix(80))
         } else if let custom = detectedCustomTitle, !custom.isEmpty {
             let singleLine = custom.components(separatedBy: .newlines).first?.trimmingCharacters(in: .whitespaces) ?? custom
-            finalTitle = singleLine.isEmpty ? "Windsurf 对话" : String(singleLine.prefix(80))
+            finalTitle = singleLine.isEmpty ? "Trae 对话" : String(singleLine.prefix(80))
         } else {
-            finalTitle = "Windsurf 对话"
+            finalTitle = "Trae 对话"
         }
 
         let snippet: String
@@ -458,83 +403,6 @@ final class WindsurfScanner: AgentScanner, @unchecked Sendable {
             snippet: snippet,
             associatedPaths: associatedPaths
         )
-    }
-
-    // MARK: - Codeium Windsurf Scans
-
-    private func scanCodeiumWindsurfDirectory(codeiumDir: URL) -> [ConversationItem] {
-        let fm = FileManager.default
-        var items: [ConversationItem] = []
-
-        // Cascades folder
-        let cascadeFolders = ["cascades", "cascade", "chats"]
-        for sub in cascadeFolders {
-            let subDir = codeiumDir.appendingPathComponent(sub)
-            guard fm.fileExists(atPath: subDir.path),
-                  let entries = try? fm.contentsOfDirectory(at: subDir, includingPropertiesForKeys: [.isDirectoryKey, .contentModificationDateKey], options: [.skipsHiddenFiles]) else {
-                continue
-            }
-
-            for entry in entries {
-                var isDir: ObjCBool = false
-                guard fm.fileExists(atPath: entry.path, isDirectory: &isDir) else { continue }
-
-                let sid = entry.deletingPathExtension().lastPathComponent
-                guard !sid.isEmpty, !sid.hasPrefix(".") else { continue }
-
-                let size = FileSizeHelper.sizeOf(path: entry.path)
-                let date = (try? entry.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date()
-
-                // Check for metadata or json
-                var promptTitle: String?
-                var projectPath: String?
-
-                if isDir.boolValue {
-                    let metaCandidates = ["meta.json", "cascade.json", "session.json"]
-                    for metaName in metaCandidates {
-                        let metaFile = entry.appendingPathComponent(metaName)
-                        if fm.fileExists(atPath: metaFile.path),
-                           let data = try? Data(contentsOf: metaFile),
-                           let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] {
-                            promptTitle = json["title"] as? String ?? json["prompt"] as? String ?? json["name"] as? String
-                            projectPath = json["cwd"] as? String ?? json["projectPath"] as? String ?? json["workspace"] as? String
-                            break
-                        }
-                    }
-                } else if entry.pathExtension.lowercased() == "json" {
-                    if let data = try? Data(contentsOf: entry),
-                       let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] {
-                        promptTitle = json["title"] as? String ?? json["prompt"] as? String
-                        projectPath = json["cwd"] as? String ?? json["projectPath"] as? String
-                    }
-                }
-
-                let finalTitle: String
-                if let pt = promptTitle, !pt.isEmpty {
-                    let singleLine = pt.components(separatedBy: .newlines).first?.trimmingCharacters(in: .whitespaces) ?? pt
-                    finalTitle = String(singleLine.prefix(80))
-                } else {
-                    finalTitle = "Windsurf Cascade 会话 \(sid.prefix(8))"
-                }
-
-                items.append(ConversationItem(
-                    id: UUID(),
-                    sessionId: sid,
-                    title: finalTitle,
-                    category: self.category,
-                    projectPath: projectPath,
-                    gitBranch: nil,
-                    messageCount: 1,
-                    sizeInBytes: size,
-                    updatedAt: date,
-                    isSelected: false,
-                    snippet: finalTitle,
-                    associatedPaths: [entry.path]
-                ))
-            }
-        }
-
-        return items
     }
 
     // MARK: - Helpers
@@ -584,24 +452,5 @@ final class WindsurfScanner: AgentScanner, @unchecked Sendable {
             return stripped.removingPercentEncoding ?? stripped
         }
         return uriString
-    }
-
-    private func cleanEmptyWorkspaceStorageDirs() {
-        let fileManager = FileManager.default
-        let workspaceStorageDir = userDirectoryURL.appendingPathComponent("workspaceStorage")
-        guard fileManager.fileExists(atPath: workspaceStorageDir.path),
-              let wsEntries = try? fileManager.contentsOfDirectory(
-                  at: workspaceStorageDir,
-                  includingPropertiesForKeys: [.isDirectoryKey],
-                  options: [.skipsHiddenFiles]
-              ) else { return }
-
-        for wsDir in wsEntries {
-            let chatDir = wsDir.appendingPathComponent("chatSessions")
-            FileSizeHelper.removeIfEmptyDirectory(path: chatDir.path)
-
-            let editDir = wsDir.appendingPathComponent("chatEditingSessions")
-            FileSizeHelper.removeIfEmptyDirectory(path: editDir.path)
-        }
     }
 }

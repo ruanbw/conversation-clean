@@ -1,22 +1,17 @@
 # ConversationClean (macOS)
 
-基于 Swift 6 + SwiftUI 构建的现代化 macOS 原生应用模板，开箱即用。
+基于 Swift 6 + SwiftUI 构建的 macOS 原生应用，用于扫描并清理本机各类 AI 编码 Agent / IDE 遗留的会话数据。
 
 ---
 
 ## 🌟 项目特性
 
-- **现代 macOS 设计规范**：采用 `NavigationSplitView` 双栏布局、统一工具栏（Unified Toolbar）、原生 SF Symbols 图标体系。
-- **清晰的 MVVM 架构**：
-  - `Models/`：数据模型（`ConversationItem`、`ConversationCategory`）。
-  - `ViewModels/`：业务状态管理（`CleanViewModel`，基于 `@MainActor` 与 Combine）。
-  - `Views/`：界面组件分离（侧边栏 `SidebarView`、内容栏 `DetailView`、偏好设置 `SettingsView`）。
-- **完善的交互体验**：
-  - 搜索与分类过滤（`.searchable`）。
-  - 会话多选与全选批量清理操作。
-  - 异步模拟扫描与清理状态提示（Progress / Alert）。
-  - 原生 Preferences 设置窗口（`Settings { ... }` 与 `@AppStorage`）。
-- **标准 Xcode 工程**：自带完整的 `ConversationClean.xcodeproj` 与共享构建 Scheme，无需额外安装第三方脚手架。
+- **15 款 Agent 全覆盖**：统一 `AgentScanner` 协议接入 CLI Agent（Claude Code、Codex、Pi Agent、Cline、Roo Code、Continue.dev、OpenViking、Aider、Zed AI、OpenHands）与 VS Code 系 IDE（VS Code Chat、Cursor、Windsurf、Trae、Antigravity）。
+- **双层索引原子清理**：对同时维护「会话文件 + SQLite 索引」的 Agent（VS Code 系 `state.vscdb`、Pi Agent context-mode），删除会话时同步清理索引，避免幽灵会话残留。
+- **现代 macOS 设计规范**：`NavigationSplitView` 双栏布局、统一工具栏、原生 SF Symbols 图标体系。
+- **清晰的 MVVM 架构**：`Models/` 数据模型、`ViewModels/` 状态管理、`Views/` 界面组件。
+- **并发扫描**：`AgentScanService` 通过 `withTaskGroup` 并发调度全部扫描器。
+- **标准 Xcode 工程**：自带完整的 `ConversationClean.xcodeproj` 与共享构建 Scheme。
 - **App Sandbox**：预置标准 `.entitlements` 权限配置。
 
 ---
@@ -28,6 +23,24 @@ conversation-clean/
 ├── .gitignore                                  # macOS / Xcode 专用忽略规则
 ├── README.md                                   # 项目说明文档
 ├── ConversationClean.xcodeproj/                # Xcode 工程与 Scheme 配置
+├── scripts/
+│   ├── run_tests.sh                            # 扫描器验证套件：编译 + 运行
+│   └── tests/                                  # 按 Agent 家族拆分的测试用例
+│       ├── TestSupport/
+│       │   ├── TestRunner.swift                # 断言收集、控制台输出、套件汇总
+│       │   ├── TestCase.swift                  # 用例上下文（自动携带测试名）
+│       │   ├── Fixtures.swift                  # 目录 / 文件 / SQLite 夹具构造助手
+│       │   └── TestRegistry.swift              # 用例注册表与 @main 入口
+│       ├── ClaudeCodeTests.swift               # 各 Agent 的 real / mock 用例
+│       ├── CodexTests.swift
+│       ├── DeletionTests.swift                 # 删除与字节统计验证
+│       ├── ClineTests.swift · RooContinueTests.swift
+│       ├── PiAgentTests.swift · PiAgentContextModeTests.swift
+│       ├── UnifiedScanTests.swift              # 多 Agent 并发统一扫描
+│       ├── VSCodeChatTests.swift · CursorTests.swift
+│       ├── WindsurfTraeTests.swift · AntigravityTests.swift
+│       ├── VSCDBIndexSyncTests.swift           # state.vscdb 索引同步
+│       └── OpenVikingTests.swift · AiderTests.swift · ZedTests.swift · OpenHandsTests.swift
 └── ConversationClean/                          # 源代码主目录
     ├── ConversationCleanApp.swift              # App 启动入口与窗口生命周期
     ├── ContentView.swift                       # 根视图 (NavigationSplitView)
@@ -39,6 +52,26 @@ conversation-clean/
     │   ├── SidebarView.swift                   # 侧边栏与缓存概览
     │   ├── DetailView.swift                    # 会话列表与批量操作栏
     │   └── SettingsView.swift                  # 偏好设置面板
+    ├── Core/                                   # 跨扫描器共享基建
+    │   ├── AgentScannerProtocol.swift          # 扫描器协议 + FileSizeHelper
+    │   ├── AgentScanService.swift              # 并发调度与聚合
+    │   ├── DateParsing.swift                   # 进程级共享 ISO8601 解析
+    │   ├── SQLite/
+    │   │   └── VSCDBHelper.swift               # state.vscdb 索引读写
+    │   └── FileSystem/
+    │       └── DirectoryCleaner.swift          # 空目录清理
+    ├── Scanners/                               # 按存储形态分层的扫描器
+    │   ├── CLIAgents/                          # 以 JSONL / JSON 会话文件为主
+    │   │   ├── ClaudeCodeScanner.swift · CodexScanner.swift
+    │   │   ├── PiAgentScanner.swift            # 协议实现与预索引
+    │   │   ├── PiAgentScanner+Parsing.swift · +ContextMode.swift · +ACPSessionMap.swift
+    │   │   ├── ClineScanner.swift · RooCodeScanner.swift · ContinueScanner.swift
+    │   │   └── OpenVikingScanner.swift · AiderScanner.swift · ZedScanner.swift · OpenHandsScanner.swift
+    │   └── VSCodeFamily/                       # 共享 state.vscdb 索引形态
+    │       ├── VSCodeChatScanner.swift
+    │       ├── CursorScanner.swift             # 协议实现
+    │       ├── CursorScanner+JSONL.swift · +StateDatabase.swift · +DirectoryScan.swift
+    │       └── WindsurfScanner.swift · TraeScanner.swift · AntigravityScanner.swift
     ├── Assets.xcassets/                        # 图标与配色资源
     └── ConversationClean.entitlements          # 沙盒与权限声明
 ```
@@ -57,13 +90,24 @@ open ConversationClean.xcodeproj
 
 在 Xcode 中选择目标设备为 **My Mac**，按下快捷键 `Cmd + R` 即可运行。
 
-### 2. 命令行编译与测试
-
-在项目根目录下执行：
+### 2. 命令行编译
 
 ```bash
 xcodebuild -scheme ConversationClean -configuration Debug build
 ```
+
+### 3. 运行扫描器验证套件
+
+```bash
+./scripts/run_tests.sh
+```
+
+套件会针对每个扫描器执行两类验证：
+
+- **real 用例（READ-ONLY）**：扫描本机真实存在的 Agent 数据目录，仅读取与解析，不修改任何文件。
+- **mock 用例**：在临时目录构造夹具（含 mock `state.vscdb` / SQLite 索引），验证扫描、字节统计与删除后的索引同步。
+
+全部断言通过时退出码为 `0`，否则为 `1` 并列出失败断言。
 
 ---
 

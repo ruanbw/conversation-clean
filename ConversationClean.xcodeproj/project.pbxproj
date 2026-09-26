@@ -33,6 +33,14 @@
 		CC0100252D00000100000001 /* TraeScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200252D00000100000001 /* TraeScanner.swift */; };
 		CC0100262D00000100000001 /* VSCDBHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200262D00000100000001 /* VSCDBHelper.swift */; };
 		CC0100272D00000100000001 /* AntigravityScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200272D00000100000001 /* AntigravityScanner.swift */; };
+		CC0100282D00000100000001 /* DateParsing.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200282D00000100000001 /* DateParsing.swift */; };
+		CC0100292D00000100000001 /* DirectoryCleaner.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200292D00000100000001 /* DirectoryCleaner.swift */; };
+		CC0100302D00000100000001 /* PiAgentScanner+Parsing.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200302D00000100000001 /* PiAgentScanner+Parsing.swift */; };
+		CC0100312D00000100000001 /* PiAgentScanner+ContextMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200312D00000100000001 /* PiAgentScanner+ContextMode.swift */; };
+		CC0100322D00000100000001 /* PiAgentScanner+ACPSessionMap.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200322D00000100000001 /* PiAgentScanner+ACPSessionMap.swift */; };
+		CC0100332D00000100000001 /* CursorScanner+JSONL.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200332D00000100000001 /* CursorScanner+JSONL.swift */; };
+		CC0100342D00000100000001 /* CursorScanner+StateDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200342D00000100000001 /* CursorScanner+StateDatabase.swift */; };
+		CC0100352D00000100000001 /* CursorScanner+DirectoryScan.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200352D00000100000001 /* CursorScanner+DirectoryScan.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -64,6 +72,14 @@
 		CC0200252D00000100000001 /* TraeScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TraeScanner.swift; sourceTree = "<group>"; };
 		CC0200262D00000100000001 /* VSCDBHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VSCDBHelper.swift; sourceTree = "<group>"; };
 		CC0200272D00000100000001 /* AntigravityScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AntigravityScanner.swift; sourceTree = "<group>"; };
+		CC0200282D00000100000001 /* DateParsing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DateParsing.swift"; sourceTree = "<group>"; };
+		CC0200292D00000100000001 /* DirectoryCleaner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DirectoryCleaner.swift"; sourceTree = "<group>"; };
+		CC0200302D00000100000001 /* PiAgentScanner+Parsing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PiAgentScanner+Parsing.swift"; sourceTree = "<group>"; };
+		CC0200312D00000100000001 /* PiAgentScanner+ContextMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PiAgentScanner+ContextMode.swift"; sourceTree = "<group>"; };
+		CC0200322D00000100000001 /* PiAgentScanner+ACPSessionMap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PiAgentScanner+ACPSessionMap.swift"; sourceTree = "<group>"; };
+		CC0200332D00000100000001 /* CursorScanner+JSONL.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CursorScanner+JSONL.swift"; sourceTree = "<group>"; };
+		CC0200342D00000100000001 /* CursorScanner+StateDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CursorScanner+StateDatabase.swift"; sourceTree = "<group>"; };
+		CC0200352D00000100000001 /* CursorScanner+DirectoryScan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CursorScanner+DirectoryScan.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -93,7 +109,8 @@
 				CC0400032D00000100000001 /* Models */,
 				CC0400042D00000100000001 /* ViewModels */,
 				CC0400052D00000100000001 /* Views */,
-				CC0400072D00000100000001 /* Services */,
+				CC0400082D00000100000001 /* Core */,
+				CC0400092D00000100000001 /* Scanners */,
 				CC0200082D00000100000001 /* Assets.xcassets */,
 				CC0200092D00000100000001 /* ConversationClean.entitlements */,
 			);
@@ -126,29 +143,76 @@
 			path = Views;
 			sourceTree = "<group>";
 		};
-		CC0400072D00000100000001 /* Services */ = {
+		CC0400082D00000100000001 /* Core */ = {
 			isa = PBXGroup;
 			children = (
 				CC0200102D00000100000001 /* AgentScannerProtocol.swift */,
+				CC0200132D00000100000001 /* AgentScanService.swift */,
+				CC0200282D00000100000001 /* DateParsing.swift */,
+				CC0400102D00000100000001 /* SQLite */,
+				CC0400112D00000100000001 /* FileSystem */,
+			);
+			path = Core;
+			sourceTree = "<group>";
+		};
+		CC0400102D00000100000001 /* SQLite */ = {
+			isa = PBXGroup;
+			children = (
+				CC0200262D00000100000001 /* VSCDBHelper.swift */,
+			);
+			path = SQLite;
+			sourceTree = "<group>";
+		};
+		CC0400112D00000100000001 /* FileSystem */ = {
+			isa = PBXGroup;
+			children = (
+				CC0200292D00000100000001 /* DirectoryCleaner.swift */,
+			);
+			path = FileSystem;
+			sourceTree = "<group>";
+		};
+		CC0400092D00000100000001 /* Scanners */ = {
+			isa = PBXGroup;
+			children = (
+				CC0400122D00000100000001 /* CLIAgents */,
+				CC0400132D00000100000001 /* VSCodeFamily */,
+			);
+			path = Scanners;
+			sourceTree = "<group>";
+		};
+		CC0400122D00000100000001 /* CLIAgents */ = {
+			isa = PBXGroup;
+			children = (
 				CC0200112D00000100000001 /* ClaudeCodeScanner.swift */,
 				CC0200122D00000100000001 /* CodexScanner.swift */,
-				CC0200132D00000100000001 /* AgentScanService.swift */,
 				CC0200142D00000100000001 /* ClineScanner.swift */,
 				CC0200152D00000100000001 /* RooCodeScanner.swift */,
 				CC0200162D00000100000001 /* ContinueScanner.swift */,
 				CC0200172D00000100000001 /* PiAgentScanner.swift */,
+				CC0200302D00000100000001 /* PiAgentScanner+Parsing.swift */,
+				CC0200312D00000100000001 /* PiAgentScanner+ContextMode.swift */,
+				CC0200322D00000100000001 /* PiAgentScanner+ACPSessionMap.swift */,
 				CC0200182D00000100000001 /* OpenVikingScanner.swift */,
 				CC0200192D00000100000001 /* AiderScanner.swift */,
 				CC0200202D00000100000001 /* ZedScanner.swift */,
 				CC0200212D00000100000001 /* OpenHandsScanner.swift */,
+			);
+			path = CLIAgents;
+			sourceTree = "<group>";
+		};
+		CC0400132D00000100000001 /* VSCodeFamily */ = {
+			isa = PBXGroup;
+			children = (
 				CC0200222D00000100000001 /* VSCodeChatScanner.swift */,
 				CC0200232D00000100000001 /* CursorScanner.swift */,
+				CC0200332D00000100000001 /* CursorScanner+JSONL.swift */,
+				CC0200342D00000100000001 /* CursorScanner+StateDatabase.swift */,
+				CC0200352D00000100000001 /* CursorScanner+DirectoryScan.swift */,
 				CC0200242D00000100000001 /* WindsurfScanner.swift */,
 				CC0200252D00000100000001 /* TraeScanner.swift */,
-				CC0200262D00000100000001 /* VSCDBHelper.swift */,
 				CC0200272D00000100000001 /* AntigravityScanner.swift */,
 			);
-			path = Services;
+			path = VSCodeFamily;
 			sourceTree = "<group>";
 		};
 		CC0400062D00000100000001 /* Products */ = {
@@ -253,6 +317,14 @@
 				CC0100252D00000100000001 /* TraeScanner.swift in Sources */,
 				CC0100262D00000100000001 /* VSCDBHelper.swift in Sources */,
 				CC0100272D00000100000001 /* AntigravityScanner.swift in Sources */,
+				CC0100282D00000100000001 /* DateParsing.swift in Sources */,
+				CC0100292D00000100000001 /* DirectoryCleaner.swift in Sources */,
+				CC0100302D00000100000001 /* PiAgentScanner+Parsing.swift in Sources */,
+				CC0100312D00000100000001 /* PiAgentScanner+ContextMode.swift in Sources */,
+				CC0100322D00000100000001 /* PiAgentScanner+ACPSessionMap.swift in Sources */,
+				CC0100332D00000100000001 /* CursorScanner+JSONL.swift in Sources */,
+				CC0100342D00000100000001 /* CursorScanner+StateDatabase.swift in Sources */,
+				CC0100352D00000100000001 /* CursorScanner+DirectoryScan.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

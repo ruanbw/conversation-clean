@@ -38,18 +38,6 @@ final class AntigravityScanner: AgentScanner, @unchecked Sendable {
         return "d72aac4b-eb6f-4cdc-af17-bb25a2d18e19"
     }
 
-    private static let isoFormatterWithFractional: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter
-    }()
-
-    private static let isoFormatter: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter
-    }()
-
     // MARK: - Scan
 
     func scan() async throws -> [ConversationItem] {
@@ -91,7 +79,7 @@ final class AntigravityScanner: AgentScanner, @unchecked Sendable {
                         var updatedAt = Date()
                         if let timePtr = sqlite3_column_text(stmt, 4) {
                             let timeStr = String(cString: timePtr)
-                            if let d = Self.isoFormatterWithFractional.date(from: timeStr) ?? Self.isoFormatter.date(from: timeStr) {
+                            if let d = ISODate.parse(timeStr) {
                                 updatedAt = d
                             }
                         }

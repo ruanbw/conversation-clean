@@ -41,18 +41,6 @@ final class OpenVikingScanner: AgentScanner, @unchecked Sendable {
         let peerId: String?
     }
 
-    private static let isoDateFormatterWithFractional: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter
-    }()
-
-    private static let isoDateFormatter: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter
-    }()
-
     // MARK: - Scan
 
     func scan() async throws -> [ConversationItem] {
@@ -232,7 +220,7 @@ final class OpenVikingScanner: AgentScanner, @unchecked Sendable {
                 createdAtDate = Date(timeIntervalSince1970: val)
             }
         } else if let tsStr = json["createdAt"] as? String {
-            createdAtDate = Self.isoDateFormatterWithFractional.date(from: tsStr) ?? Self.isoDateFormatter.date(from: tsStr)
+            createdAtDate = ISODate.parse(tsStr)
         }
 
         // Parse payload
@@ -241,7 +229,7 @@ final class OpenVikingScanner: AgentScanner, @unchecked Sendable {
         let peerId = payload?["peer_id"] as? String
 
         if createdAtDate == nil, let pCreated = payload?["created_at"] as? String {
-            createdAtDate = Self.isoDateFormatterWithFractional.date(from: pCreated) ?? Self.isoDateFormatter.date(from: pCreated)
+            createdAtDate = ISODate.parse(pCreated)
         }
 
         let extractedText = extractText(from: payload)

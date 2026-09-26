@@ -1,8 +1,7 @@
 import Foundation
-import SQLite3
 
-final class CursorScanner: AgentScanner, @unchecked Sendable {
-    let category: ConversationCategory = .cursor
+final class WindsurfScanner: AgentScanner, @unchecked Sendable {
+    let category: ConversationCategory = .windsurf
     let customStorageURL: URL?
 
     init(baseURL: URL? = nil) {
@@ -17,11 +16,11 @@ final class CursorScanner: AgentScanner, @unchecked Sendable {
         let base: URL
         if let custom = customStorageURL {
             base = custom
-        } else if let env = ProcessInfo.processInfo.environment["CURSOR_HOME"], !env.isEmpty {
+        } else if let env = ProcessInfo.processInfo.environment["WINDSURF_HOME"], !env.isEmpty {
             base = URL(fileURLWithPath: env)
         } else {
             base = FileManager.default.homeDirectoryForCurrentUser
-                .appendingPathComponent("Library/Application Support/Cursor")
+                .appendingPathComponent("Library/Application Support/Windsurf")
         }
         return (try? base.resourceValues(forKeys: [.canonicalPathKey]).canonicalPath).map { URL(fileURLWithPath: $0) } ?? base.standardized
     }
@@ -38,14 +37,19 @@ final class CursorScanner: AgentScanner, @unchecked Sendable {
         return directUser
     }
 
-    var dotCursorURL: URL {
+    var codeiumWindsurfURL: URL {
         if let custom = customStorageURL {
-            let candidate = custom.appendingPathComponent(".cursor")
-            if FileManager.default.fileExists(atPath: candidate.path) {
-                return candidate
+            let candidate1 = custom.appendingPathComponent(".codeium/windsurf")
+            if FileManager.default.fileExists(atPath: candidate1.path) {
+                return candidate1
+            }
+            let candidate2 = custom.appendingPathComponent("codeium/windsurf")
+            if FileManager.default.fileExists(atPath: candidate2.path) {
+                return candidate2
             }
         }
-        return FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".cursor")
+        return FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".codeium/windsurf")
     }
 
     var isInstalled: Bool {
@@ -56,8 +60,9 @@ final class CursorScanner: AgentScanner, @unchecked Sendable {
         if customStorageURL != nil {
             return false
         }
-        let dotCursor = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".cursor")
-        return fm.fileExists(atPath: dotCursor.path)
+        let dotCodeium = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".codeium/windsurf")
+        return fm.fileExists(atPath: dotCodeium.path)
     }
 
     // MARK: - Scan
@@ -77,7 +82,7 @@ final class CursorScanner: AgentScanner, @unchecked Sendable {
         let userDir = userDirectoryURL
         let workspaceStorageDir = userDir.appendingPathComponent("workspaceStorage")
 
-        // 1. Scan User/workspaceStorage/*/chatSessions/*.jsonl
+        // 1. Scan User/workspaceStorage/*/
         if fileManager.fileExists(atPath: workspaceStorageDir.path),
            let wsEntries = try? fileManager.contentsOfDirectory(
                at: workspaceStorageDir,
@@ -95,7 +100,6 @@ final class CursorScanner: AgentScanner, @unchecked Sendable {
                 let wsJsonURL = wsDir.appendingPathComponent("workspace.json")
                 let projectPath = Self.extractProjectPath(from: wsJsonURL)
 
-                // Check chatSessions/
                 let chatSessionsDir = wsDir.appendingPathComponent("chatSessions")
                 let chatEditingDir = wsDir.appendingPathComponent("chatEditingSessions")
 
@@ -117,16 +121,8 @@ final class CursorScanner: AgentScanner, @unchecked Sendable {
                         ))
                     }
                 }
-
-                // 2. Scan User/workspaceStorage/*/state.vscdb
-                let stateDbURL = wsDir.appendingPathComponent("state.vscdb")
-                if fileManager.fileExists(atPath: stateDbURL.path) {
-                    let dbItems = parseStateDatabase(dbURL: stateDbURL, projectPath: projectPath)
-                    items.append(contentsOf: dbItems)
-                }
             }
 
-            // Concurrently parse chatSessions jsonl
             let parsedJsonl: [ConversationItem] = await withTaskGroup(of: ConversationItem?.self) { group in
                 for target in jsonlTargets {
                     group.addTask {
@@ -145,7 +141,7 @@ final class CursorScanner: AgentScanner, @unchecked Sendable {
             items.append(contentsOf: parsedJsonl)
         }
 
-        // 3. Scan User/globalStorage/
+        // 2. Scan User/globalStorage/
         let globalStorageDir = userDir.appendingPathComponent("globalStorage")
         let emptyWindowDir = globalStorageDir.appendingPathComponent("emptyWindowChatSessions")
         if fileManager.fileExists(atPath: emptyWindowDir.path),
@@ -161,18 +157,11 @@ final class CursorScanner: AgentScanner, @unchecked Sendable {
             }
         }
 
-        // Scan globalStorage/cursor.cursor/
-        let cursorExtDir = globalStorageDir.appendingPathComponent("cursor.cursor")
-        if fileManager.fileExists(atPath: cursorExtDir.path) {
-            let extItems = scanCursorExtensionStorage(dirURL: cursorExtDir)
-            items.append(contentsOf: extItems)
-        }
-
-        // 4. Scan ~/.cursor/
-        let dotCursor = dotCursorURL
-        if fileManager.fileExists(atPath: dotCursor.path) {
-            let dotItems = scanDotCursorDirectory(dotURL: dotCursor)
-            items.append(contentsOf: dotItems)
+        // 3. Scan ~/.codeium/windsurf/
+        let codeiumDir = codeiumWindsurfURL
+        if fileManager.fileExists(atPath: codeiumDir.path) {
+            let cascadeItems = scanCodeiumWindsurfDirectory(codeiumDir: codeiumDir)
+            items.append(contentsOf: cascadeItems)
         }
 
         return items.sorted(by: { $0.updatedAt > $1.updatedAt })
@@ -183,38 +172,85 @@ final class CursorScanner: AgentScanner, @unchecked Sendable {
     func delete(items: [ConversationItem]) async throws -> Int64 {
         guard !items.isEmpty else { return 0 }
 
+        let fileManager = FileManager.default
+        let userDir = userDirectoryURL
         var totalFreed: Int64 = 0
         var stateDbToSessions: [URL: Set<String>] = [:]
-        let userDir = userDirectoryURL
+        let allSessionIds = Set(items.map { $0.sessionId })
 
         for item in items {
             totalFreed += item.sizeInBytes
 
+            // 1. Remove associated paths and ensure cascade folders are completely removed
             for path in item.associatedPaths {
                 let fileURL = URL(fileURLWithPath: path)
-                if path.hasSuffix(".vscdb") {
-                    stateDbToSessions[fileURL, default: []].insert(item.sessionId)
-                } else {
-                    if path.contains("chatSessions") {
-                        let wsDir = fileURL.deletingLastPathComponent().deletingLastPathComponent()
-                        let stateDbURL = wsDir.appendingPathComponent("state.vscdb")
-                        stateDbToSessions[stateDbURL, default: []].insert(item.sessionId)
-                    } else if path.contains("emptyWindowChatSessions") {
-                        let globalDb = userDir.appendingPathComponent("globalStorage/state.vscdb")
-                        stateDbToSessions[globalDb, default: []].insert(item.sessionId)
-                    }
+                if path.contains("chatSessions") {
+                    let wsDir = fileURL.deletingLastPathComponent().deletingLastPathComponent()
+                    let stateDbURL = wsDir.appendingPathComponent("state.vscdb")
+                    stateDbToSessions[stateDbURL, default: []].insert(item.sessionId)
+                } else if path.contains("emptyWindowChatSessions") {
+                    let globalDb = userDir.appendingPathComponent("globalStorage/state.vscdb")
+                    stateDbToSessions[globalDb, default: []].insert(item.sessionId)
+                }
+
+                var isDir: ObjCBool = false
+                if fileManager.fileExists(atPath: path, isDirectory: &isDir) {
                     _ = FileSizeHelper.removeIfExists(path: path)
+
+                    // If a single file inside a cascade folder was removed, ensure the parent cascade folder is cleaned
+                    if !isDir.boolValue {
+                        let parentDir = fileURL.deletingLastPathComponent()
+                        let metaFile = parentDir.appendingPathComponent("meta.json")
+                        let cascadeFile = parentDir.appendingPathComponent("cascade.json")
+                        if !fileManager.fileExists(atPath: metaFile.path) && !fileManager.fileExists(atPath: cascadeFile.path) {
+                            FileSizeHelper.removeIfEmptyDirectory(path: parentDir.path)
+                        }
+                    }
+                }
+            }
+
+            // Also check standard cascade storage locations to ensure the entire cascade folder (with meta.json and cascade.json) is removed
+            let codeiumDir = codeiumWindsurfURL
+            let cascadeFolders = ["cascades", "cascade", "chats"]
+            for sub in cascadeFolders {
+                let cascadeDir = codeiumDir.appendingPathComponent(sub).appendingPathComponent(item.sessionId)
+                if fileManager.fileExists(atPath: cascadeDir.path) {
+                    _ = FileSizeHelper.removeIfExists(path: cascadeDir.path)
+                }
+                let cascadeJsonFile = codeiumDir.appendingPathComponent(sub).appendingPathComponent("\(item.sessionId).json")
+                if fileManager.fileExists(atPath: cascadeJsonFile.path) {
+                    _ = FileSizeHelper.removeIfExists(path: cascadeJsonFile.path)
                 }
             }
         }
 
-        // Atomically sync state.vscdb: completely cleans both composer.composerData and chat.ChatSessionStore.index
+        // Atomically sync state.vscdb indexes so Windsurf's chat dropdown never shows ghost sessions
         for (stateDbURL, sessionIds) in stateDbToSessions {
             VSCDBHelper.removeChatSessions(from: stateDbURL, sessionIds: sessionIds)
-            deleteComposersFromStateDb(dbPath: stateDbURL.path, sessionIds: sessionIds)
         }
 
-        cleanEmptyWorkspaceStorageDirs()
+        // Sync all workspace state.vscdb and globalStorage state.vscdb with deleted session IDs
+        let workspaceStorageDir = userDir.appendingPathComponent("workspaceStorage")
+        if fileManager.fileExists(atPath: workspaceStorageDir.path),
+           let wsEntries = try? fileManager.contentsOfDirectory(
+               at: workspaceStorageDir,
+               includingPropertiesForKeys: [.isDirectoryKey],
+               options: [.skipsHiddenFiles]
+           ) {
+            for wsDir in wsEntries {
+                let stateDbURL = wsDir.appendingPathComponent("state.vscdb")
+                if fileManager.fileExists(atPath: stateDbURL.path) && stateDbToSessions[stateDbURL] == nil {
+                    VSCDBHelper.removeChatSessions(from: stateDbURL, sessionIds: allSessionIds)
+                }
+            }
+        }
+
+        let globalStateDb = userDir.appendingPathComponent("globalStorage/state.vscdb")
+        if fileManager.fileExists(atPath: globalStateDb.path) && stateDbToSessions[globalStateDb] == nil {
+            VSCDBHelper.removeChatSessions(from: globalStateDb, sessionIds: allSessionIds)
+        }
+
+        DirectoryCleaner.cleanEmptyWorkspaceStorageDirs(under: userDirectoryURL)
 
         return totalFreed
     }
@@ -227,7 +263,7 @@ final class CursorScanner: AgentScanner, @unchecked Sendable {
         let userDir = userDirectoryURL
         let workspaceStorageDir = userDir.appendingPathComponent("workspaceStorage")
 
-        // Clean chatSessions & chatEditingSessions in workspaceStorage
+        // Clean workspaceStorage chatSessions & chatEditingSessions
         if fileManager.fileExists(atPath: workspaceStorageDir.path),
            let wsEntries = try? fileManager.contentsOfDirectory(
                at: workspaceStorageDir,
@@ -251,18 +287,12 @@ final class CursorScanner: AgentScanner, @unchecked Sendable {
                     }
                 }
 
-                // Clean state.vscdb composer keys and chat session indexes completely using VSCDBHelper
+                // Clean and vacuum state.vscdb chat indexes
                 let stateDb = wsDir.appendingPathComponent("state.vscdb")
                 if fileManager.fileExists(atPath: stateDb.path) {
                     VSCDBHelper.clearAllChatSessions(from: stateDb)
                 }
             }
-        }
-
-        // Clean globalStorage/state.vscdb chat indexes completely using VSCDBHelper
-        let globalStateDb = userDir.appendingPathComponent("globalStorage/state.vscdb")
-        if fileManager.fileExists(atPath: globalStateDb.path) {
-            VSCDBHelper.clearAllChatSessions(from: globalStateDb)
         }
 
         // Clean emptyWindowChatSessions
@@ -276,27 +306,27 @@ final class CursorScanner: AgentScanner, @unchecked Sendable {
             }
         }
 
-        // Clean User/globalStorage/cursor.cursor/
-        let cursorExtDir = globalStorageDir.appendingPathComponent("cursor.cursor")
-        if fileManager.fileExists(atPath: cursorExtDir.path) {
-            let sz = FileSizeHelper.sizeOf(path: cursorExtDir.path)
-            if FileSizeHelper.removeIfExists(path: cursorExtDir.path) {
-                freed += sz
-                try? fileManager.createDirectory(at: cursorExtDir, withIntermediateDirectories: true)
+        // Clean globalStorage/state.vscdb chat indexes
+        let globalStateDb = userDir.appendingPathComponent("globalStorage/state.vscdb")
+        if fileManager.fileExists(atPath: globalStateDb.path) {
+            VSCDBHelper.clearAllChatSessions(from: globalStateDb)
+        }
+
+        // Clean ~/.codeium/windsurf cascades, chats, memories
+        let codeiumDir = codeiumWindsurfURL
+        let dirsToClean = ["cascades", "chats", "memories", "cascade"]
+        for sub in dirsToClean {
+            let subURL = codeiumDir.appendingPathComponent(sub)
+            if fileManager.fileExists(atPath: subURL.path) {
+                let sz = FileSizeHelper.sizeOf(path: subURL.path)
+                if FileSizeHelper.removeIfExists(path: subURL.path) {
+                    freed += sz
+                    try? fileManager.createDirectory(at: subURL, withIntermediateDirectories: true)
+                }
             }
         }
 
-        // Clean ~/.cursor/chats
-        let dotCursorChats = dotCursorURL.appendingPathComponent("chats")
-        if fileManager.fileExists(atPath: dotCursorChats.path) {
-            let sz = FileSizeHelper.sizeOf(path: dotCursorChats.path)
-            if FileSizeHelper.removeIfExists(path: dotCursorChats.path) {
-                freed += sz
-                try? fileManager.createDirectory(at: dotCursorChats, withIntermediateDirectories: true)
-            }
-        }
-
-        cleanEmptyWorkspaceStorageDirs()
+        DirectoryCleaner.cleanEmptyWorkspaceStorageDirs(under: userDirectoryURL)
 
         return freed
     }
@@ -381,12 +411,12 @@ final class CursorScanner: AgentScanner, @unchecked Sendable {
         let finalTitle: String
         if let prompt = firstUserPrompt, !prompt.isEmpty {
             let singleLine = prompt.components(separatedBy: .newlines).first?.trimmingCharacters(in: .whitespaces) ?? prompt
-            finalTitle = singleLine.isEmpty ? "Cursor 对话" : String(singleLine.prefix(80))
+            finalTitle = singleLine.isEmpty ? "Windsurf 对话" : String(singleLine.prefix(80))
         } else if let custom = detectedCustomTitle, !custom.isEmpty {
             let singleLine = custom.components(separatedBy: .newlines).first?.trimmingCharacters(in: .whitespaces) ?? custom
-            finalTitle = singleLine.isEmpty ? "Cursor 对话" : String(singleLine.prefix(80))
+            finalTitle = singleLine.isEmpty ? "Windsurf 对话" : String(singleLine.prefix(80))
         } else {
-            finalTitle = "Cursor 对话"
+            finalTitle = "Windsurf 对话"
         }
 
         let snippet: String
@@ -430,245 +460,76 @@ final class CursorScanner: AgentScanner, @unchecked Sendable {
         )
     }
 
-    // MARK: - SQLite state.vscdb Parsing
+    // MARK: - Codeium Windsurf Scans
 
-    private func parseStateDatabase(dbURL: URL, projectPath: String?) -> [ConversationItem] {
-        var items: [ConversationItem] = []
-        let dbPath = dbURL.path
-        let fileSize = FileSizeHelper.sizeOf(path: dbPath)
-
-        // Try SQLite first
-        var db: OpaquePointer?
-        if sqlite3_open_v2(dbPath, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK {
-            defer { sqlite3_close(db) }
-
-            let query = "SELECT key, value FROM ItemTable WHERE key IN ('composer.composerData', 'workbench.panel.aichat.view.aichat.chatdata');"
-            var stmt: OpaquePointer?
-            if sqlite3_prepare_v2(db, query, -1, &stmt, nil) == SQLITE_OK {
-                defer { sqlite3_finalize(stmt) }
-
-                while sqlite3_step(stmt) == SQLITE_ROW {
-                    guard let keyPtr = sqlite3_column_text(stmt, 0),
-                          let valPtr = sqlite3_column_text(stmt, 1) else { continue }
-
-                    let key = String(cString: keyPtr)
-                    let valueStr = String(cString: valPtr)
-
-                    if key == "composer.composerData" {
-                        let parsed = parseComposerDataString(valueStr, dbURL: dbURL, totalDbSize: fileSize, projectPath: projectPath)
-                        items.append(contentsOf: parsed)
-                    } else if key == "workbench.panel.aichat.view.aichat.chatdata" {
-                        let parsed = parseAiChatDataString(valueStr, dbURL: dbURL, totalDbSize: fileSize, projectPath: projectPath)
-                        items.append(contentsOf: parsed)
-                    }
-                }
-            }
-        }
-
-        // Fallback for mock test fixture files (plain JSON or non-SQLite)
-        if items.isEmpty {
-            if let data = try? Data(contentsOf: dbURL),
-               let jsonStr = String(data: data, encoding: .utf8) {
-                let parsed = parseComposerDataString(jsonStr, dbURL: dbURL, totalDbSize: fileSize, projectPath: projectPath)
-                items.append(contentsOf: parsed)
-            }
-        }
-
-        return items
-    }
-
-    private func parseComposerDataString(_ str: String, dbURL: URL, totalDbSize: Int64, projectPath: String?) -> [ConversationItem] {
-        guard let data = str.data(using: .utf8),
-              let dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
-              let composers = dict["allComposers"] as? [[String: Any]], !composers.isEmpty else {
-            return []
-        }
-
-        var results: [ConversationItem] = []
-        let count = Int64(composers.count)
-        let perComposerSize = max(1, totalDbSize / count)
-
-        for composer in composers {
-            let cid = composer["composerId"] as? String ?? UUID().uuidString
-            let name = composer["name"] as? String
-            let text = composer["text"] as? String
-            let richText = composer["richText"] as? String
-
-            let rawTitle = name ?? text ?? richText ?? "Cursor Composer"
-            let singleLine = rawTitle.components(separatedBy: .newlines).first?.trimmingCharacters(in: .whitespaces) ?? rawTitle
-            let title = singleLine.isEmpty ? "Cursor Composer" : String(singleLine.prefix(80))
-
-            var msgCount = 1
-            if let msgs = composer["conversation"] as? [Any] {
-                msgCount = msgs.count
-            } else if let msgs = composer["messages"] as? [Any] {
-                msgCount = msgs.count
-            }
-
-            let date: Date
-            if let lastUpdated = (composer["lastUpdatedAt"] as? NSNumber)?.doubleValue, lastUpdated > 0 {
-                date = Date(timeIntervalSince1970: lastUpdated > 1_000_000_000_000 ? lastUpdated / 1000.0 : lastUpdated)
-            } else if let created = (composer["createdAt"] as? NSNumber)?.doubleValue, created > 0 {
-                date = Date(timeIntervalSince1970: created > 1_000_000_000_000 ? created / 1000.0 : created)
-            } else {
-                date = (try? dbURL.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date()
-            }
-
-            results.append(ConversationItem(
-                id: UUID(),
-                sessionId: cid,
-                title: title,
-                category: self.category,
-                projectPath: projectPath,
-                gitBranch: nil,
-                messageCount: msgCount,
-                sizeInBytes: perComposerSize,
-                updatedAt: date,
-                isSelected: false,
-                snippet: title,
-                associatedPaths: [dbURL.path]
-            ))
-        }
-
-        return results
-    }
-
-    private func parseAiChatDataString(_ str: String, dbURL: URL, totalDbSize: Int64, projectPath: String?) -> [ConversationItem] {
-        guard let data = str.data(using: .utf8),
-              let dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
-              let tabs = dict["tabs"] as? [[String: Any]], !tabs.isEmpty else {
-            return []
-        }
-
-        var results: [ConversationItem] = []
-        let count = Int64(tabs.count)
-        let perTabSize = max(1, totalDbSize / count)
-
-        for tab in tabs {
-            let tid = tab["id"] as? String ?? tab["tabId"] as? String ?? UUID().uuidString
-            let chatTitle = tab["chatTitle"] as? String ?? "Cursor 对话"
-            let bubbles = tab["bubbles"] as? [[String: Any]] ?? []
-
-            results.append(ConversationItem(
-                id: UUID(),
-                sessionId: tid,
-                title: String(chatTitle.prefix(80)),
-                category: self.category,
-                projectPath: projectPath,
-                gitBranch: nil,
-                messageCount: bubbles.count,
-                sizeInBytes: perTabSize,
-                updatedAt: (try? dbURL.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date(),
-                isSelected: false,
-                snippet: chatTitle,
-                associatedPaths: [dbURL.path]
-            ))
-        }
-
-        return results
-    }
-
-    private func deleteComposersFromStateDb(dbPath: String, sessionIds: Set<String>) {
-        let dbURL = URL(fileURLWithPath: dbPath)
-        VSCDBHelper.removeComposers(from: dbURL, composerIds: sessionIds)
-
-        // Also handle plain JSON fixture files
-        if let data = try? Data(contentsOf: dbURL),
-           var dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
-           var composers = dict["allComposers"] as? [[String: Any]] {
-            composers.removeAll { c in
-                guard let id = c["composerId"] as? String else { return false }
-                return sessionIds.contains(id)
-            }
-            if composers.isEmpty {
-                _ = FileSizeHelper.removeIfExists(path: dbPath)
-            } else {
-                dict["allComposers"] = composers
-                if let updatedData = try? JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted]) {
-                    try? updatedData.write(to: dbURL, options: .atomic)
-                }
-            }
-        }
-    }
-
-    private func clearStateDatabaseChatData(dbURL: URL) {
-        var db: OpaquePointer?
-        if sqlite3_open_v2(dbURL.path, &db, SQLITE_OPEN_READWRITE, nil) == SQLITE_OK {
-            defer { sqlite3_close(db) }
-
-            let query = "DELETE FROM ItemTable WHERE key IN ('composer.composerData', 'workbench.panel.aichat.view.aichat.chatdata');"
-            if sqlite3_exec(db, query, nil, nil, nil) == SQLITE_OK {
-                sqlite3_exec(db, "VACUUM;", nil, nil, nil)
-                return
-            }
-        }
-        _ = FileSizeHelper.removeIfExists(path: dbURL.path)
-    }
-
-    // MARK: - Global and Home Directory Scans
-
-    private func scanCursorExtensionStorage(dirURL: URL) -> [ConversationItem] {
+    private func scanCodeiumWindsurfDirectory(codeiumDir: URL) -> [ConversationItem] {
         let fm = FileManager.default
         var items: [ConversationItem] = []
 
-        let candidateSubdirs = ["composer", "chats", "workspaces"]
-        for sub in candidateSubdirs {
-            let subURL = dirURL.appendingPathComponent(sub)
-            guard fm.fileExists(atPath: subURL.path),
-                  let files = try? fm.contentsOfDirectory(at: subURL, includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles]) else {
+        // Cascades folder
+        let cascadeFolders = ["cascades", "cascade", "chats"]
+        for sub in cascadeFolders {
+            let subDir = codeiumDir.appendingPathComponent(sub)
+            guard fm.fileExists(atPath: subDir.path),
+                  let entries = try? fm.contentsOfDirectory(at: subDir, includingPropertiesForKeys: [.isDirectoryKey, .contentModificationDateKey], options: [.skipsHiddenFiles]) else {
                 continue
             }
 
-            for file in files where file.pathExtension.lowercased() == "json" || file.pathExtension.lowercased() == "jsonl" {
-                let sid = file.deletingPathExtension().lastPathComponent
-                let size = FileSizeHelper.sizeOf(path: file.path)
-                let date = (try? file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date()
+            for entry in entries {
+                var isDir: ObjCBool = false
+                guard fm.fileExists(atPath: entry.path, isDirectory: &isDir) else { continue }
+
+                let sid = entry.deletingPathExtension().lastPathComponent
+                guard !sid.isEmpty, !sid.hasPrefix(".") else { continue }
+
+                let size = FileSizeHelper.sizeOf(path: entry.path)
+                let date = (try? entry.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date()
+
+                // Check for metadata or json
+                var promptTitle: String?
+                var projectPath: String?
+
+                if isDir.boolValue {
+                    let metaCandidates = ["meta.json", "cascade.json", "session.json"]
+                    for metaName in metaCandidates {
+                        let metaFile = entry.appendingPathComponent(metaName)
+                        if fm.fileExists(atPath: metaFile.path),
+                           let data = try? Data(contentsOf: metaFile),
+                           let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] {
+                            promptTitle = json["title"] as? String ?? json["prompt"] as? String ?? json["name"] as? String
+                            projectPath = json["cwd"] as? String ?? json["projectPath"] as? String ?? json["workspace"] as? String
+                            break
+                        }
+                    }
+                } else if entry.pathExtension.lowercased() == "json" {
+                    if let data = try? Data(contentsOf: entry),
+                       let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] {
+                        promptTitle = json["title"] as? String ?? json["prompt"] as? String
+                        projectPath = json["cwd"] as? String ?? json["projectPath"] as? String
+                    }
+                }
+
+                let finalTitle: String
+                if let pt = promptTitle, !pt.isEmpty {
+                    let singleLine = pt.components(separatedBy: .newlines).first?.trimmingCharacters(in: .whitespaces) ?? pt
+                    finalTitle = String(singleLine.prefix(80))
+                } else {
+                    finalTitle = "Windsurf Cascade 会话 \(sid.prefix(8))"
+                }
 
                 items.append(ConversationItem(
                     id: UUID(),
                     sessionId: sid,
-                    title: "Cursor 对话 \(sid.prefix(8))",
+                    title: finalTitle,
                     category: self.category,
-                    projectPath: nil,
+                    projectPath: projectPath,
                     gitBranch: nil,
                     messageCount: 1,
                     sizeInBytes: size,
                     updatedAt: date,
                     isSelected: false,
-                    snippet: "Cursor 扩展历史会话",
-                    associatedPaths: [file.path]
-                ))
-            }
-        }
-
-        return items
-    }
-
-    private func scanDotCursorDirectory(dotURL: URL) -> [ConversationItem] {
-        let fm = FileManager.default
-        var items: [ConversationItem] = []
-
-        let chatsDir = dotURL.appendingPathComponent("chats")
-        if fm.fileExists(atPath: chatsDir.path),
-           let files = try? fm.contentsOfDirectory(at: chatsDir, includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles]) {
-            for file in files where file.pathExtension.lowercased() == "json" || file.pathExtension.lowercased() == "jsonl" {
-                let sid = file.deletingPathExtension().lastPathComponent
-                let size = FileSizeHelper.sizeOf(path: file.path)
-                let date = (try? file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date()
-
-                items.append(ConversationItem(
-                    id: UUID(),
-                    sessionId: sid,
-                    title: "Cursor 会话 \(sid.prefix(8))",
-                    category: self.category,
-                    projectPath: nil,
-                    gitBranch: nil,
-                    messageCount: 1,
-                    sizeInBytes: size,
-                    updatedAt: date,
-                    isSelected: false,
-                    snippet: "Cursor 用户目录会话",
-                    associatedPaths: [file.path]
+                    snippet: finalTitle,
+                    associatedPaths: [entry.path]
                 ))
             }
         }
@@ -723,24 +584,5 @@ final class CursorScanner: AgentScanner, @unchecked Sendable {
             return stripped.removingPercentEncoding ?? stripped
         }
         return uriString
-    }
-
-    private func cleanEmptyWorkspaceStorageDirs() {
-        let fileManager = FileManager.default
-        let workspaceStorageDir = userDirectoryURL.appendingPathComponent("workspaceStorage")
-        guard fileManager.fileExists(atPath: workspaceStorageDir.path),
-              let wsEntries = try? fileManager.contentsOfDirectory(
-                  at: workspaceStorageDir,
-                  includingPropertiesForKeys: [.isDirectoryKey],
-                  options: [.skipsHiddenFiles]
-              ) else { return }
-
-        for wsDir in wsEntries {
-            let chatDir = wsDir.appendingPathComponent("chatSessions")
-            FileSizeHelper.removeIfEmptyDirectory(path: chatDir.path)
-
-            let editDir = wsDir.appendingPathComponent("chatEditingSessions")
-            FileSizeHelper.removeIfEmptyDirectory(path: editDir.path)
-        }
     }
 }

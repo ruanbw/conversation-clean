@@ -30,18 +30,6 @@ final class ZedScanner: AgentScanner, @unchecked Sendable {
         FileManager.default.fileExists(atPath: storageURL.path)
     }
 
-    private static let isoDateFormatterWithFractional: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter
-    }()
-
-    private static let isoDateFormatter: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter
-    }()
-
     // MARK: - Scan
 
     func scan() async throws -> [ConversationItem] {
@@ -431,7 +419,6 @@ final class ZedScanner: AgentScanner, @unchecked Sendable {
     }
 
     private func parseDate(_ string: String) -> Date? {
-        guard !string.isEmpty else { return nil }
-        return Self.isoDateFormatterWithFractional.date(from: string) ?? Self.isoDateFormatter.date(from: string)
+        ISODate.parse(string)
     }
 }

@@ -59,18 +59,6 @@ final class OpenHandsScanner: AgentScanner, @unchecked Sendable {
         return roots
     }
 
-    private static let isoDateFormatterWithFractional: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter
-    }()
-
-    private static let isoDateFormatter: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter
-    }()
-
     // MARK: - Scan
 
     func scan() async throws -> [ConversationItem] {
@@ -450,7 +438,7 @@ final class OpenHandsScanner: AgentScanner, @unchecked Sendable {
     }
 
     private func parseDate(_ string: String) -> Date? {
-        return Self.isoDateFormatterWithFractional.date(from: string) ?? Self.isoDateFormatter.date(from: string)
+        ISODate.parse(string)
     }
 
     private func isSafeToDelete(path: String) -> Bool {

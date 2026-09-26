@@ -1,7 +1,7 @@
 import Foundation
 
-final class TraeScanner: AgentScanner, @unchecked Sendable {
-    let category: ConversationCategory = .trae
+final class VSCodeChatScanner: AgentScanner, @unchecked Sendable {
+    let category: ConversationCategory = .copilotChat
     let customStorageURL: URL?
 
     init(baseURL: URL? = nil) {
@@ -16,30 +16,26 @@ final class TraeScanner: AgentScanner, @unchecked Sendable {
         let base: URL
         if let custom = customStorageURL {
             base = custom
-        } else if let env = ProcessInfo.processInfo.environment["TRAE_HOME"], !env.isEmpty {
+        } else if let env = ProcessInfo.processInfo.environment["VSCODE_USER_DATA"], !env.isEmpty {
             base = URL(fileURLWithPath: env)
         } else {
             base = FileManager.default.homeDirectoryForCurrentUser
-                .appendingPathComponent("Library/Application Support/Trae")
+                .appendingPathComponent("Library/Application Support/Code/User")
         }
         return (try? base.resourceValues(forKeys: [.canonicalPathKey]).canonicalPath).map { URL(fileURLWithPath: $0) } ?? base.standardized
     }
 
-    var userDirectoryURL: URL {
-        let directUser = storageURL.appendingPathComponent("User")
-        let directWS = storageURL.appendingPathComponent("workspaceStorage")
-        let fm = FileManager.default
-        if fm.fileExists(atPath: directUser.path) {
-            return directUser
-        } else if fm.fileExists(atPath: directWS.path) {
-            return storageURL
-        }
-        return directUser
-    }
-
     var isInstalled: Bool {
         let fm = FileManager.default
-        return fm.fileExists(atPath: storageURL.path)
+        if fm.fileExists(atPath: storageURL.path) {
+            return true
+        }
+        if customStorageURL != nil {
+            return false
+        }
+        let codeBase = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/Code")
+        return fm.fileExists(atPath: codeBase.path)
     }
 
     // MARK: - Scan
@@ -48,37 +44,37 @@ final class TraeScanner: AgentScanner, @unchecked Sendable {
         let fileURL: URL
         let projectPath: String?
         let editingDirURL: URL?
+        let extraPaths: [String]
     }
 
     func scan() async throws -> [ConversationItem] {
         guard isInstalled else { return [] }
 
         let fileManager = FileManager.default
-        var items: [ConversationItem] = []
+        var targets: [ScanTarget] = []
 
-        let userDir = userDirectoryURL
-        let workspaceStorageDir = userDir.appendingPathComponent("workspaceStorage")
-
-        // 1. Scan User/workspaceStorage/*/chatSessions/
+        // 1. Scan workspaceStorage/<hash>/chatSessions/*.jsonl
+        let workspaceStorageDir = storageURL.appendingPathComponent("workspaceStorage")
         if fileManager.fileExists(atPath: workspaceStorageDir.path),
            let wsEntries = try? fileManager.contentsOfDirectory(
                at: workspaceStorageDir,
                includingPropertiesForKeys: [.isDirectoryKey],
                options: [.skipsHiddenFiles]
            ) {
-            var jsonlTargets: [ScanTarget] = []
-
             for wsDir in wsEntries {
                 var isDir: ObjCBool = false
                 guard fileManager.fileExists(atPath: wsDir.path, isDirectory: &isDir), isDir.boolValue else {
                     continue
                 }
 
+                // Parse project path from workspace.json
                 let wsJsonURL = wsDir.appendingPathComponent("workspace.json")
                 let projectPath = Self.extractProjectPath(from: wsJsonURL)
 
                 let chatSessionsDir = wsDir.appendingPathComponent("chatSessions")
                 let chatEditingDir = wsDir.appendingPathComponent("chatEditingSessions")
+                let copilotTranscriptsDir = wsDir.appendingPathComponent("GitHub.copilot-chat/transcripts")
+                let copilotDebugDir = wsDir.appendingPathComponent("GitHub.copilot-chat/debug-logs")
 
                 if fileManager.fileExists(atPath: chatSessionsDir.path),
                    let sessionFiles = try? fileManager.contentsOfDirectory(
@@ -91,36 +87,29 @@ final class TraeScanner: AgentScanner, @unchecked Sendable {
                         let editingURL = chatEditingDir.appendingPathComponent(sid)
                         let matchingEdit = fileManager.fileExists(atPath: editingURL.path) ? editingURL : nil
 
-                        jsonlTargets.append(ScanTarget(
+                        var extra: [String] = []
+                        let transcriptFile = copilotTranscriptsDir.appendingPathComponent("\(sid).jsonl")
+                        if fileManager.fileExists(atPath: transcriptFile.path) {
+                            extra.append(transcriptFile.path)
+                        }
+                        let debugDir = copilotDebugDir.appendingPathComponent(sid)
+                        if fileManager.fileExists(atPath: debugDir.path) {
+                            extra.append(debugDir.path)
+                        }
+
+                        targets.append(ScanTarget(
                             fileURL: sessionFile,
                             projectPath: projectPath,
-                            editingDirURL: matchingEdit
+                            editingDirURL: matchingEdit,
+                            extraPaths: extra
                         ))
                     }
                 }
             }
-
-            let parsedJsonl: [ConversationItem] = await withTaskGroup(of: ConversationItem?.self) { group in
-                for target in jsonlTargets {
-                    group.addTask {
-                        return self.parseJsonlSession(target: target)
-                    }
-                }
-
-                var collected: [ConversationItem] = []
-                for await item in group {
-                    if let item = item {
-                        collected.append(item)
-                    }
-                }
-                return collected
-            }
-            items.append(contentsOf: parsedJsonl)
         }
 
-        // 2. Scan User/globalStorage/
-        let globalStorageDir = userDir.appendingPathComponent("globalStorage")
-        let emptyWindowDir = globalStorageDir.appendingPathComponent("emptyWindowChatSessions")
+        // 2. Scan globalStorage/emptyWindowChatSessions/*.jsonl
+        let emptyWindowDir = storageURL.appendingPathComponent("globalStorage/emptyWindowChatSessions")
         if fileManager.fileExists(atPath: emptyWindowDir.path),
            let emptyFiles = try? fileManager.contentsOfDirectory(
                at: emptyWindowDir,
@@ -128,10 +117,33 @@ final class TraeScanner: AgentScanner, @unchecked Sendable {
                options: [.skipsHiddenFiles]
            ) {
             for sessionFile in emptyFiles where sessionFile.pathExtension.lowercased() == "jsonl" {
-                if let item = parseJsonlSession(target: ScanTarget(fileURL: sessionFile, projectPath: nil, editingDirURL: nil)) {
-                    items.append(item)
+                targets.append(ScanTarget(
+                    fileURL: sessionFile,
+                    projectPath: nil,
+                    editingDirURL: nil,
+                    extraPaths: []
+                ))
+            }
+        }
+
+        guard !targets.isEmpty else { return [] }
+
+        // Process sessions concurrently
+        let items: [ConversationItem] = await withTaskGroup(of: ConversationItem?.self) { group in
+            for target in targets {
+                group.addTask {
+                    return self.parseSession(target: target)
                 }
             }
+
+            var collected: [ConversationItem] = []
+            collected.reserveCapacity(targets.count)
+            for await item in group {
+                if let item = item {
+                    collected.append(item)
+                }
+            }
+            return collected
         }
 
         return items.sorted(by: { $0.updatedAt > $1.updatedAt })
@@ -142,8 +154,6 @@ final class TraeScanner: AgentScanner, @unchecked Sendable {
     func delete(items: [ConversationItem]) async throws -> Int64 {
         guard !items.isEmpty else { return 0 }
 
-        let fileManager = FileManager.default
-        let userDir = userDirectoryURL
         var totalFreed: Int64 = 0
         var stateDbToSessions: [URL: Set<String>] = [:]
         let allSessionIds = Set(items.map { $0.sessionId })
@@ -157,40 +167,31 @@ final class TraeScanner: AgentScanner, @unchecked Sendable {
                     let stateDbURL = wsDir.appendingPathComponent("state.vscdb")
                     stateDbToSessions[stateDbURL, default: []].insert(item.sessionId)
                 } else if path.contains("emptyWindowChatSessions") {
-                    let globalDb = userDir.appendingPathComponent("globalStorage/state.vscdb")
+                    let globalDb = storageURL.appendingPathComponent("globalStorage/state.vscdb")
                     stateDbToSessions[globalDb, default: []].insert(item.sessionId)
                 }
                 _ = FileSizeHelper.removeIfExists(path: path)
             }
         }
 
-        // Atomically sync state.vscdb indexes to prevent ghost sessions in Trae
+        // Atomically sync state.vscdb indexes so VS Code Chat history never leaves ghost sessions
         for (stateDbURL, sessionIds) in stateDbToSessions {
             VSCDBHelper.removeChatSessions(from: stateDbURL, sessionIds: sessionIds)
         }
 
-        // Sync all workspace state.vscdb and globalStorage state.vscdb with deleted session IDs
-        let workspaceStorageDir = userDir.appendingPathComponent("workspaceStorage")
-        if fileManager.fileExists(atPath: workspaceStorageDir.path),
-           let wsEntries = try? fileManager.contentsOfDirectory(
-               at: workspaceStorageDir,
-               includingPropertiesForKeys: [.isDirectoryKey],
-               options: [.skipsHiddenFiles]
-           ) {
-            for wsDir in wsEntries {
-                let stateDbURL = wsDir.appendingPathComponent("state.vscdb")
-                if fileManager.fileExists(atPath: stateDbURL.path) && stateDbToSessions[stateDbURL] == nil {
-                    VSCDBHelper.removeChatSessions(from: stateDbURL, sessionIds: allSessionIds)
-                }
+        // Clean matching sessions in Copilot Chat session-store.db
+        let copilotDbCandidates = [
+            storageURL.appendingPathComponent("globalStorage/github.copilot-chat/session-store.db"),
+            storageURL.appendingPathComponent("globalStorage/GitHub.copilot-chat/session-store.db")
+        ]
+        for dbURL in copilotDbCandidates {
+            if FileManager.default.fileExists(atPath: dbURL.path) {
+                VSCDBHelper.removeCopilotSessionStore(from: dbURL, sessionIds: allSessionIds)
             }
         }
 
-        let globalStateDb = userDir.appendingPathComponent("globalStorage/state.vscdb")
-        if fileManager.fileExists(atPath: globalStateDb.path) && stateDbToSessions[globalStateDb] == nil {
-            VSCDBHelper.removeChatSessions(from: globalStateDb, sessionIds: allSessionIds)
-        }
-
-        cleanEmptyWorkspaceStorageDirs()
+        // Clean empty directories in workspaceStorage
+        DirectoryCleaner.cleanEmptyWorkspaceStorageDirs(under: storageURL)
 
         return totalFreed
     }
@@ -200,10 +201,9 @@ final class TraeScanner: AgentScanner, @unchecked Sendable {
         var freed = try await delete(items: items)
 
         let fileManager = FileManager.default
-        let userDir = userDirectoryURL
-        let workspaceStorageDir = userDir.appendingPathComponent("workspaceStorage")
 
-        // Clean chatSessions & chatEditingSessions in workspaceStorage
+        // Clean any remaining chatSessions in workspaceStorage
+        let workspaceStorageDir = storageURL.appendingPathComponent("workspaceStorage")
         if fileManager.fileExists(atPath: workspaceStorageDir.path),
            let wsEntries = try? fileManager.contentsOfDirectory(
                at: workspaceStorageDir,
@@ -218,11 +218,17 @@ final class TraeScanner: AgentScanner, @unchecked Sendable {
                         freed += sz
                     }
                 }
-
                 let editDir = wsDir.appendingPathComponent("chatEditingSessions")
                 if fileManager.fileExists(atPath: editDir.path) {
                     let sz = FileSizeHelper.sizeOf(path: editDir.path)
                     if FileSizeHelper.removeIfExists(path: editDir.path) {
+                        freed += sz
+                    }
+                }
+                let copilotDir = wsDir.appendingPathComponent("GitHub.copilot-chat")
+                if fileManager.fileExists(atPath: copilotDir.path) {
+                    let sz = FileSizeHelper.sizeOf(path: copilotDir.path)
+                    if FileSizeHelper.removeIfExists(path: copilotDir.path) {
                         freed += sz
                     }
                 }
@@ -236,8 +242,7 @@ final class TraeScanner: AgentScanner, @unchecked Sendable {
         }
 
         // Clean emptyWindowChatSessions
-        let globalStorageDir = userDir.appendingPathComponent("globalStorage")
-        let emptyWindowDir = globalStorageDir.appendingPathComponent("emptyWindowChatSessions")
+        let emptyWindowDir = storageURL.appendingPathComponent("globalStorage/emptyWindowChatSessions")
         if fileManager.fileExists(atPath: emptyWindowDir.path) {
             let sz = FileSizeHelper.sizeOf(path: emptyWindowDir.path)
             if FileSizeHelper.removeIfExists(path: emptyWindowDir.path) {
@@ -247,38 +252,65 @@ final class TraeScanner: AgentScanner, @unchecked Sendable {
         }
 
         // Clean globalStorage/state.vscdb chat indexes
-        let globalStateDb = userDir.appendingPathComponent("globalStorage/state.vscdb")
+        let globalStateDb = storageURL.appendingPathComponent("globalStorage/state.vscdb")
         if fileManager.fileExists(atPath: globalStateDb.path) {
             VSCDBHelper.clearAllChatSessions(from: globalStateDb)
         }
 
-        // Clean Trae extension caches in globalStorage
-        if fileManager.fileExists(atPath: globalStorageDir.path),
-           let globalEntries = try? fileManager.contentsOfDirectory(
-               at: globalStorageDir,
-               includingPropertiesForKeys: [.isDirectoryKey],
-               options: [.skipsHiddenFiles]
-           ) {
-            for entry in globalEntries {
-                let name = entry.lastPathComponent.lowercased()
-                if name.contains("trae") || name.contains("chat") {
-                    let sz = FileSizeHelper.sizeOf(path: entry.path)
-                    if FileSizeHelper.removeIfExists(path: entry.path) {
-                        freed += sz
-                        try? fileManager.createDirectory(at: entry, withIntermediateDirectories: true)
+        // Clean globalStorage/github.copilot-chat session-store and caches
+        let copilotGlobalCandidates = [
+            storageURL.appendingPathComponent("globalStorage/github.copilot-chat"),
+            storageURL.appendingPathComponent("globalStorage/GitHub.copilot-chat")
+        ]
+
+        for copilotGlobal in copilotGlobalCandidates {
+            guard fileManager.fileExists(atPath: copilotGlobal.path) else { continue }
+
+            let sessionStoreURL = copilotGlobal.appendingPathComponent("session-store.db")
+            if fileManager.fileExists(atPath: sessionStoreURL.path) {
+                VSCDBHelper.clearCopilotSessionStore(from: sessionStoreURL)
+            }
+
+            // Target session-store databases
+            let dbFiles = [
+                copilotGlobal.appendingPathComponent("session-store.db"),
+                copilotGlobal.appendingPathComponent("session-store.db-shm"),
+                copilotGlobal.appendingPathComponent("session-store.db-wal"),
+                copilotGlobal.appendingPathComponent("toolEmbeddingsCache.bin")
+            ]
+            for dbFile in dbFiles where fileManager.fileExists(atPath: dbFile.path) {
+                let sz = FileSizeHelper.sizeOf(path: dbFile.path)
+                if FileSizeHelper.removeIfExists(path: dbFile.path) {
+                    freed += sz
+                }
+            }
+
+            // Target vscode-sessions-* directories
+            if let entries = try? fileManager.contentsOfDirectory(
+                at: copilotGlobal,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            ) {
+                for entry in entries {
+                    let name = entry.lastPathComponent
+                    if name.hasPrefix("vscode-sessions-") || name == "copilot-cli-images" {
+                        let sz = FileSizeHelper.sizeOf(path: entry.path)
+                        if FileSizeHelper.removeIfExists(path: entry.path) {
+                            freed += sz
+                        }
                     }
                 }
             }
         }
 
-        cleanEmptyWorkspaceStorageDirs()
+        DirectoryCleaner.cleanEmptyWorkspaceStorageDirs(under: storageURL)
 
         return freed
     }
 
-    // MARK: - JSONL Parsing
+    // MARK: - Parsing
 
-    private func parseJsonlSession(target: ScanTarget) -> ConversationItem? {
+    private func parseSession(target: ScanTarget) -> ConversationItem? {
         let fileManager = FileManager.default
         let fileURL = target.fileURL
         guard fileManager.fileExists(atPath: fileURL.path) else { return nil }
@@ -305,6 +337,7 @@ final class TraeScanner: AgentScanner, @unchecked Sendable {
                 let k = json["k"] as? [Any]
                 let v = json["v"]
 
+                // 1. Initial snapshot / state: kind == 0
                 if kind == 0, let vDict = v as? [String: Any] {
                     if let sid = vDict["sessionId"] as? String, !sid.isEmpty {
                         detectedSessionId = sid
@@ -323,7 +356,9 @@ final class TraeScanner: AgentScanner, @unchecked Sendable {
                             }
                         }
                     }
-                } else if kind == 1 {
+                }
+                // 2. Property update: kind == 1
+                else if kind == 1 {
                     if let kFirst = k?.first as? String {
                         if kFirst == "customTitle", let str = v as? String, !str.isEmpty {
                             detectedCustomTitle = str
@@ -331,7 +366,9 @@ final class TraeScanner: AgentScanner, @unchecked Sendable {
                             detectedSessionId = str
                         }
                     }
-                } else if kind == 2 {
+                }
+                // 3. Array append: kind == 2
+                else if kind == 2 {
                     if let k = k, k.count == 1, let kFirst = k.first as? String, kFirst == "requests", let reqs = v as? [[String: Any]] {
                         requestCount += reqs.count
                         for req in reqs {
@@ -342,26 +379,35 @@ final class TraeScanner: AgentScanner, @unchecked Sendable {
                     }
                 }
 
+                // Fallback for non-delta format
                 if detectedSessionId == nil, let sid = json["sessionId"] as? String, !sid.isEmpty {
                     detectedSessionId = sid
                 }
                 if detectedCreationDateMs == nil, let cd = json["creationDate"] as? NSNumber {
                     detectedCreationDateMs = cd.doubleValue
                 }
+                if firstUserPrompt == nil, let reqs = json["requests"] as? [[String: Any]] {
+                    for req in reqs {
+                        if firstUserPrompt == nil {
+                            firstUserPrompt = Self.extractPromptText(from: req)
+                        }
+                    }
+                }
             }
         }
 
         let sessionId = detectedSessionId ?? fallbackBaseName
 
+        // Title resolution: first request prompt text (truncate to 80 chars, fallback to 'GitHub Copilot 对话')
         let finalTitle: String
         if let prompt = firstUserPrompt, !prompt.isEmpty {
             let singleLine = prompt.components(separatedBy: .newlines).first?.trimmingCharacters(in: .whitespaces) ?? prompt
-            finalTitle = singleLine.isEmpty ? "Trae 对话" : String(singleLine.prefix(80))
+            finalTitle = singleLine.isEmpty ? "GitHub Copilot 对话" : String(singleLine.prefix(80))
         } else if let custom = detectedCustomTitle, !custom.isEmpty {
             let singleLine = custom.components(separatedBy: .newlines).first?.trimmingCharacters(in: .whitespaces) ?? custom
-            finalTitle = singleLine.isEmpty ? "Trae 对话" : String(singleLine.prefix(80))
+            finalTitle = singleLine.isEmpty ? "GitHub Copilot 对话" : String(singleLine.prefix(80))
         } else {
-            finalTitle = "Trae 对话"
+            finalTitle = "GitHub Copilot 对话"
         }
 
         let snippet: String
@@ -372,6 +418,7 @@ final class TraeScanner: AgentScanner, @unchecked Sendable {
             snippet = finalTitle
         }
 
+        // Date calculation
         let updatedDate: Date
         if let ms = detectedCreationDateMs, ms > 0 {
             updatedDate = Date(timeIntervalSince1970: ms / 1000.0)
@@ -381,12 +428,18 @@ final class TraeScanner: AgentScanner, @unchecked Sendable {
             updatedDate = Date()
         }
 
+        // Associated paths: the .jsonl file and matching chatEditingSessions/<sessionId> folder
         var associatedPaths: [String] = [fileURL.path]
         var totalSize = mainFileSize
 
         if let editingDir = target.editingDirURL, fileManager.fileExists(atPath: editingDir.path) {
             associatedPaths.append(editingDir.path)
             totalSize += FileSizeHelper.sizeOf(path: editingDir.path)
+        }
+
+        for extraPath in target.extraPaths where fileManager.fileExists(atPath: extraPath) {
+            associatedPaths.append(extraPath)
+            totalSize += FileSizeHelper.sizeOf(path: extraPath)
         }
 
         return ConversationItem(
@@ -452,24 +505,5 @@ final class TraeScanner: AgentScanner, @unchecked Sendable {
             return stripped.removingPercentEncoding ?? stripped
         }
         return uriString
-    }
-
-    private func cleanEmptyWorkspaceStorageDirs() {
-        let fileManager = FileManager.default
-        let workspaceStorageDir = userDirectoryURL.appendingPathComponent("workspaceStorage")
-        guard fileManager.fileExists(atPath: workspaceStorageDir.path),
-              let wsEntries = try? fileManager.contentsOfDirectory(
-                  at: workspaceStorageDir,
-                  includingPropertiesForKeys: [.isDirectoryKey],
-                  options: [.skipsHiddenFiles]
-              ) else { return }
-
-        for wsDir in wsEntries {
-            let chatDir = wsDir.appendingPathComponent("chatSessions")
-            FileSizeHelper.removeIfEmptyDirectory(path: chatDir.path)
-
-            let editDir = wsDir.appendingPathComponent("chatEditingSessions")
-            FileSizeHelper.removeIfEmptyDirectory(path: editDir.path)
-        }
     }
 }

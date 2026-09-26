@@ -71,7 +71,7 @@ final class ContinueScanner: AgentScanner, @unchecked Sendable {
             }
         }
 
-        cleanEmptyDirectories(in: storageURL.appendingPathComponent("sessions"))
+        DirectoryCleaner.cleanEmptyDirectories(in: storageURL.appendingPathComponent("sessions"))
 
         return totalBytesFreed
     }
@@ -256,14 +256,8 @@ final class ContinueScanner: AgentScanner, @unchecked Sendable {
     }
 
     private static func parseISO8601Date(_ str: String) -> Date? {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let d = formatter.date(from: str) {
-            return d
-        }
-        formatter.formatOptions = [.withInternetDateTime]
-        if let d = formatter.date(from: str) {
-            return d
+        if let date = ISODate.parse(str) {
+            return date
         }
         // Custom format fallback: yyyy-MM-dd'T'HH:mm:ss
         let customFormatter = DateFormatter()
@@ -274,27 +268,5 @@ final class ContinueScanner: AgentScanner, @unchecked Sendable {
         }
         customFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
         return customFormatter.date(from: str)
-    }
-
-    private func cleanEmptyDirectories(in directory: URL) {
-        let fileManager = FileManager.default
-        guard let enumerator = fileManager.enumerator(
-            at: directory,
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles]
-        ) else { return }
-
-        var subdirs: [URL] = []
-        while let fileURL = enumerator.nextObject() as? URL {
-            var isDir: ObjCBool = false
-            if fileManager.fileExists(atPath: fileURL.path, isDirectory: &isDir), isDir.boolValue {
-                subdirs.append(fileURL)
-            }
-        }
-
-        // Clean deepest directories first
-        for dir in subdirs.sorted(by: { $0.path.count > $1.path.count }) {
-            FileSizeHelper.removeIfEmptyDirectory(path: dir.path)
-        }
     }
 }
