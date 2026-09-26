@@ -115,6 +115,7 @@ final class ClaudeCodeScanner: AgentScanner, @unchecked Sendable {
         }
 
         cleanHistory(excludingSessionIds: deletedSessionIds)
+        cleanSessionsIndex(excludingSessionIds: deletedSessionIds)
         cleanEmptyProjectDirectories()
 
         return totalBytesFreed
@@ -137,6 +138,8 @@ final class ClaudeCodeScanner: AgentScanner, @unchecked Sendable {
                 try? FileManager.default.createDirectory(atPath: path, withIntermediateDirectories: true)
             }
         }
+
+        removeAllSessionsIndices()
 
         return freed
     }
@@ -380,6 +383,124 @@ final class ClaudeCodeScanner: AgentScanner, @unchecked Sendable {
         try? newContent.write(to: historyURL, atomically: true, encoding: .utf8)
     }
 
+    private func cleanSessionsIndex(excludingSessionIds: Set<String>) {
+        guard !excludingSessionIds.isEmpty else { return }
+        let fileManager = FileManager.default
+        var indexURLs: [URL] = []
+
+        let projectsURL = storageURL.appendingPathComponent("projects")
+        if fileManager.fileExists(atPath: projectsURL.path),
+           let projectDirs = try? fileManager.contentsOfDirectory(at: projectsURL, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles]) {
+            for projectDir in projectDirs {
+                let indexURL = projectDir.appendingPathComponent("sessions-index.json")
+                if fileManager.fileExists(atPath: indexURL.path) {
+                    indexURLs.append(indexURL)
+                }
+            }
+        }
+
+        let directIndex = storageURL.appendingPathComponent("sessions-index.json")
+        if fileManager.fileExists(atPath: directIndex.path) {
+            indexURLs.append(directIndex)
+        }
+
+        for indexURL in indexURLs {
+            cleanSingleSessionsIndex(fileURL: indexURL, excludingSessionIds: excludingSessionIds)
+        }
+    }
+
+    private func cleanSingleSessionsIndex(fileURL: URL, excludingSessionIds: Set<String>) {
+        let fileManager = FileManager.default
+        guard let data = try? Data(contentsOf: fileURL),
+              let jsonObject = try? JSONSerialization.jsonObject(with: data) else {
+            try? fileManager.removeItem(at: fileURL)
+            return
+        }
+
+        var shouldRemoveFile = false
+        var modifiedObject: Any? = nil
+
+        if var dict = jsonObject as? [String: Any] {
+            if let entries = dict["entries"] as? [[String: Any]] {
+                let filtered = entries.filter { entry in
+                    let sid = (entry["sessionId"] ?? entry["id"]) as? String ?? ""
+                    return !sid.isEmpty && !excludingSessionIds.contains(sid)
+                }
+                if filtered.isEmpty {
+                    shouldRemoveFile = true
+                } else {
+                    dict["entries"] = filtered
+                    modifiedObject = dict
+                }
+            } else if let sessions = dict["sessions"] as? [[String: Any]] {
+                let filtered = sessions.filter { entry in
+                    let sid = (entry["sessionId"] ?? entry["id"]) as? String ?? ""
+                    return !sid.isEmpty && !excludingSessionIds.contains(sid)
+                }
+                if filtered.isEmpty {
+                    shouldRemoveFile = true
+                } else {
+                    dict["sessions"] = filtered
+                    modifiedObject = dict
+                }
+            } else if let sessionsMap = dict["sessions"] as? [String: Any] {
+                let filtered = sessionsMap.filter { !excludingSessionIds.contains($0.key) }
+                if filtered.isEmpty {
+                    shouldRemoveFile = true
+                } else {
+                    dict["sessions"] = filtered
+                    modifiedObject = dict
+                }
+            } else {
+                let filtered = dict.filter { !excludingSessionIds.contains($0.key) }
+                if filtered.isEmpty {
+                    shouldRemoveFile = true
+                } else {
+                    modifiedObject = filtered
+                }
+            }
+        } else if let array = jsonObject as? [[String: Any]] {
+            let filtered = array.filter { entry in
+                let sid = (entry["sessionId"] ?? entry["id"]) as? String ?? ""
+                return !sid.isEmpty && !excludingSessionIds.contains(sid)
+            }
+            if filtered.isEmpty {
+                shouldRemoveFile = true
+            } else {
+                modifiedObject = filtered
+            }
+        }
+
+        if shouldRemoveFile {
+            try? fileManager.removeItem(at: fileURL)
+        } else if let modifiedObject = modifiedObject {
+            if let updatedData = try? JSONSerialization.data(withJSONObject: modifiedObject, options: [.prettyPrinted, .sortedKeys]) {
+                try? updatedData.write(to: fileURL, options: .atomic)
+            }
+        }
+    }
+
+    private func removeAllSessionsIndices() {
+        let fileManager = FileManager.default
+        let projectsURL = storageURL.appendingPathComponent("projects")
+        guard fileManager.fileExists(atPath: projectsURL.path),
+              let projectDirs = try? fileManager.contentsOfDirectory(at: projectsURL, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles]) else {
+            return
+        }
+
+        for projectDir in projectDirs {
+            let indexURL = projectDir.appendingPathComponent("sessions-index.json")
+            if fileManager.fileExists(atPath: indexURL.path) {
+                try? fileManager.removeItem(at: indexURL)
+            }
+        }
+
+        let directIndex = storageURL.appendingPathComponent("sessions-index.json")
+        if fileManager.fileExists(atPath: directIndex.path) {
+            try? fileManager.removeItem(at: directIndex)
+        }
+    }
+
     private func cleanEmptyProjectDirectories() {
         let projectsURL = storageURL.appendingPathComponent("projects")
         let fileManager = FileManager.default
@@ -390,7 +511,7 @@ final class ClaudeCodeScanner: AgentScanner, @unchecked Sendable {
 
         for dir in projectDirs {
             if let contents = try? fileManager.contentsOfDirectory(atPath: dir.path) {
-                let remaining = contents.filter { $0 != "memory" && !$0.hasPrefix(".") }
+                let remaining = contents.filter { $0 != "memory" && !$0.hasPrefix(".") && $0 != "sessions-index.json" }
                 if remaining.isEmpty {
                     try? fileManager.removeItem(at: dir)
                 }

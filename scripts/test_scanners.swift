@@ -1328,6 +1328,218 @@ func testMockPiAgentScanner() async {
     }
 }
 
+// MARK: - Test: Pi Agent context-mode 双层索引同步（幽灵会话修复）
+
+func testMockPiAgentContextModeSync() async {
+    TestRunner.printSection("Test: Pi Agent context-mode 双层索引同步（幽灵会话修复）")
+    let testName = "MockPiContextModeSync"
+
+    let tempDir = TestRunner.createTempDirectory(prefix: "pi_cm_sync")
+    defer { try? FileManager.default.removeItem(at: tempDir) }
+
+    let fm = FileManager.default
+    let projectDir = tempDir.appendingPathComponent("agent/sessions/--Users-mock-cm--")
+    let cmSessionsDir = tempDir.appendingPathComponent("context-mode/sessions")
+    let cmContentDir = tempDir.appendingPathComponent("context-mode/content")
+    let acpDir = tempDir.appendingPathComponent("pi-acp")
+
+    for dir in [projectDir, cmSessionsDir, cmContentDir, acpDir] {
+        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+    }
+
+    TestRunner.printSubSection("构造 Pi 会话文件 + context-mode 索引库")
+
+    let sid1 = "01a0d1cc-4a16-74c5-bfbe-b36a0224af90"
+    let sid2 = "01a0d1cc-4a16-74c5-bfbe-b36a0224af91"
+    let jsonl1 = projectDir.appendingPathComponent("2026-09-10T10-00-00-000Z_\(sid1).jsonl")
+    let jsonl2 = projectDir.appendingPathComponent("2026-09-11T11-00-00-000Z_\(sid2).jsonl")
+
+    try? """
+    {"type":"session","version":3,"id":"\(sid1)","timestamp":"2026-09-10T10:00:00.000Z","cwd":"/Users/mock/cm"}
+    {"type":"message","id":"m1","message":{"role":"user","content":[{"type":"text","text":"context-mode 幽灵会话测试 A"}]}}
+    """.write(to: jsonl1, atomically: true, encoding: .utf8)
+
+    try? """
+    {"type":"session","version":3,"id":"\(sid2)","timestamp":"2026-09-11T11:00:00.000Z","cwd":"/Users/mock/cm"}
+    {"type":"message","id":"m2","message":{"role":"user","content":[{"type":"text","text":"context-mode 幽灵会话测试 B"}]}}
+    """.write(to: jsonl2, atomically: true, encoding: .utf8)
+
+    // 子代理嵌套会话（旧版 Pi 布局：<sessionDir>/<uuid>/run-0/session.jsonl）
+    let nestedSessionDir = projectDir.appendingPathComponent("2026-09-10T10-00-00-000Z_\(sid1)")
+    let nestedRunDir = nestedSessionDir.appendingPathComponent("4b0172f1-647c-452f-82fd-b53e43777777/run-0")
+    try? fm.createDirectory(at: nestedRunDir, withIntermediateDirectories: true)
+    let nestedJsonl = nestedRunDir.appendingPathComponent("session.jsonl")
+    try? "{\"type\":\"session\",\"version\":3,\"id\":\"\(sid1)\"}".write(to: nestedJsonl, atomically: true, encoding: .utf8)
+
+    // 索引侧 session_id：sha256(会话文件绝对路径) 的前 16 位小写十六进制
+    let cmId1 = PiAgentScanner.contextModeSessionId(forSessionFilePath: jsonl1.path)
+    let cmId2 = PiAgentScanner.contextModeSessionId(forSessionFilePath: jsonl2.path)
+    let cmIdNested = PiAgentScanner.contextModeSessionId(forSessionFilePath: nestedJsonl.path)
+    let cmIdOther = "ffffffffffffffff"
+
+    TestRunner.assertTest(cmId1.count == 16 && cmId1 == cmId1.lowercased(), "contextModeSessionId 产出 16 位小写十六进制", testName: testName)
+    TestRunner.assertTest(
+        PiAgentScanner.contextModeSessionId(forSessionFilePath: "/tmp/cc-ghost/sessions/--Users-mock-cm--/2026-09-10T10-00-00-000Z_01a0d1cc-4a16-74c5-bfbe-b36a0224af90.jsonl") == "bf05d5e4e506b232",
+        "contextModeSessionId 与 context-mode 的 sha256[:16] 规则一致（回归基线值）",
+        testName: testName
+    )
+    TestRunner.assertTest(Set([cmId1, cmId2, cmIdNested]).count == 3, "不同会话文件推导出不同索引 ID", testName: testName)
+
+    // ── 共享的项目索引库（context-mode 当前 schema，含 4 张会话表）──
+    let sessionsDb1 = cmSessionsDir.appendingPathComponent("aaaaaaaaaaaaaaaa.db")
+    var db1: OpaquePointer?
+    if sqlite3_open(sessionsDb1.path, &db1) == SQLITE_OK, let db1 = db1 {
+        sqlite3_exec(db1, "CREATE TABLE session_meta (session_id TEXT PRIMARY KEY, project_dir TEXT NOT NULL, started_at TEXT NOT NULL DEFAULT (datetime('now')), last_event_at TEXT, event_count INTEGER NOT NULL DEFAULT 0, compact_count INTEGER NOT NULL DEFAULT 0, usage_cursor TEXT);", nil, nil, nil)
+        sqlite3_exec(db1, "CREATE TABLE session_events (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, type TEXT NOT NULL, category TEXT NOT NULL, priority INTEGER NOT NULL DEFAULT 2, data TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')));", nil, nil, nil)
+        sqlite3_exec(db1, "CREATE TABLE session_resume (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL UNIQUE, snapshot TEXT NOT NULL, event_count INTEGER NOT NULL, consumed INTEGER NOT NULL DEFAULT 0);", nil, nil, nil)
+        sqlite3_exec(db1, "CREATE TABLE tool_calls (session_id TEXT NOT NULL, tool TEXT NOT NULL, calls INTEGER NOT NULL DEFAULT 0);", nil, nil, nil)
+
+        for sid in [cmId1, cmIdNested, cmIdOther] {
+            sqlite3_exec(db1, "INSERT OR REPLACE INTO session_meta (session_id, project_dir, event_count) VALUES ('\(sid)', '/Users/mock/cm', 3);", nil, nil, nil)
+            sqlite3_exec(db1, "INSERT INTO session_events (session_id, type, category, data) VALUES ('\(sid)', 'decision', 'decision', 'payload');", nil, nil, nil)
+            sqlite3_exec(db1, "INSERT OR REPLACE INTO session_resume (session_id, snapshot, event_count) VALUES ('\(sid)', 'snapshot', 3);", nil, nil, nil)
+            sqlite3_exec(db1, "INSERT INTO tool_calls (session_id, tool, calls) VALUES ('\(sid)', 'bash', 2);", nil, nil, nil)
+        }
+        sqlite3_close(db1)
+    } else {
+        TestRunner.assertTest(false, "无法创建 context-mode sessions 索引库", testName: testName)
+    }
+
+    // ── 旧版 schema 的独立索引库，仅含 sid2 行：清空后应连带删除文件 ──
+    let sessionsDb2 = cmSessionsDir.appendingPathComponent("bbbbbbbbbbbbbbbb.db")
+    var db2: OpaquePointer?
+    if sqlite3_open(sessionsDb2.path, &db2) == SQLITE_OK, let db2 = db2 {
+        sqlite3_exec(db2, "CREATE TABLE session_meta (session_id TEXT PRIMARY KEY, cwd TEXT, created_at TEXT, updated_at TEXT, event_count INTEGER, is_archived INTEGER, title TEXT);", nil, nil, nil)
+        sqlite3_exec(db2, "CREATE TABLE session_events (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, data TEXT);", nil, nil, nil)
+        sqlite3_exec(db2, "INSERT INTO session_meta VALUES ('\(cmId2)', '/Users/mock/cm', '2026-09-11T11:00:00Z', '2026-09-11T11:00:00Z', 1, 0, 'legacy schema');", nil, nil, nil)
+        sqlite3_exec(db2, "INSERT INTO session_events (session_id, data) VALUES ('\(cmId2)', 'legacy-event');", nil, nil, nil)
+        sqlite3_close(db2)
+    } else {
+        TestRunner.assertTest(false, "无法创建旧版 schema 的 context-mode 索引库", testName: testName)
+    }
+
+    // ── content/ 内容索引库（fts5 chunks，与真实环境一致）──
+    let contentDb = cmContentDir.appendingPathComponent("cccccccccccccccc.db")
+    var cdb: OpaquePointer?
+    if sqlite3_open(contentDb.path, &cdb) == SQLITE_OK, let cdb = cdb {
+        sqlite3_exec(cdb, "CREATE TABLE sources (id INTEGER PRIMARY KEY AUTOINCREMENT, label TEXT NOT NULL, chunk_count INTEGER NOT NULL DEFAULT 0);", nil, nil, nil)
+        let ftsResult = sqlite3_exec(cdb, "CREATE VIRTUAL TABLE chunks USING fts5(title, content, source_id UNINDEXED, session_id UNINDEXED, event_id UNINDEXED, tokenize='porter unicode61');", nil, nil, nil)
+        TestRunner.assertTest(ftsResult == SQLITE_OK, "测试环境支持 fts5 内容索引（与 context-mode content/*.db 一致）", testName: testName)
+        sqlite3_exec(cdb, "INSERT INTO sources (label, chunk_count) VALUES ('other-source', 1);", nil, nil, nil)
+        sqlite3_exec(cdb, "INSERT INTO chunks (title, content, source_id, session_id, event_id) VALUES ('t1', 'c1', '1', '\(cmId1)', 'e1');", nil, nil, nil)
+        sqlite3_exec(cdb, "INSERT INTO chunks (title, content, source_id, session_id, event_id) VALUES ('t2', 'c2', '1', '\(cmIdOther)', 'e2');", nil, nil, nil)
+        sqlite3_close(cdb)
+    } else {
+        TestRunner.assertTest(false, "无法创建 context-mode content 索引库", testName: testName)
+    }
+
+    // ── stats-pid 进程统计缓存 ──
+    let statsLinked = cmSessionsDir.appendingPathComponent("stats-pid-4242.json")
+    let statsUnlinked = cmSessionsDir.appendingPathComponent("stats-pid-4343.json")
+    try? "{\"schemaVersion\":2,\"session\":\"\(cmId1)\"}".write(to: statsLinked, atomically: true, encoding: .utf8)
+    try? "{\"schemaVersion\":2,\"session\":\"\(cmIdOther)\"}".write(to: statsUnlinked, atomically: true, encoding: .utf8)
+
+    // ── pi-acp 会话映射表（ACP 客户端的会话索引）──
+    let acpMapURL = acpDir.appendingPathComponent("session-map.json")
+    let unrelatedJsonl = tempDir.appendingPathComponent("unrelated/other-session.jsonl")
+    try? fm.createDirectory(at: unrelatedJsonl.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try? "{\"type\":\"session\",\"id\":\"other-session\"}".write(to: unrelatedJsonl, atomically: true, encoding: .utf8)
+    let ghostJsonlPath = tempDir.appendingPathComponent("ghost-dangling.jsonl").path
+    let acpMapJSON = """
+    {
+      "version": 1,
+      "sessions": {
+        "\(sid1)": {"sessionId": "\(sid1)", "cwd": "/Users/mock/cm", "sessionFile": "\(jsonl1.path)"},
+        "\(sid2)": {"sessionId": "\(sid2)", "cwd": "/Users/mock/cm", "sessionFile": "\(jsonl2.path)"},
+        "other-session": {"sessionId": "other-session", "cwd": "/tmp", "sessionFile": "\(unrelatedJsonl.path)"},
+        "ghost-dangling": {"sessionId": "ghost-dangling", "cwd": "/tmp", "sessionFile": "\(ghostJsonlPath)"}
+      }
+    }
+    """
+    try? acpMapJSON.write(to: acpMapURL, atomically: true, encoding: .utf8)
+
+    func scalarCount(_ dbURL: URL, _ sql: String) -> Int? {
+        var db: OpaquePointer?
+        guard sqlite3_open_v2(dbURL.path, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK, let db = db else { return nil }
+        defer { sqlite3_close(db) }
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return nil }
+        defer { sqlite3_finalize(stmt) }
+        guard sqlite3_step(stmt) == SQLITE_ROW else { return nil }
+        return Int(sqlite3_column_int(stmt, 0))
+    }
+
+    let scanner = PiAgentScanner(storageURL: tempDir)
+
+    do {
+        let items = try await scanner.scan()
+        TestRunner.assertTest(items.count == 2, "扫描到 2 个 Pi 会话（实际 \(items.count)）", testName: testName)
+
+        guard let item1 = items.first(where: { $0.sessionId == sid1 }),
+              let item2 = items.first(where: { $0.sessionId == sid2 }) else {
+            TestRunner.assertTest(false, "未找到预期的两个 Pi 会话", testName: testName)
+            return
+        }
+
+        TestRunner.printSubSection("删除单个会话：物理文件 + context-mode 索引同步")
+        let freed = try await scanner.delete(items: [item1])
+        TestRunner.assertTest(freed == item1.sizeInBytes, "delete([item1]) 释放字节数等于 item1.sizeInBytes", testName: testName)
+        TestRunner.assertTest(!fm.fileExists(atPath: jsonl1.path), "sid1 会话文件已从磁盘删除", testName: testName)
+        TestRunner.assertTest(!fm.fileExists(atPath: nestedSessionDir.path), "sid1 子代理嵌套会话目录已删除", testName: testName)
+        TestRunner.assertTest(fm.fileExists(atPath: jsonl2.path), "sid2 会话文件未被误删", testName: testName)
+
+        // context-mode sessions 索引库（当前 schema）
+        TestRunner.assertTest(scalarCount(sessionsDb1, "SELECT COUNT(*) FROM session_meta WHERE session_id = '\(cmId1)';") == 0, "session_meta 中 sid1 索引行已清除", testName: testName)
+        TestRunner.assertTest(scalarCount(sessionsDb1, "SELECT COUNT(*) FROM session_events WHERE session_id = '\(cmId1)';") == 0, "session_events 中 sid1 行已清除", testName: testName)
+        TestRunner.assertTest(scalarCount(sessionsDb1, "SELECT COUNT(*) FROM session_resume WHERE session_id = '\(cmId1)';") == 0, "session_resume 中 sid1 行已清除", testName: testName)
+        TestRunner.assertTest(scalarCount(sessionsDb1, "SELECT COUNT(*) FROM tool_calls WHERE session_id = '\(cmId1)';") == 0, "tool_calls 中 sid1 行已清除", testName: testName)
+        TestRunner.assertTest(scalarCount(sessionsDb1, "SELECT COUNT(*) FROM session_meta WHERE session_id = '\(cmIdNested)';") == 0, "子代理嵌套会话索引行已清除", testName: testName)
+        TestRunner.assertTest(scalarCount(sessionsDb1, "SELECT COUNT(*) FROM session_meta WHERE session_id = '\(cmIdOther)';") == 1, "其他会话 session_meta 行被保留", testName: testName)
+        TestRunner.assertTest(scalarCount(sessionsDb1, "SELECT COUNT(*) FROM tool_calls WHERE session_id = '\(cmIdOther)';") == 1, "其他会话 tool_calls 行被保留", testName: testName)
+        TestRunner.assertTest(fm.fileExists(atPath: sessionsDb1.path), "仍含其他会话的索引库文件被保留", testName: testName)
+
+        // content/ 内容索引（fts5）
+        TestRunner.assertTest(scalarCount(contentDb, "SELECT COUNT(*) FROM chunks WHERE session_id = '\(cmId1)';") == 0, "content fts5 chunks 中 sid1 行已清除", testName: testName)
+        TestRunner.assertTest(scalarCount(contentDb, "SELECT COUNT(*) FROM chunks WHERE session_id = '\(cmIdOther)';") == 1, "content fts5 chunks 保留其他来源", testName: testName)
+        TestRunner.assertTest(scalarCount(contentDb, "SELECT COUNT(*) FROM sources;") == 1, "content sources 表未被误删", testName: testName)
+
+        // stats 缓存与 pi-acp 映射
+        TestRunner.assertTest(!fm.fileExists(atPath: statsLinked.path), "引用被删会话的 stats-pid 缓存已清理", testName: testName)
+        TestRunner.assertTest(fm.fileExists(atPath: statsUnlinked.path), "无关 stats-pid 缓存被保留", testName: testName)
+
+        let acpAfterDelete = (try? String(contentsOf: acpMapURL, encoding: .utf8)) ?? ""
+        TestRunner.assertTest(!acpAfterDelete.contains(sid1), "pi-acp session-map 中 sid1 条目已剪除", testName: testName)
+        TestRunner.assertTest(acpAfterDelete.contains(sid2), "pi-acp session-map 保留 sid2 条目", testName: testName)
+        TestRunner.assertTest(acpAfterDelete.contains("other-session"), "pi-acp session-map 保留其他有效条目", testName: testName)
+        TestRunner.assertTest(!acpAfterDelete.contains("ghost-dangling"), "pi-acp session-map 中指向已不存在文件的幽灵条目已剪除", testName: testName)
+
+        TestRunner.printSubSection("删除最后一个会话：清空后的索引库连带清理")
+        let freed2 = try await scanner.delete(items: [item2])
+        TestRunner.assertTest(freed2 == item2.sizeInBytes, "delete([item2]) 释放字节数正确", testName: testName)
+        TestRunner.assertTest(scalarCount(sessionsDb1, "SELECT COUNT(*) FROM session_meta WHERE session_id = '\(cmId2)';") == 0, "共享库中不存在 sid2 残留行", testName: testName)
+        TestRunner.assertTest(fm.fileExists(atPath: sessionsDb1.path) && scalarCount(sessionsDb1, "SELECT COUNT(*) FROM session_meta WHERE session_id = '\(cmIdOther)';") == 1, "共享库仍保留其他项目会话（不误删）", testName: testName)
+        TestRunner.assertTest(!fm.fileExists(atPath: sessionsDb2.path), "旧 schema 且已被清空的索引库文件被删除", testName: testName)
+        let acpAfterSecondDelete = (try? String(contentsOf: acpMapURL, encoding: .utf8)) ?? ""
+        TestRunner.assertTest(!acpAfterSecondDelete.contains(sid2), "pi-acp session-map 中 sid2 条目已剪除", testName: testName)
+        TestRunner.assertTest(acpAfterSecondDelete.contains("other-session") && !acpAfterSecondDelete.contains("ghost-dangling"), "pi-acp session-map 仅保留有效条目", testName: testName)
+
+        TestRunner.printSubSection("cleanAll：context-mode / pi-acp 全量清理")
+        let allFreed = try await scanner.cleanAll()
+        TestRunner.assertTest(allFreed > 0, "cleanAll() 释放字节数 > 0（\(allFreed)）", testName: testName)
+        let cmSessionEntries = (try? fm.contentsOfDirectory(at: cmSessionsDir, includingPropertiesForKeys: nil)) ?? []
+        TestRunner.assertTest(cmSessionEntries.filter { $0.pathExtension == "db" }.isEmpty, "cleanAll 后 context-mode/sessions 无残留索引库", testName: testName)
+        TestRunner.assertTest(cmSessionEntries.filter { $0.lastPathComponent.hasPrefix("stats-pid-") }.isEmpty, "cleanAll 后 stats-pid-*.json 全部清理", testName: testName)
+        let cmContentEntries = (try? fm.contentsOfDirectory(at: cmContentDir, includingPropertiesForKeys: nil)) ?? []
+        TestRunner.assertTest(cmContentEntries.isEmpty, "cleanAll 后 context-mode/content 清空", testName: testName)
+        TestRunner.assertTest(!fm.fileExists(atPath: acpMapURL.path), "cleanAll 后 pi-acp session-map.json 已清理", testName: testName)
+
+        let postScan = try await scanner.scan()
+        TestRunner.assertTest(postScan.isEmpty, "cleanAll 后重扫结果为 0（无幽灵会话）", testName: testName)
+    } catch {
+        TestRunner.assertTest(false, "context-mode 双层索引同步测试抛出异常: \(error)", testName: testName)
+    }
+}
+
 // MARK: - Test: Real VS Code Chat Scanner (READ-ONLY)
 
 func testRealVSCodeChatScannerReadOnly() async {
@@ -2475,7 +2687,7 @@ func testMockVSCDBIndexSync() async {
     """
     try? s2Content.write(to: s2File, atomically: true, encoding: .utf8)
 
-    // Create state.vscdb with ItemTable and chat.ChatSessionStore.index
+    // Create state.vscdb with ItemTable and all index keys
     var db: OpaquePointer?
     if sqlite3_open(stateDbURL.path, &db) == SQLITE_OK, let db = db {
         sqlite3_exec(db, "CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value BLOB);", nil, nil, nil)
@@ -2498,14 +2710,54 @@ func testMockVSCDBIndexSync() async {
         }
         """
 
-        let insertSQL = "INSERT INTO ItemTable (key, value) VALUES ('chat.ChatSessionStore.index', ?);"
-        var stmt: OpaquePointer?
-        if sqlite3_prepare_v2(db, insertSQL, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (initialIndexJSON as NSString).utf8String, -1, nil)
-            sqlite3_step(stmt)
-            sqlite3_finalize(stmt)
+        let enc1 = Data(sid1.utf8).base64EncodedString()
+        let enc2 = Data(sid2.utf8).base64EncodedString()
+
+        let mementoJSON = "{\"sessionResource\":{\"external\":\"vscode-chat-session://local/\(enc1)\"}}"
+        let interactiveSessionsJSON = "[\"\(sid1)\",\"\(sid2)\"]"
+        let panelChatJSON = "{\"activeSession\":\"\(sid1)\"}"
+        let agentStateCacheJSON = "[{\"resource\":\"vscode-chat-session://local/\(enc1)\",\"read\":1},{\"resource\":\"vscode-chat-session://local/\(enc2)\",\"read\":1}]"
+        let agentModelCacheJSON = "[{\"resource\":\"vscode-chat-session://local/\(enc1)\",\"label\":\"m1\"},{\"resource\":\"vscode-chat-session://local/\(enc2)\",\"label\":\"m2\"}]"
+        let composerDataJSON = "{\"allComposers\":[{\"composerId\":\"\(sid1)\",\"name\":\"c1\"},{\"composerId\":\"\(sid2)\",\"name\":\"c2\"}]}"
+        let aiChatDataJSON = "{\"tabs\":[{\"id\":\"\(sid1)\",\"chatTitle\":\"t1\"},{\"id\":\"\(sid2)\",\"chatTitle\":\"t2\"}]}"
+
+        let insertItems: [(String, String)] = [
+            ("chat.ChatSessionStore.index", initialIndexJSON),
+            ("memento/interactive-session-view-copilot", mementoJSON),
+            ("interactive.sessions", interactiveSessionsJSON),
+            ("workbench.panel.chat", panelChatJSON),
+            ("agentSessions.state.cache", agentStateCacheJSON),
+            ("agentSessions.model.cache", agentModelCacheJSON),
+            ("composer.composerData", composerDataJSON),
+            ("workbench.panel.aichat.view.aichat.chatdata", aiChatDataJSON)
+        ]
+
+        for (k, v) in insertItems {
+            let insertSQL = "INSERT INTO ItemTable (key, value) VALUES (?, ?);"
+            var stmt: OpaquePointer?
+            if sqlite3_prepare_v2(db, insertSQL, -1, &stmt, nil) == SQLITE_OK {
+                sqlite3_bind_text(stmt, 1, (k as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 2, (v as NSString).utf8String, -1, nil)
+                sqlite3_step(stmt)
+                sqlite3_finalize(stmt)
+            }
         }
         sqlite3_close(db)
+    }
+
+    // Set up globalStorage/github.copilot-chat/session-store.db
+    let copilotGlobalDir = tempDir.appendingPathComponent("globalStorage/github.copilot-chat")
+    try? fm.createDirectory(at: copilotGlobalDir, withIntermediateDirectories: true)
+    let sessionStoreDbURL = copilotGlobalDir.appendingPathComponent("session-store.db")
+    var cdb: OpaquePointer?
+    if sqlite3_open(sessionStoreDbURL.path, &cdb) == SQLITE_OK, let cdb = cdb {
+        sqlite3_exec(cdb, "CREATE TABLE sessions (id TEXT PRIMARY KEY, summary TEXT);", nil, nil, nil)
+        sqlite3_exec(cdb, "CREATE TABLE turns (id INTEGER PRIMARY KEY, session_id TEXT, user_message TEXT);", nil, nil, nil)
+        sqlite3_exec(cdb, "INSERT INTO sessions (id, summary) VALUES ('\(sid1)', 'summary1');", nil, nil, nil)
+        sqlite3_exec(cdb, "INSERT INTO sessions (id, summary) VALUES ('\(sid2)', 'summary2');", nil, nil, nil)
+        sqlite3_exec(cdb, "INSERT INTO turns (session_id, user_message) VALUES ('\(sid1)', 'msg1');", nil, nil, nil)
+        sqlite3_exec(cdb, "INSERT INTO turns (session_id, user_message) VALUES ('\(sid2)', 'msg2');", nil, nil, nil)
+        sqlite3_close(cdb)
     }
 
     TestRunner.printSubSection("Executing Scan and Deletion with VSCDB Sync Verification")
@@ -2517,7 +2769,7 @@ func testMockVSCDBIndexSync() async {
         TestRunner.assertTest(items.count == 2, "Scanned exactly 2 sessions (found: \(items.count))", testName: testName)
 
         guard let item1 = items.first(where: { $0.sessionId == sid1 }),
-              let item2 = items.first(where: { $0.sessionId == sid2 }) else {
+              items.contains(where: { $0.sessionId == sid2 }) else {
             TestRunner.assertTest(false, "Could not find expected items sid1 and sid2", testName: testName)
             return
         }
@@ -2532,30 +2784,145 @@ func testMockVSCDBIndexSync() async {
         TestRunner.assertTest(!fm.fileExists(atPath: s1File.path), "Session 1 file removed from disk", testName: testName)
         TestRunner.assertTest(fm.fileExists(atPath: s2File.path), "Session 2 file still exists on disk", testName: testName)
 
-        // Assert that the deleted session is removed from chat.ChatSessionStore.index in SQLite!
+        // Assert that all index keys in state.vscdb were appropriately synced!
         var verifyDb: OpaquePointer?
         if sqlite3_open_v2(stateDbURL.path, &verifyDb, SQLITE_OPEN_READONLY, nil) == SQLITE_OK, let verifyDb = verifyDb {
-            let selectSQL = "SELECT value FROM ItemTable WHERE key = 'chat.ChatSessionStore.index';"
-            var selStmt: OpaquePointer?
-            if sqlite3_prepare_v2(verifyDb, selectSQL, -1, &selStmt, nil) == SQLITE_OK {
-                if sqlite3_step(selStmt) == SQLITE_ROW, let textPtr = sqlite3_column_text(selStmt, 0) {
-                    let updatedJSON = String(cString: textPtr)
-                    if let data = updatedJSON.data(using: .utf8),
-                       let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                       let entries = root["entries"] as? [String: Any] {
-                        TestRunner.assertTest(entries[sid1] == nil, "Session 1 (\(sid1)) was successfully removed from chat.ChatSessionStore.index in SQLite", testName: testName)
-                        TestRunner.assertTest(entries[sid2] != nil, "Session 2 (\(sid2)) is preserved in chat.ChatSessionStore.index in SQLite", testName: testName)
-                    } else {
-                        TestRunner.assertTest(false, "Failed to parse updated index JSON from ItemTable", testName: testName)
-                    }
-                } else {
-                    TestRunner.assertTest(false, "No row found for chat.ChatSessionStore.index in ItemTable", testName: testName)
+            func queryKey(_ key: String) -> String? {
+                let sql = "SELECT value FROM ItemTable WHERE key = ?;"
+                var stmt: OpaquePointer?
+                guard sqlite3_prepare_v2(verifyDb, sql, -1, &stmt, nil) == SQLITE_OK else { return nil }
+                defer { sqlite3_finalize(stmt) }
+                sqlite3_bind_text(stmt, 1, (key as NSString).utf8String, -1, nil)
+                if sqlite3_step(stmt) == SQLITE_ROW, let ptr = sqlite3_column_text(stmt, 0) {
+                    return String(cString: ptr)
                 }
-                sqlite3_finalize(selStmt)
+                return nil
             }
+
+            // 1. chat.ChatSessionStore.index
+            if let updatedJSON = queryKey("chat.ChatSessionStore.index"),
+               let data = updatedJSON.data(using: .utf8),
+               let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let entries = root["entries"] as? [String: Any] {
+                TestRunner.assertTest(entries[sid1] == nil, "Session 1 (\(sid1)) was successfully removed from chat.ChatSessionStore.index", testName: testName)
+                TestRunner.assertTest(entries[sid2] != nil, "Session 2 (\(sid2)) is preserved in chat.ChatSessionStore.index", testName: testName)
+            } else {
+                TestRunner.assertTest(false, "Failed to verify chat.ChatSessionStore.index", testName: testName)
+            }
+
+            // 2. memento/interactive-session-view-copilot
+            let mementoVal = queryKey("memento/interactive-session-view-copilot")
+            TestRunner.assertTest(mementoVal == nil, "memento/interactive-session-view-copilot was removed for deleted session", testName: testName)
+
+            // 3. interactive.sessions
+            if let intVal = queryKey("interactive.sessions"),
+               let data = intVal.data(using: .utf8),
+               let arr = try? JSONSerialization.jsonObject(with: data) as? [String] {
+                TestRunner.assertTest(!arr.contains(sid1), "interactive.sessions removed sid1", testName: testName)
+                TestRunner.assertTest(arr.contains(sid2), "interactive.sessions preserved sid2", testName: testName)
+            } else {
+                TestRunner.assertTest(false, "Failed to verify interactive.sessions", testName: testName)
+            }
+
+            // 4. workbench.panel.chat
+            let panelVal = queryKey("workbench.panel.chat")
+            TestRunner.assertTest(panelVal == nil, "workbench.panel.chat referencing sid1 was removed", testName: testName)
+
+            // 5. agentSessions.state.cache
+            if let stateVal = queryKey("agentSessions.state.cache"),
+               let data = stateVal.data(using: .utf8),
+               let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+                let enc1 = Data(sid1.utf8).base64EncodedString()
+                let enc2 = Data(sid2.utf8).base64EncodedString()
+                let contains1 = arr.contains { ($0["resource"] as? String)?.contains(enc1) == true }
+                let contains2 = arr.contains { ($0["resource"] as? String)?.contains(enc2) == true }
+                TestRunner.assertTest(!contains1, "agentSessions.state.cache removed sid1 resource", testName: testName)
+                TestRunner.assertTest(contains2, "agentSessions.state.cache preserved sid2 resource", testName: testName)
+            } else {
+                TestRunner.assertTest(false, "Failed to verify agentSessions.state.cache", testName: testName)
+            }
+
+            // 6. agentSessions.model.cache
+            if let modelVal = queryKey("agentSessions.model.cache"),
+               let data = modelVal.data(using: .utf8),
+               let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+                let enc1 = Data(sid1.utf8).base64EncodedString()
+                let enc2 = Data(sid2.utf8).base64EncodedString()
+                let contains1 = arr.contains { ($0["resource"] as? String)?.contains(enc1) == true }
+                let contains2 = arr.contains { ($0["resource"] as? String)?.contains(enc2) == true }
+                TestRunner.assertTest(!contains1, "agentSessions.model.cache removed sid1 resource", testName: testName)
+                TestRunner.assertTest(contains2, "agentSessions.model.cache preserved sid2 resource", testName: testName)
+            } else {
+                TestRunner.assertTest(false, "Failed to verify agentSessions.model.cache", testName: testName)
+            }
+
+            // 7. composer.composerData
+            if let composerVal = queryKey("composer.composerData"),
+               let data = composerVal.data(using: .utf8),
+               let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let allComposers = root["allComposers"] as? [[String: Any]] {
+                let contains1 = allComposers.contains { ($0["composerId"] as? String) == sid1 }
+                let contains2 = allComposers.contains { ($0["composerId"] as? String) == sid2 }
+                TestRunner.assertTest(!contains1, "composer.composerData removed sid1 from allComposers", testName: testName)
+                TestRunner.assertTest(contains2, "composer.composerData preserved sid2 in allComposers", testName: testName)
+            } else {
+                TestRunner.assertTest(false, "Failed to verify composer.composerData", testName: testName)
+            }
+
+            // 8. workbench.panel.aichat.view.aichat.chatdata
+            if let aichatVal = queryKey("workbench.panel.aichat.view.aichat.chatdata"),
+               let data = aichatVal.data(using: .utf8),
+               let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let tabs = root["tabs"] as? [[String: Any]] {
+                let contains1 = tabs.contains { ($0["id"] as? String) == sid1 }
+                let contains2 = tabs.contains { ($0["id"] as? String) == sid2 }
+                TestRunner.assertTest(!contains1, "workbench.panel.aichat.view.aichat.chatdata removed sid1 tab", testName: testName)
+                TestRunner.assertTest(contains2, "workbench.panel.aichat.view.aichat.chatdata preserved sid2 tab", testName: testName)
+            } else {
+                TestRunner.assertTest(false, "Failed to verify workbench.panel.aichat.view.aichat.chatdata", testName: testName)
+            }
+
             sqlite3_close(verifyDb)
         } else {
             TestRunner.assertTest(false, "Failed to open state.vscdb for verification", testName: testName)
+        }
+
+        // Verify session-store.db
+        var verifyCdb: OpaquePointer?
+        if sqlite3_open_v2(sessionStoreDbURL.path, &verifyCdb, SQLITE_OPEN_READONLY, nil) == SQLITE_OK, let verifyCdb = verifyCdb {
+            var s1Count = 0
+            var s2Count = 0
+            var stmt: OpaquePointer?
+            if sqlite3_prepare_v2(verifyCdb, "SELECT id FROM sessions;", -1, &stmt, nil) == SQLITE_OK {
+                while sqlite3_step(stmt) == SQLITE_ROW {
+                    if let ptr = sqlite3_column_text(stmt, 0) {
+                        let id = String(cString: ptr)
+                        if id == sid1 { s1Count += 1 }
+                        if id == sid2 { s2Count += 1 }
+                    }
+                }
+                sqlite3_finalize(stmt)
+            }
+            TestRunner.assertTest(s1Count == 0, "session-store.db removed sid1 from sessions table", testName: testName)
+            TestRunner.assertTest(s2Count == 1, "session-store.db preserved sid2 in sessions table", testName: testName)
+            sqlite3_close(verifyCdb)
+        } else {
+            TestRunner.assertTest(false, "Failed to open session-store.db for verification", testName: testName)
+        }
+
+        // Test clearAllChatSessions
+        VSCDBHelper.clearAllChatSessions(from: stateDbURL)
+        if sqlite3_open_v2(stateDbURL.path, &verifyDb, SQLITE_OPEN_READONLY, nil) == SQLITE_OK, let verifyDb = verifyDb {
+            var rowCount = 0
+            var countStmt: OpaquePointer?
+            if sqlite3_prepare_v2(verifyDb, "SELECT COUNT(*) FROM ItemTable;", -1, &countStmt, nil) == SQLITE_OK {
+                if sqlite3_step(countStmt) == SQLITE_ROW {
+                    rowCount = Int(sqlite3_column_int(countStmt, 0))
+                }
+                sqlite3_finalize(countStmt)
+            }
+            TestRunner.assertTest(rowCount == 0, "clearAllChatSessions purged all index keys from ItemTable", testName: testName)
+            sqlite3_close(verifyDb)
         }
     } catch {
         TestRunner.assertTest(false, "VSCDB sync test threw error: \(error)", testName: testName)
@@ -2583,6 +2950,7 @@ struct Main {
         await testMockContinueScanner()
         await testRealPiAgentScannerReadOnly()
         await testMockPiAgentScanner()
+        await testMockPiAgentContextModeSync()
         await testUnifiedMultiAgentScan()
 
         // 4 IDE Agent Scanners

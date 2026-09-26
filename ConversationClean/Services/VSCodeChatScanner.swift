@@ -156,6 +156,7 @@ final class VSCodeChatScanner: AgentScanner, @unchecked Sendable {
 
         var totalFreed: Int64 = 0
         var stateDbToSessions: [URL: Set<String>] = [:]
+        let allSessionIds = Set(items.map { $0.sessionId })
 
         for item in items {
             totalFreed += item.sizeInBytes
@@ -165,6 +166,9 @@ final class VSCodeChatScanner: AgentScanner, @unchecked Sendable {
                     let wsDir = fileURL.deletingLastPathComponent().deletingLastPathComponent()
                     let stateDbURL = wsDir.appendingPathComponent("state.vscdb")
                     stateDbToSessions[stateDbURL, default: []].insert(item.sessionId)
+                } else if path.contains("emptyWindowChatSessions") {
+                    let globalDb = storageURL.appendingPathComponent("globalStorage/state.vscdb")
+                    stateDbToSessions[globalDb, default: []].insert(item.sessionId)
                 }
                 _ = FileSizeHelper.removeIfExists(path: path)
             }
@@ -173,6 +177,17 @@ final class VSCodeChatScanner: AgentScanner, @unchecked Sendable {
         // Atomically sync state.vscdb indexes so VS Code Chat history never leaves ghost sessions
         for (stateDbURL, sessionIds) in stateDbToSessions {
             VSCDBHelper.removeChatSessions(from: stateDbURL, sessionIds: sessionIds)
+        }
+
+        // Clean matching sessions in Copilot Chat session-store.db
+        let copilotDbCandidates = [
+            storageURL.appendingPathComponent("globalStorage/github.copilot-chat/session-store.db"),
+            storageURL.appendingPathComponent("globalStorage/GitHub.copilot-chat/session-store.db")
+        ]
+        for dbURL in copilotDbCandidates {
+            if FileManager.default.fileExists(atPath: dbURL.path) {
+                VSCDBHelper.removeCopilotSessionStore(from: dbURL, sessionIds: allSessionIds)
+            }
         }
 
         // Clean empty directories in workspaceStorage
@@ -236,6 +251,12 @@ final class VSCodeChatScanner: AgentScanner, @unchecked Sendable {
             }
         }
 
+        // Clean globalStorage/state.vscdb chat indexes
+        let globalStateDb = storageURL.appendingPathComponent("globalStorage/state.vscdb")
+        if fileManager.fileExists(atPath: globalStateDb.path) {
+            VSCDBHelper.clearAllChatSessions(from: globalStateDb)
+        }
+
         // Clean globalStorage/github.copilot-chat session-store and caches
         let copilotGlobalCandidates = [
             storageURL.appendingPathComponent("globalStorage/github.copilot-chat"),
@@ -244,6 +265,11 @@ final class VSCodeChatScanner: AgentScanner, @unchecked Sendable {
 
         for copilotGlobal in copilotGlobalCandidates {
             guard fileManager.fileExists(atPath: copilotGlobal.path) else { continue }
+
+            let sessionStoreURL = copilotGlobal.appendingPathComponent("session-store.db")
+            if fileManager.fileExists(atPath: sessionStoreURL.path) {
+                VSCDBHelper.clearCopilotSessionStore(from: sessionStoreURL)
+            }
 
             // Target session-store databases
             let dbFiles = [

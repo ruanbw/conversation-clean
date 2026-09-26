@@ -172,25 +172,82 @@ final class WindsurfScanner: AgentScanner, @unchecked Sendable {
     func delete(items: [ConversationItem]) async throws -> Int64 {
         guard !items.isEmpty else { return 0 }
 
+        let fileManager = FileManager.default
+        let userDir = userDirectoryURL
         var totalFreed: Int64 = 0
         var stateDbToSessions: [URL: Set<String>] = [:]
+        let allSessionIds = Set(items.map { $0.sessionId })
 
         for item in items {
             totalFreed += item.sizeInBytes
+
+            // 1. Remove associated paths and ensure cascade folders are completely removed
             for path in item.associatedPaths {
                 let fileURL = URL(fileURLWithPath: path)
                 if path.contains("chatSessions") {
                     let wsDir = fileURL.deletingLastPathComponent().deletingLastPathComponent()
                     let stateDbURL = wsDir.appendingPathComponent("state.vscdb")
                     stateDbToSessions[stateDbURL, default: []].insert(item.sessionId)
+                } else if path.contains("emptyWindowChatSessions") {
+                    let globalDb = userDir.appendingPathComponent("globalStorage/state.vscdb")
+                    stateDbToSessions[globalDb, default: []].insert(item.sessionId)
                 }
-                _ = FileSizeHelper.removeIfExists(path: path)
+
+                var isDir: ObjCBool = false
+                if fileManager.fileExists(atPath: path, isDirectory: &isDir) {
+                    _ = FileSizeHelper.removeIfExists(path: path)
+
+                    // If a single file inside a cascade folder was removed, ensure the parent cascade folder is cleaned
+                    if !isDir.boolValue {
+                        let parentDir = fileURL.deletingLastPathComponent()
+                        let metaFile = parentDir.appendingPathComponent("meta.json")
+                        let cascadeFile = parentDir.appendingPathComponent("cascade.json")
+                        if !fileManager.fileExists(atPath: metaFile.path) && !fileManager.fileExists(atPath: cascadeFile.path) {
+                            FileSizeHelper.removeIfEmptyDirectory(path: parentDir.path)
+                        }
+                    }
+                }
+            }
+
+            // Also check standard cascade storage locations to ensure the entire cascade folder (with meta.json and cascade.json) is removed
+            let codeiumDir = codeiumWindsurfURL
+            let cascadeFolders = ["cascades", "cascade", "chats"]
+            for sub in cascadeFolders {
+                let cascadeDir = codeiumDir.appendingPathComponent(sub).appendingPathComponent(item.sessionId)
+                if fileManager.fileExists(atPath: cascadeDir.path) {
+                    _ = FileSizeHelper.removeIfExists(path: cascadeDir.path)
+                }
+                let cascadeJsonFile = codeiumDir.appendingPathComponent(sub).appendingPathComponent("\(item.sessionId).json")
+                if fileManager.fileExists(atPath: cascadeJsonFile.path) {
+                    _ = FileSizeHelper.removeIfExists(path: cascadeJsonFile.path)
+                }
             }
         }
 
         // Atomically sync state.vscdb indexes so Windsurf's chat dropdown never shows ghost sessions
         for (stateDbURL, sessionIds) in stateDbToSessions {
             VSCDBHelper.removeChatSessions(from: stateDbURL, sessionIds: sessionIds)
+        }
+
+        // Sync all workspace state.vscdb and globalStorage state.vscdb with deleted session IDs
+        let workspaceStorageDir = userDir.appendingPathComponent("workspaceStorage")
+        if fileManager.fileExists(atPath: workspaceStorageDir.path),
+           let wsEntries = try? fileManager.contentsOfDirectory(
+               at: workspaceStorageDir,
+               includingPropertiesForKeys: [.isDirectoryKey],
+               options: [.skipsHiddenFiles]
+           ) {
+            for wsDir in wsEntries {
+                let stateDbURL = wsDir.appendingPathComponent("state.vscdb")
+                if fileManager.fileExists(atPath: stateDbURL.path) && stateDbToSessions[stateDbURL] == nil {
+                    VSCDBHelper.removeChatSessions(from: stateDbURL, sessionIds: allSessionIds)
+                }
+            }
+        }
+
+        let globalStateDb = userDir.appendingPathComponent("globalStorage/state.vscdb")
+        if fileManager.fileExists(atPath: globalStateDb.path) && stateDbToSessions[globalStateDb] == nil {
+            VSCDBHelper.removeChatSessions(from: globalStateDb, sessionIds: allSessionIds)
         }
 
         cleanEmptyWorkspaceStorageDirs()
@@ -247,6 +304,12 @@ final class WindsurfScanner: AgentScanner, @unchecked Sendable {
                 freed += sz
                 try? fileManager.createDirectory(at: emptyWindowDir, withIntermediateDirectories: true)
             }
+        }
+
+        // Clean globalStorage/state.vscdb chat indexes
+        let globalStateDb = userDir.appendingPathComponent("globalStorage/state.vscdb")
+        if fileManager.fileExists(atPath: globalStateDb.path) {
+            VSCDBHelper.clearAllChatSessions(from: globalStateDb)
         }
 
         // Clean ~/.codeium/windsurf cascades, chats, memories

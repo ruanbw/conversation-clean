@@ -184,8 +184,8 @@ final class CursorScanner: AgentScanner, @unchecked Sendable {
         guard !items.isEmpty else { return 0 }
 
         var totalFreed: Int64 = 0
-        var stateDbComposersToDelete: [String: Set<String>] = [:] // dbPath: Set<sessionId>
         var stateDbToSessions: [URL: Set<String>] = [:]
+        let userDir = userDirectoryURL
 
         for item in items {
             totalFreed += item.sizeInBytes
@@ -193,28 +193,25 @@ final class CursorScanner: AgentScanner, @unchecked Sendable {
             for path in item.associatedPaths {
                 let fileURL = URL(fileURLWithPath: path)
                 if path.hasSuffix(".vscdb") {
-                    stateDbComposersToDelete[path, default: []].insert(item.sessionId)
+                    stateDbToSessions[fileURL, default: []].insert(item.sessionId)
                 } else {
                     if path.contains("chatSessions") {
                         let wsDir = fileURL.deletingLastPathComponent().deletingLastPathComponent()
                         let stateDbURL = wsDir.appendingPathComponent("state.vscdb")
                         stateDbToSessions[stateDbURL, default: []].insert(item.sessionId)
+                    } else if path.contains("emptyWindowChatSessions") {
+                        let globalDb = userDir.appendingPathComponent("globalStorage/state.vscdb")
+                        stateDbToSessions[globalDb, default: []].insert(item.sessionId)
                     }
                     _ = FileSizeHelper.removeIfExists(path: path)
                 }
             }
         }
 
-        // Handle state.vscdb composer deletions
-        for (dbPath, sessionIds) in stateDbComposersToDelete {
-            let dbURL = URL(fileURLWithPath: dbPath)
-            VSCDBHelper.removeComposers(from: dbURL, composerIds: sessionIds)
-            deleteComposersFromStateDb(dbPath: dbPath, sessionIds: sessionIds)
-        }
-
-        // Atomically sync state.vscdb chat session indexes
+        // Atomically sync state.vscdb: completely cleans both composer.composerData and chat.ChatSessionStore.index
         for (stateDbURL, sessionIds) in stateDbToSessions {
             VSCDBHelper.removeChatSessions(from: stateDbURL, sessionIds: sessionIds)
+            deleteComposersFromStateDb(dbPath: stateDbURL.path, sessionIds: sessionIds)
         }
 
         cleanEmptyWorkspaceStorageDirs()
@@ -254,13 +251,18 @@ final class CursorScanner: AgentScanner, @unchecked Sendable {
                     }
                 }
 
-                // Clean state.vscdb composer keys and chat session indexes
+                // Clean state.vscdb composer keys and chat session indexes completely using VSCDBHelper
                 let stateDb = wsDir.appendingPathComponent("state.vscdb")
                 if fileManager.fileExists(atPath: stateDb.path) {
                     VSCDBHelper.clearAllChatSessions(from: stateDb)
-                    clearStateDatabaseChatData(dbURL: stateDb)
                 }
             }
+        }
+
+        // Clean globalStorage/state.vscdb chat indexes completely using VSCDBHelper
+        let globalStateDb = userDir.appendingPathComponent("globalStorage/state.vscdb")
+        if fileManager.fileExists(atPath: globalStateDb.path) {
+            VSCDBHelper.clearAllChatSessions(from: globalStateDb)
         }
 
         // Clean emptyWindowChatSessions

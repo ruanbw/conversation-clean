@@ -142,8 +142,11 @@ final class TraeScanner: AgentScanner, @unchecked Sendable {
     func delete(items: [ConversationItem]) async throws -> Int64 {
         guard !items.isEmpty else { return 0 }
 
+        let fileManager = FileManager.default
+        let userDir = userDirectoryURL
         var totalFreed: Int64 = 0
         var stateDbToSessions: [URL: Set<String>] = [:]
+        let allSessionIds = Set(items.map { $0.sessionId })
 
         for item in items {
             totalFreed += item.sizeInBytes
@@ -153,6 +156,9 @@ final class TraeScanner: AgentScanner, @unchecked Sendable {
                     let wsDir = fileURL.deletingLastPathComponent().deletingLastPathComponent()
                     let stateDbURL = wsDir.appendingPathComponent("state.vscdb")
                     stateDbToSessions[stateDbURL, default: []].insert(item.sessionId)
+                } else if path.contains("emptyWindowChatSessions") {
+                    let globalDb = userDir.appendingPathComponent("globalStorage/state.vscdb")
+                    stateDbToSessions[globalDb, default: []].insert(item.sessionId)
                 }
                 _ = FileSizeHelper.removeIfExists(path: path)
             }
@@ -161,6 +167,27 @@ final class TraeScanner: AgentScanner, @unchecked Sendable {
         // Atomically sync state.vscdb indexes to prevent ghost sessions in Trae
         for (stateDbURL, sessionIds) in stateDbToSessions {
             VSCDBHelper.removeChatSessions(from: stateDbURL, sessionIds: sessionIds)
+        }
+
+        // Sync all workspace state.vscdb and globalStorage state.vscdb with deleted session IDs
+        let workspaceStorageDir = userDir.appendingPathComponent("workspaceStorage")
+        if fileManager.fileExists(atPath: workspaceStorageDir.path),
+           let wsEntries = try? fileManager.contentsOfDirectory(
+               at: workspaceStorageDir,
+               includingPropertiesForKeys: [.isDirectoryKey],
+               options: [.skipsHiddenFiles]
+           ) {
+            for wsDir in wsEntries {
+                let stateDbURL = wsDir.appendingPathComponent("state.vscdb")
+                if fileManager.fileExists(atPath: stateDbURL.path) && stateDbToSessions[stateDbURL] == nil {
+                    VSCDBHelper.removeChatSessions(from: stateDbURL, sessionIds: allSessionIds)
+                }
+            }
+        }
+
+        let globalStateDb = userDir.appendingPathComponent("globalStorage/state.vscdb")
+        if fileManager.fileExists(atPath: globalStateDb.path) && stateDbToSessions[globalStateDb] == nil {
+            VSCDBHelper.removeChatSessions(from: globalStateDb, sessionIds: allSessionIds)
         }
 
         cleanEmptyWorkspaceStorageDirs()
@@ -217,6 +244,12 @@ final class TraeScanner: AgentScanner, @unchecked Sendable {
                 freed += sz
                 try? fileManager.createDirectory(at: emptyWindowDir, withIntermediateDirectories: true)
             }
+        }
+
+        // Clean globalStorage/state.vscdb chat indexes
+        let globalStateDb = userDir.appendingPathComponent("globalStorage/state.vscdb")
+        if fileManager.fileExists(atPath: globalStateDb.path) {
+            VSCDBHelper.clearAllChatSessions(from: globalStateDb)
         }
 
         // Clean Trae extension caches in globalStorage

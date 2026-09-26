@@ -97,6 +97,7 @@ final class CodexScanner: AgentScanner, @unchecked Sendable {
         }
 
         cleanSessionIndex(excludingSessionIds: deletedSessionIds)
+        cleanGlobalState(excludingSessionIds: deletedSessionIds)
         cleanEmptyDirectories(in: storageURL.appendingPathComponent("sessions"))
         cleanEmptyDirectories(in: storageURL.appendingPathComponent("archived_sessions"))
 
@@ -119,6 +120,8 @@ final class CodexScanner: AgentScanner, @unchecked Sendable {
                 freed += size
             }
         }
+
+        cleanGlobalState(excludingSessionIds: Set(items.map { $0.sessionId }))
 
         return freed
     }
@@ -278,6 +281,92 @@ final class CodexScanner: AgentScanner, @unchecked Sendable {
 
         let newContent = retainedLines.joined(separator: "\n") + (retainedLines.isEmpty ? "" : "\n")
         try? newContent.write(to: indexURL, atomically: true, encoding: .utf8)
+    }
+
+    private func cleanGlobalState(excludingSessionIds: Set<String>) {
+        guard !excludingSessionIds.isEmpty else { return }
+        let fileManager = FileManager.default
+        let candidates = [
+            storageURL.appendingPathComponent(".codex-global-state.json"),
+            fileManager.homeDirectoryForCurrentUser.appendingPathComponent(".codex-global-state.json")
+        ]
+
+        var processedPaths = Set<String>()
+        for stateURL in candidates {
+            let path = stateURL.path
+            guard !processedPaths.contains(path), fileManager.fileExists(atPath: path) else { continue }
+            processedPaths.insert(path)
+
+            guard let data = try? Data(contentsOf: stateURL),
+                  var json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+                continue
+            }
+
+            var modified = false
+
+            // 1. Check direct activeSessionId fields
+            for key in ["activeSessionId", "active_session_id", "currentSessionId", "active_thread_id"] {
+                if let cur = json[key] as? String, excludingSessionIds.contains(cur) {
+                    json[key] = NSNull()
+                    modified = true
+                }
+            }
+
+            // 2. Check session arrays / threads / history / recent_sessions
+            for key in ["recentSessions", "recent_sessions", "sessions", "threads", "history", "sessionIds"] {
+                if let arr = json[key] as? [Any] {
+                    let filtered = arr.filter { item in
+                        if let s = item as? String {
+                            return !excludingSessionIds.contains(s)
+                        }
+                        if let d = item as? [String: Any] {
+                            let sid = (d["id"] ?? d["sessionId"] ?? d["session_id"] ?? d["thread_id"]) as? String ?? ""
+                            if !sid.isEmpty && excludingSessionIds.contains(sid) {
+                                return false
+                            }
+                        }
+                        return true
+                    }
+                    if filtered.count != arr.count {
+                        json[key] = filtered
+                        modified = true
+                    }
+                } else if let dict = json[key] as? [String: Any] {
+                    var newDict = dict
+                    var dictModified = false
+                    for (k, val) in dict {
+                        if excludingSessionIds.contains(k) {
+                            newDict.removeValue(forKey: k)
+                            dictModified = true
+                        } else if let subDict = val as? [String: Any] {
+                            let sid = (subDict["id"] ?? subDict["sessionId"] ?? subDict["session_id"]) as? String ?? ""
+                            if !sid.isEmpty && excludingSessionIds.contains(sid) {
+                                newDict.removeValue(forKey: k)
+                                dictModified = true
+                            }
+                        }
+                    }
+                    if dictModified {
+                        json[key] = newDict
+                        modified = true
+                    }
+                }
+            }
+
+            // 3. Check any top-level key matching deleted session id
+            for sid in excludingSessionIds {
+                if json[sid] != nil {
+                    json.removeValue(forKey: sid)
+                    modified = true
+                }
+            }
+
+            if modified {
+                if let updatedData = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]) {
+                    try? updatedData.write(to: stateURL, options: .atomic)
+                }
+            }
+        }
     }
 
     private func cleanEmptyDirectories(in rootURL: URL) {
