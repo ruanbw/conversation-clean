@@ -19,6 +19,10 @@
 		CC0100112D00000100000001 /* ClaudeCodeScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200112D00000100000001 /* ClaudeCodeScanner.swift */; };
 		CC0100122D00000100000001 /* CodexScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200122D00000100000001 /* CodexScanner.swift */; };
 		CC0100132D00000100000001 /* AgentScanService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200132D00000100000001 /* AgentScanService.swift */; };
+		CC0100142D00000100000001 /* ClineScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200142D00000100000001 /* ClineScanner.swift */; };
+		CC0100152D00000100000001 /* RooCodeScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200152D00000100000001 /* RooCodeScanner.swift */; };
+		CC0100162D00000100000001 /* ContinueScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200162D00000100000001 /* ContinueScanner.swift */; };
+		CC0100172D00000100000001 /* PiAgentScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200172D00000100000001 /* PiAgentScanner.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -36,6 +40,10 @@
 		CC0200112D00000100000001 /* ClaudeCodeScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeCodeScanner.swift; sourceTree = "<group>"; };
 		CC0200122D00000100000001 /* CodexScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexScanner.swift; sourceTree = "<group>"; };
 		CC0200132D00000100000001 /* AgentScanService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentScanService.swift; sourceTree = "<group>"; };
+		CC0200142D00000100000001 /* ClineScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClineScanner.swift; sourceTree = "<group>"; };
+		CC0200152D00000100000001 /* RooCodeScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RooCodeScanner.swift; sourceTree = "<group>"; };
+		CC0200162D00000100000001 /* ContinueScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContinueScanner.swift; sourceTree = "<group>"; };
+		CC0200172D00000100000001 /* PiAgentScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PiAgentScanner.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -105,6 +113,10 @@
 				CC0200112D00000100000001 /* ClaudeCodeScanner.swift */,
 				CC0200122D00000100000001 /* CodexScanner.swift */,
 				CC0200132D00000100000001 /* AgentScanService.swift */,
+				CC0200142D00000100000001 /* ClineScanner.swift */,
+				CC0200152D00000100000001 /* RooCodeScanner.swift */,
+				CC0200162D00000100000001 /* ContinueScanner.swift */,
+				CC0200172D00000100000001 /* PiAgentScanner.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -197,6 +209,10 @@
 				CC0100112D00000100000001 /* ClaudeCodeScanner.swift in Sources */,
 				CC0100122D00000100000001 /* CodexScanner.swift in Sources */,
 				CC0100132D00000100000001 /* AgentScanService.swift in Sources */,
+				CC0100142D00000100000001 /* ClineScanner.swift in Sources */,
+				CC0100152D00000100000001 /* RooCodeScanner.swift in Sources */,
+				CC0100162D00000100000001 /* ContinueScanner.swift in Sources */,
+				CC0100172D00000100000001 /* PiAgentScanner.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -41,6 +41,34 @@ struct SettingsView: View {
                             ? ProcessInfo.processInfo.environment["CODEX_HOME"]!
                             : FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex").path
                     )
+
+                    AgentPathRow(
+                        name: "Cline",
+                        icon: "bolt.horizontal.fill",
+                        color: .blue,
+                        path: ClineScanner().storageURL.path
+                    )
+
+                    AgentPathRow(
+                        name: "Roo Code",
+                        icon: "sparkles",
+                        color: .purple,
+                        path: RooCodeScanner().storageURL.path
+                    )
+
+                    AgentPathRow(
+                        name: "Continue",
+                        icon: "play.rectangle.fill",
+                        color: .cyan,
+                        path: ContinueScanner().storageURL.path
+                    )
+
+                    AgentPathRow(
+                        name: "Pi Agent",
+                        icon: "cpu",
+                        color: .pink,
+                        path: PiAgentScanner().storageURL.path
+                    )
                 }
             }
             .padding(20)
@@ -58,7 +86,7 @@ struct SettingsView: View {
                 Text("版本 1.0.0")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Text("一键扫描并清理本地 AI Agent（Claude Code、Codex）产生的会话历史、上下文快照与缓存垃圾。")
+                Text("一键扫描并清理本地 AI Agent（Claude Code、Codex、Cline、Roo Code、Continue、Pi Agent）产生的会话历史、上下文快照与缓存垃圾。")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)

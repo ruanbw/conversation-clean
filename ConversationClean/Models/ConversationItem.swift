@@ -4,6 +4,10 @@ enum ConversationCategory: String, CaseIterable, Identifiable {
     case all = "全部会话"
     case claudeCode = "Claude Code"
     case codex = "Codex"
+    case cline = "Cline"
+    case rooCode = "Roo Code"
+    case continueDev = "Continue"
+    case piAgent = "Pi Agent"
 
     var id: String { rawValue }
 
@@ -15,6 +19,14 @@ enum ConversationCategory: String, CaseIterable, Identifiable {
             return "terminal.fill"
         case .codex:
             return "chevron.left.forwardslash.chevron.right"
+        case .cline:
+            return "bolt.horizontal.fill"
+        case .rooCode:
+            return "sparkles"
+        case .continueDev:
+            return "play.rectangle.fill"
+        case .piAgent:
+            return "cpu"
         }
     }
 }

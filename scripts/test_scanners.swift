@@ -648,6 +648,685 @@ func testMockDeletion() async {
     TestRunner.assertTest(remaining.isEmpty, "AgentScanService.scanAll() after deletion returns 0 items", testName: testService)
 }
 
+// MARK: - Test 5: Real Local Cline Scanner (READ-ONLY)
+
+func testRealClineScannerReadOnly() async {
+    TestRunner.printSection("Test 5: Real Local Cline Scanner (READ-ONLY)")
+
+    let realScanner = ClineScanner()
+    let testName = "RealClineReadOnly"
+
+    TestRunner.printSubSection("Checking Installation and Storage URL")
+    let homePath = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent("Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev").path
+    TestRunner.assertTest(TestRunner.canonicalPath(realScanner.storageURL.path) == TestRunner.canonicalPath(homePath), "storageURL correctly points to Cline directory", testName: testName)
+    TestRunner.assertTest(realScanner.category == .cline, "Category is .cline", testName: testName)
+
+    let isRealInstalled = FileManager.default.fileExists(atPath: realScanner.storageURL.path)
+    TestRunner.assertTest(realScanner.isInstalled == isRealInstalled, "isInstalled matches filesystem check (\(isRealInstalled))", testName: testName)
+
+    if !isRealInstalled {
+        print("  \u{001B}[33m[INFO] Cline storage not found on system. Skipping real file scan checks.\u{001B}[0m")
+        return
+    }
+
+    TestRunner.printSubSection("Scanning Real Local Cline Tasks (READ-ONLY)")
+    do {
+        let items = try await realScanner.scan()
+        TestRunner.assertTest(true, "scan() executed without throwing an error", testName: testName)
+        print("  \u{001B}[34m[INFO] Scanned \(items.count) sessions from real Cline\u{001B}[0m")
+
+        if !items.isEmpty {
+            let totalBytes = items.reduce(0) { $0 + $1.sizeInBytes }
+            let formattedTotal = ByteCountFormatter.string(fromByteCount: totalBytes, countStyle: .file)
+            print("  \u{001B}[34m[INFO] Total size of real Cline sessions: \(formattedTotal) (\(totalBytes) bytes)\u{001B}[0m")
+
+            // Verify task 1790252321985
+            if let task = items.first(where: { $0.sessionId == "1790252321985" }) {
+                TestRunner.assertTest(task.title == "hello", "Task 1790252321985 title is 'hello' (found: '\(task.title)')", testName: testName)
+                TestRunner.assertTest(task.projectPath == "/Users/ruanbw/projects/bennett-usage", "Task 1790252321985 cwd is '/Users/ruanbw/projects/bennett-usage' (found: '\(task.projectPath ?? "nil")')", testName: testName)
+                TestRunner.assertTest(task.messageCount == 10, "Task 1790252321985 messageCount is 10 (found: \(task.messageCount))", testName: testName)
+                TestRunner.assertTest(task.sizeInBytes > 0, "Task 1790252321985 sizeInBytes > 0 (\(task.sizeInBytes) bytes)", testName: testName)
+                TestRunner.assertTest(task.category == .cline, "Task category is .cline", testName: testName)
+                let calendar = Calendar.current
+                let year = calendar.component(.year, from: task.updatedAt)
+                TestRunner.assertTest(year >= 2024, "Task updatedAt has valid recent year (\(year))", testName: testName)
+            } else {
+                TestRunner.assertTest(false, "Did not find expected task 1790252321985 in real Cline scan", testName: testName)
+            }
+
+            // Verify all items have valid associatedPaths that exist on disk
+            var associatedPathsValid = true
+            for item in items {
+                for path in item.associatedPaths {
+                    if !FileManager.default.fileExists(atPath: path) {
+                        associatedPathsValid = false
+                        break
+                    }
+                }
+            }
+            TestRunner.assertTest(associatedPathsValid, "All associatedPaths exist on the real filesystem", testName: testName)
+
+            // Print sample info
+            for item in items {
+                print("    ID: \(item.sessionId) | Title: \(item.title) | Cwd: \(item.displayProjectPath) | Msgs: \(item.messageCount) | Size: \(item.formattedSize) | Date: \(item.formattedDate)")
+            }
+        }
+    } catch {
+        TestRunner.assertTest(false, "scan() threw unexpected error: \(error)", testName: testName)
+    }
+}
+
+// MARK: - Test 6: Mock Cline Scanner (Fixture Directory)
+
+func testMockClineScanner() async {
+    TestRunner.printSection("Test 6: Mock Cline Scanner (Fixture Directory)")
+    let testName = "MockClineScan"
+
+    let fm = FileManager.default
+    let tempDir = TestRunner.createTempDirectory(prefix: "mock_cline_scan")
+    defer { try? fm.removeItem(at: tempDir) }
+
+    TestRunner.printSubSection("Setting up Mock Cline Storage Structure")
+    let tasksDir = tempDir.appendingPathComponent("tasks")
+    let checkpointsDir = tempDir.appendingPathComponent("checkpoints")
+    let stateDir = tempDir.appendingPathComponent("state")
+    let cacheDir = tempDir.appendingPathComponent("cache")
+
+    try? fm.createDirectory(at: tasksDir, withIntermediateDirectories: true)
+    try? fm.createDirectory(at: checkpointsDir, withIntermediateDirectories: true)
+    try? fm.createDirectory(at: stateDir, withIntermediateDirectories: true)
+    try? fm.createDirectory(at: cacheDir, withIntermediateDirectories: true)
+
+    // Task 1: has ui_messages, task_metadata, api_conversation_history, and checkpoints
+    let t1Id = "cline-task-001"
+    let t1Dir = tasksDir.appendingPathComponent(t1Id)
+    let t1CpDir = checkpointsDir.appendingPathComponent(t1Id)
+    try? fm.createDirectory(at: t1Dir, withIntermediateDirectories: true)
+    try? fm.createDirectory(at: t1CpDir, withIntermediateDirectories: true)
+    try? "checkpoint git commit data".write(to: t1CpDir.appendingPathComponent("commit.dat"), atomically: true, encoding: .utf8)
+
+    let t1UiMessages = """
+    [
+      {"ts": 1789000000000, "type": "say", "say": "task", "text": "Refactor Swift Concurrency Actors"},
+      {"ts": 1789000005000, "type": "say", "say": "text", "text": "Analyzing codebase actors..."},
+      {"ts": 1789000010000, "type": "say", "say": "completion_result", "text": "Refactor completed."}
+    ]
+    """
+    try? t1UiMessages.write(to: t1Dir.appendingPathComponent("ui_messages.json"), atomically: true, encoding: .utf8)
+
+    let t1Metadata = """
+    {
+      "files_in_context": ["/Users/tester/actor-demo/Sources/Actor.swift"],
+      "model_usage": [{"ts": 1789000000000, "model_id": "claude-3-5-sonnet", "mode": "act"}]
+    }
+    """
+    try? t1Metadata.write(to: t1Dir.appendingPathComponent("task_metadata.json"), atomically: true, encoding: .utf8)
+
+    let t1ApiHistory = """
+    [
+      {"role": "user", "content": "# Current Working Directory (/Users/tester/actor-demo) Files\\nRefactor actors"},
+      {"role": "assistant", "content": "I will update Actor.swift"}
+    ]
+    """
+    try? t1ApiHistory.write(to: t1Dir.appendingPathComponent("api_conversation_history.json"), atomically: true, encoding: .utf8)
+
+    // Task 2: uses taskHistory.json for cwd and title
+    let t2Id = "cline-task-002"
+    let t2Dir = tasksDir.appendingPathComponent(t2Id)
+    try? fm.createDirectory(at: t2Dir, withIntermediateDirectories: true)
+    let t2UiMessages = """
+    [
+      {"ts": 1789100000000, "type": "say", "say": "task", "text": "Build REST API Client in Go"}
+    ]
+    """
+    try? t2UiMessages.write(to: t2Dir.appendingPathComponent("ui_messages.json"), atomically: true, encoding: .utf8)
+
+    // state/taskHistory.json
+    let taskHistoryContent = """
+    [
+      {
+        "id": "\(t1Id)",
+        "task": "Refactor Swift Concurrency Actors",
+        "cwdOnTaskInitialization": "/Users/tester/actor-demo",
+        "ts": 1789000010000,
+        "size": 500
+      },
+      {
+        "id": "\(t2Id)",
+        "task": "Build REST API Client in Go",
+        "cwdOnTaskInitialization": "/Users/tester/go-api",
+        "ts": 1789100000000,
+        "size": 250
+      }
+    ]
+    """
+    try? taskHistoryContent.write(to: stateDir.appendingPathComponent("taskHistory.json"), atomically: true, encoding: .utf8)
+
+    // Cache file
+    try? "catalog data".write(to: cacheDir.appendingPathComponent("catalog.json"), atomically: true, encoding: .utf8)
+
+    TestRunner.printSubSection("Executing Mock Cline Scanner")
+    let scanner = ClineScanner(storageURL: tempDir)
+    TestRunner.assertTest(scanner.isInstalled, "scanner.isInstalled is true for fixture directory", testName: testName)
+    TestRunner.assertTest(scanner.category == .cline, "Category is .cline", testName: testName)
+
+    do {
+        var items = try await scanner.scan()
+        TestRunner.assertTest(items.count == 2, "Detected exactly 2 Cline tasks (found \(items.count))", testName: testName)
+
+        // Verify task 1
+        if let item1 = items.first(where: { $0.sessionId == t1Id }) {
+            TestRunner.assertTest(item1.title == "Refactor Swift Concurrency Actors", "Task 1 title matches prompt (\(item1.title))", testName: testName)
+            TestRunner.assertTest(item1.projectPath == "/Users/tester/actor-demo", "Task 1 cwd matches /Users/tester/actor-demo", testName: testName)
+            TestRunner.assertTest(item1.messageCount == 3, "Task 1 messageCount is 3", testName: testName)
+            let canonPaths = Set(item1.associatedPaths.map { TestRunner.canonicalPath($0) })
+            TestRunner.assertTest(canonPaths.contains(TestRunner.canonicalPath(t1Dir.path)), "Task 1 associatedPaths contains task directory", testName: testName)
+            TestRunner.assertTest(canonPaths.contains(TestRunner.canonicalPath(t1CpDir.path)), "Task 1 associatedPaths contains checkpoint directory", testName: testName)
+            let calculatedSize = FileSizeHelper.sizeOf(path: t1Dir.path) + FileSizeHelper.sizeOf(path: t1CpDir.path)
+            TestRunner.assertTest(item1.sizeInBytes == calculatedSize, "Task 1 size matches sum of task dir + checkpoints (\(item1.sizeInBytes) == \(calculatedSize))", testName: testName)
+        } else {
+            TestRunner.assertTest(false, "Task 1 not found", testName: testName)
+        }
+
+        // Verify task 2
+        if let item2 = items.first(where: { $0.sessionId == t2Id }) {
+            TestRunner.assertTest(item2.title == "Build REST API Client in Go", "Task 2 title matches prompt (\(item2.title))", testName: testName)
+            TestRunner.assertTest(item2.projectPath == "/Users/tester/go-api", "Task 2 cwd matches /Users/tester/go-api", testName: testName)
+        } else {
+            TestRunner.assertTest(false, "Task 2 not found", testName: testName)
+        }
+
+        // Deletion test: delete item 1
+        print("  \u{001B}[34m[INFO] Deleting Cline Task 1...\u{001B}[0m")
+        if let item1 = items.first(where: { $0.sessionId == t1Id }) {
+            let freed = try await scanner.delete(items: [item1])
+            TestRunner.assertTest(freed == item1.sizeInBytes, "Freed size (\(freed)) matches item 1 size (\(item1.sizeInBytes))", testName: testName)
+            TestRunner.assertTest(!fm.fileExists(atPath: t1Dir.path), "Task 1 folder removed from disk", testName: testName)
+            TestRunner.assertTest(!fm.fileExists(atPath: t1CpDir.path), "Task 1 checkpoint folder removed from disk", testName: testName)
+
+            // Verify taskHistory.json updated
+            let histFile = stateDir.appendingPathComponent("taskHistory.json")
+            let histStr = (try? String(contentsOf: histFile, encoding: .utf8)) ?? ""
+            TestRunner.assertTest(!histStr.contains(t1Id), "taskHistory.json no longer contains Task 1", testName: testName)
+            TestRunner.assertTest(histStr.contains(t2Id), "taskHistory.json still contains Task 2", testName: testName)
+
+            // Rescan shows 1 item
+            items = try await scanner.scan()
+            TestRunner.assertTest(items.count == 1 && items.first?.sessionId == t2Id, "Rescan shows 1 task remaining", testName: testName)
+        }
+
+        // Clean all test
+        print("  \u{001B}[34m[INFO] Calling scanner.cleanAll()...\u{001B}[0m")
+        let totalFreed = try await scanner.cleanAll()
+        TestRunner.assertTest(totalFreed > 0, "cleanAll() returned freed bytes (\(totalFreed))", testName: testName)
+        items = try await scanner.scan()
+        TestRunner.assertTest(items.isEmpty, "Rescan after cleanAll returns 0 tasks", testName: testName)
+
+    } catch {
+        TestRunner.assertTest(false, "Mock Cline scan threw error: \(error)", testName: testName)
+    }
+}
+
+// MARK: - Test 7: Mock Roo Code Scanner (Fixture Directory)
+
+func testMockRooCodeScanner() async {
+    TestRunner.printSection("Test 7: Mock Roo Code Scanner (Fixture Directory)")
+    let testName = "MockRooCodeScan"
+
+    let fm = FileManager.default
+    let tempDir = TestRunner.createTempDirectory(prefix: "mock_roocode_scan")
+    defer { try? fm.removeItem(at: tempDir) }
+
+    let tasksDir = tempDir.appendingPathComponent("tasks")
+    let stateDir = tempDir.appendingPathComponent("state")
+    let checkpointsDir = tempDir.appendingPathComponent("checkpoints")
+    try? fm.createDirectory(at: tasksDir, withIntermediateDirectories: true)
+    try? fm.createDirectory(at: stateDir, withIntermediateDirectories: true)
+    try? fm.createDirectory(at: checkpointsDir, withIntermediateDirectories: true)
+
+    let rooTaskId = "roo-task-001"
+    let rooTaskDir = tasksDir.appendingPathComponent(rooTaskId)
+    try? fm.createDirectory(at: rooTaskDir, withIntermediateDirectories: true)
+
+    let uiMsg = """
+    [
+      {"ts": 1789200000000, "type": "say", "say": "task", "text": "Migrate database schema to PostgreSQL"},
+      {"ts": 1789200005000, "type": "say", "say": "text", "text": "Generated migrations in # Current Working Directory (/Users/tester/data-store) Files"}
+    ]
+    """
+    try? uiMsg.write(to: rooTaskDir.appendingPathComponent("ui_messages.json"), atomically: true, encoding: .utf8)
+
+    let scanner = RooCodeScanner(storageURL: tempDir)
+    TestRunner.assertTest(scanner.isInstalled, "RooCodeScanner.isInstalled is true for fixture", testName: testName)
+    TestRunner.assertTest(scanner.category == .rooCode, "Category is .rooCode", testName: testName)
+
+    do {
+        let items = try await scanner.scan()
+        TestRunner.assertTest(items.count == 1, "Detected 1 Roo Code task", testName: testName)
+        if let item = items.first {
+            TestRunner.assertTest(item.category == .rooCode, "Item category is .rooCode", testName: testName)
+            TestRunner.assertTest(item.title == "Migrate database schema to PostgreSQL", "Title matches prompt (\(item.title))", testName: testName)
+            TestRunner.assertTest(item.projectPath == "/Users/tester/data-store", "Extracted cwd matches /Users/tester/data-store", testName: testName)
+            TestRunner.assertTest(item.messageCount == 2, "Message count is 2", testName: testName)
+        }
+
+        // Test delete
+        let freed = try await scanner.delete(items: items)
+        TestRunner.assertTest(freed > 0, "RooCodeScanner.delete freed bytes (\(freed))", testName: testName)
+        let remaining = try await scanner.scan()
+        TestRunner.assertTest(remaining.isEmpty, "Rescan after delete returns 0 items", testName: testName)
+    } catch {
+        TestRunner.assertTest(false, "Mock Roo Code scan threw error: \(error)", testName: testName)
+    }
+}
+
+// MARK: - Test 8: Mock Continue.dev Scanner (Fixture Directory)
+
+func testMockContinueScanner() async {
+    TestRunner.printSection("Test 8: Mock Continue.dev Scanner (Fixture Directory)")
+    let testName = "MockContinueScan"
+
+    let fm = FileManager.default
+    let tempDir = TestRunner.createTempDirectory(prefix: "mock_continue_scan")
+    defer { try? fm.removeItem(at: tempDir) }
+
+    TestRunner.printSubSection("Setting up Mock ~/.continue Structure")
+    let sessionsDir = tempDir.appendingPathComponent("sessions")
+    let indexDir = tempDir.appendingPathComponent("index")
+    let cacheDir = tempDir.appendingPathComponent("cache")
+    try? fm.createDirectory(at: sessionsDir, withIntermediateDirectories: true)
+    try? fm.createDirectory(at: indexDir, withIntermediateDirectories: true)
+    try? fm.createDirectory(at: cacheDir, withIntermediateDirectories: true)
+
+    // User configuration file (must NOT be deleted by cleanAll!)
+    let configFile = tempDir.appendingPathComponent("config.json")
+    try? "{\"models\":[{\"title\":\"GPT-4o\"}]}".write(to: configFile, atomically: true, encoding: .utf8)
+
+    // Session 1: explicit title, ISO 8601 date, history with message objects
+    let s1Id = "continue-session-001"
+    let s1File = sessionsDir.appendingPathComponent("\(s1Id).json")
+    let s1Content = """
+    {
+      "sessionId": "\(s1Id)",
+      "title": "Implement Redis Caching Layer",
+      "workspaceDirectory": "/Users/tester/api-gateway",
+      "dateCreated": "2026-09-20T14:30:00.000Z",
+      "history": [
+        {"message": {"role": "user", "content": "How do I configure Redis cache eviction policy?"}},
+        {"message": {"role": "assistant", "content": "You can configure volatile-lru in redis.conf."}}
+      ]
+    }
+    """
+    try? s1Content.write(to: s1File, atomically: true, encoding: .utf8)
+
+    // Session 2: no title (inferred from first prompt), timestamp date, direct history objects
+    let s2Id = "continue-session-002"
+    let s2File = sessionsDir.appendingPathComponent("\(s2Id).json")
+    let s2Content = """
+    {
+      "sessionId": "\(s2Id)",
+      "workspaceDirectory": "/Users/tester/web-client",
+      "dateCreated": 1789500000000,
+      "history": [
+        {"role": "user", "content": "Create a responsive sidebar navigation with SwiftUI"},
+        {"role": "assistant", "content": "Here is a SidebarView implementation..."}
+      ]
+    }
+    """
+    try? s2Content.write(to: s2File, atomically: true, encoding: .utf8)
+
+    // Index data
+    try? "sqlite index data".write(to: indexDir.appendingPathComponent("index.db"), atomically: true, encoding: .utf8)
+
+    TestRunner.printSubSection("Executing Mock Continue.dev Scanner")
+    let scanner = ContinueScanner(storageURL: tempDir)
+    TestRunner.assertTest(scanner.isInstalled, "ContinueScanner.isInstalled is true for fixture", testName: testName)
+    TestRunner.assertTest(scanner.category == .continueDev, "Category is .continueDev", testName: testName)
+
+    do {
+        var items = try await scanner.scan()
+        TestRunner.assertTest(items.count == 2, "Detected exactly 2 Continue sessions (found \(items.count))", testName: testName)
+
+        // Verify session 1
+        if let item1 = items.first(where: { $0.sessionId == s1Id }) {
+            TestRunner.assertTest(item1.category == .continueDev, "Session 1 category is .continueDev", testName: testName)
+            TestRunner.assertTest(item1.title == "Implement Redis Caching Layer", "Session 1 title matches explicit title (\(item1.title))", testName: testName)
+            TestRunner.assertTest(item1.projectPath == "/Users/tester/api-gateway", "Session 1 workspace matches /Users/tester/api-gateway", testName: testName)
+            TestRunner.assertTest(item1.messageCount == 2, "Session 1 message count is 2", testName: testName)
+            TestRunner.assertTest(item1.sizeInBytes == FileSizeHelper.sizeOf(path: s1File.path), "Session 1 size matches file size", testName: testName)
+        } else {
+            TestRunner.assertTest(false, "Session 1 not found", testName: testName)
+        }
+
+        // Verify session 2
+        if let item2 = items.first(where: { $0.sessionId == s2Id }) {
+            TestRunner.assertTest(item2.title == "Create a responsive sidebar navigation with SwiftUI", "Session 2 title inferred from user prompt (\(item2.title))", testName: testName)
+            TestRunner.assertTest(item2.projectPath == "/Users/tester/web-client", "Session 2 workspace matches /Users/tester/web-client", testName: testName)
+            TestRunner.assertTest(item2.messageCount == 2, "Session 2 message count is 2", testName: testName)
+        } else {
+            TestRunner.assertTest(false, "Session 2 not found", testName: testName)
+        }
+
+        // Deletion test: delete item 1
+        print("  \u{001B}[34m[INFO] Deleting Continue session 1...\u{001B}[0m")
+        if let item1 = items.first(where: { $0.sessionId == s1Id }) {
+            let freed = try await scanner.delete(items: [item1])
+            TestRunner.assertTest(freed == item1.sizeInBytes, "Freed size (\(freed)) matches item 1 size (\(item1.sizeInBytes))", testName: testName)
+            TestRunner.assertTest(!fm.fileExists(atPath: s1File.path), "Session 1 file removed from disk", testName: testName)
+            TestRunner.assertTest(fm.fileExists(atPath: s2File.path), "Session 2 file still exists on disk", testName: testName)
+
+            items = try await scanner.scan()
+            TestRunner.assertTest(items.count == 1 && items.first?.sessionId == s2Id, "Rescan shows 1 session remaining", testName: testName)
+        }
+
+        // Clean all test
+        print("  \u{001B}[34m[INFO] Calling Continue cleanAll()...\u{001B}[0m")
+        let freedAll = try await scanner.cleanAll()
+        TestRunner.assertTest(freedAll > 0, "cleanAll() returned freed bytes (\(freedAll))", testName: testName)
+
+        // Verify sessions cleared
+        items = try await scanner.scan()
+        TestRunner.assertTest(items.isEmpty, "Rescan after cleanAll returns 0 sessions", testName: testName)
+
+        // Verify config.json preserved!
+        TestRunner.assertTest(fm.fileExists(atPath: configFile.path), "config.json was safely preserved and NOT deleted", testName: testName)
+
+    } catch {
+        TestRunner.assertTest(false, "Mock Continue scan threw error: \(error)", testName: testName)
+    }
+}
+
+// MARK: - Test 9: Unified Multi-Agent Scan (5 Scanners)
+
+func testUnifiedMultiAgentScan() async {
+    TestRunner.printSection("Test 9: Unified Multi-Agent Scan (5 Scanners)")
+    let testName = "UnifiedFiveAgents"
+
+    let fm = FileManager.default
+    let tempClaude = TestRunner.createTempDirectory(prefix: "unified5_claude")
+    let tempCodex = TestRunner.createTempDirectory(prefix: "unified5_codex")
+    let tempCline = TestRunner.createTempDirectory(prefix: "unified5_cline")
+    let tempRoo = TestRunner.createTempDirectory(prefix: "unified5_roo")
+    let tempContinue = TestRunner.createTempDirectory(prefix: "unified5_cont")
+
+    let tempPi = TestRunner.createTempDirectory(prefix: "unified6_pi")
+
+    defer {
+        try? fm.removeItem(at: tempClaude)
+        try? fm.removeItem(at: tempCodex)
+        try? fm.removeItem(at: tempCline)
+        try? fm.removeItem(at: tempRoo)
+        try? fm.removeItem(at: tempContinue)
+        try? fm.removeItem(at: tempPi)
+    }
+
+    // 1. Claude session
+    let claudeP = tempClaude.appendingPathComponent("projects/-Users-u5-claude")
+    try? fm.createDirectory(at: claudeP, withIntermediateDirectories: true)
+    try? "{\"type\":\"user\",\"message\":{\"content\":\"Claude 6-agent test\"}}\n".write(to: claudeP.appendingPathComponent("s-claude.jsonl"), atomically: true, encoding: .utf8)
+
+    // 2. Codex session
+    let codexDay = tempCodex.appendingPathComponent("sessions/2026/09/20")
+    try? fm.createDirectory(at: codexDay, withIntermediateDirectories: true)
+    try? "{\"role\":\"user\",\"content\":\"Codex 6-agent test\"}\n".write(to: codexDay.appendingPathComponent("s-codex.jsonl"), atomically: true, encoding: .utf8)
+
+    // 3. Cline session
+    let clineTasks = tempCline.appendingPathComponent("tasks/s-cline")
+    try? fm.createDirectory(at: clineTasks, withIntermediateDirectories: true)
+    try? "[{\"ts\":1789000000000,\"type\":\"say\",\"say\":\"task\",\"text\":\"Cline 6-agent test\"}]".write(to: clineTasks.appendingPathComponent("ui_messages.json"), atomically: true, encoding: .utf8)
+
+    // 4. Roo Code session
+    let rooTasks = tempRoo.appendingPathComponent("tasks/s-roo")
+    try? fm.createDirectory(at: rooTasks, withIntermediateDirectories: true)
+    try? "[{\"ts\":1789000000000,\"type\":\"say\",\"say\":\"task\",\"text\":\"Roo Code 6-agent test\"}]".write(to: rooTasks.appendingPathComponent("ui_messages.json"), atomically: true, encoding: .utf8)
+
+    // 5. Continue session
+    let contSessions = tempContinue.appendingPathComponent("sessions")
+    try? fm.createDirectory(at: contSessions, withIntermediateDirectories: true)
+    let contJson = "{\"sessionId\":\"s-cont\",\"title\":\"Continue 6-agent test\",\"workspaceDirectory\":\"/Users/u5/cont\",\"dateCreated\":\"2026-09-20T10:00:00Z\",\"history\":[]}"
+    try? contJson.write(to: contSessions.appendingPathComponent("s-cont.json"), atomically: true, encoding: .utf8)
+
+    // 6. Pi Agent session
+    let piProj = tempPi.appendingPathComponent("agent/sessions/--Users-u6-pi--")
+    try? fm.createDirectory(at: piProj, withIntermediateDirectories: true)
+    let piSid = "01a00000-0000-7000-8000-000000000099"
+    let piJson = """
+    {"type":"session","version":3,"id":"\(piSid)","timestamp":"2026-09-20T10:00:00.000Z","cwd":"/Users/u6/pi"}
+    {"type":"message","id":"msg1","message":{"role":"user","content":[{"type":"text","text":"Pi Agent 6-agent test"}]}}
+    """
+    try? piJson.write(to: piProj.appendingPathComponent("2026-09-20T10-00-00-000Z_\(piSid).jsonl"), atomically: true, encoding: .utf8)
+
+    let scanners: [AgentScanner] = [
+        ClaudeCodeScanner(storageURL: tempClaude),
+        CodexScanner(storageURL: tempCodex),
+        ClineScanner(storageURL: tempCline),
+        RooCodeScanner(storageURL: tempRoo),
+        ContinueScanner(storageURL: tempContinue),
+        PiAgentScanner(storageURL: tempPi)
+    ]
+    let scanService = AgentScanService(scanners: scanners)
+
+    let allItems = await scanService.scanAll()
+    TestRunner.assertTest(allItems.count == 6, "scanAll() detected 6 items across all 6 scanners (found \(allItems.count))", testName: testName)
+
+    let categoriesFound = Set(allItems.map { $0.category })
+    TestRunner.assertTest(categoriesFound.contains(.claudeCode), "Contains .claudeCode", testName: testName)
+    TestRunner.assertTest(categoriesFound.contains(.codex), "Contains .codex", testName: testName)
+    TestRunner.assertTest(categoriesFound.contains(.cline), "Contains .cline", testName: testName)
+    TestRunner.assertTest(categoriesFound.contains(.rooCode), "Contains .rooCode", testName: testName)
+    TestRunner.assertTest(categoriesFound.contains(.continueDev), "Contains .continueDev", testName: testName)
+    TestRunner.assertTest(categoriesFound.contains(.piAgent), "Contains .piAgent", testName: testName)
+
+    let infos = scanService.getAgentInfos(from: allItems)
+    TestRunner.assertTest(infos.count == 6, "AgentScanService.getAgentInfos() returned 6 infos", testName: testName)
+    for info in infos {
+        TestRunner.assertTest(info.sessionCount == 1, "\(info.category.rawValue) shows exactly 1 session", testName: testName)
+    }
+
+    let totalExpectedSize = allItems.reduce(0) { $0 + $1.sizeInBytes }
+    let freed = await scanService.delete(items: allItems)
+    TestRunner.assertTest(freed == totalExpectedSize, "scanService.delete() freed all bytes (\(freed) == \(totalExpectedSize))", testName: testName)
+
+    let remaining = await scanService.scanAll()
+    TestRunner.assertTest(remaining.isEmpty, "Rescan after deleting all 6 returns 0 items", testName: testName)
+}
+
+// MARK: - Test: Real Local Pi Agent Scanner (READ-ONLY)
+
+func testRealPiAgentScannerReadOnly() async {
+    TestRunner.printSection("Test: Real Local ~/.pi Scanner (READ-ONLY)")
+
+    let realScanner = PiAgentScanner()
+    let testName = "RealPiReadOnly"
+
+    TestRunner.printSubSection("Checking Installation and Storage URL")
+    let homePath = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".pi").path
+    TestRunner.assertTest(TestRunner.canonicalPath(realScanner.storageURL.path) == TestRunner.canonicalPath(homePath), "storageURL correctly points to ~/.pi", testName: testName)
+    TestRunner.assertTest(realScanner.category == .piAgent, "Category is .piAgent", testName: testName)
+
+    let isRealInstalled = FileManager.default.fileExists(atPath: realScanner.storageURL.path)
+    TestRunner.assertTest(realScanner.isInstalled == isRealInstalled, "isInstalled matches filesystem check (\(isRealInstalled))", testName: testName)
+
+    if !isRealInstalled {
+        print("  \u{001B}[33m[INFO] ~/.pi not found on system. Skipping real file scan checks.\u{001B}[0m")
+        return
+    }
+
+    TestRunner.printSubSection("Scanning Real Local ~/.pi Sessions (READ-ONLY)")
+    do {
+        let items = try await realScanner.scan()
+        TestRunner.assertTest(true, "scan() executed without throwing an error", testName: testName)
+        print("  \u{001B}[34m[INFO] Scanned \(items.count) sessions from real ~/.pi\u{001B}[0m")
+
+        if !items.isEmpty {
+            let totalBytes = items.reduce(0) { $0 + $1.sizeInBytes }
+            let formattedTotal = ByteCountFormatter.string(fromByteCount: totalBytes, countStyle: .file)
+            print("  \u{001B}[34m[INFO] Total size of real Pi sessions: \(formattedTotal) (\(totalBytes) bytes)\u{001B}[0m")
+
+            // Verify category
+            let allArePi = items.allSatisfy { $0.category == .piAgent }
+            TestRunner.assertTest(allArePi, "All items have category .piAgent", testName: testName)
+
+            // Verify non-empty sessionIds
+            let allHaveSessionId = items.allSatisfy { !$0.sessionId.isEmpty }
+            TestRunner.assertTest(allHaveSessionId, "All items have valid non-empty sessionId", testName: testName)
+
+            // Verify descending sort order by updatedAt
+            var isSorted = true
+            for i in 0..<(items.count - 1) {
+                if items[i].updatedAt < items[i + 1].updatedAt {
+                    isSorted = false
+                    break
+                }
+            }
+            TestRunner.assertTest(isSorted, "Items are sorted by updatedAt descending", testName: testName)
+
+            // Verify title extraction
+            let withTitle = items.filter { !$0.title.isEmpty }
+            TestRunner.assertTest(withTitle.count == items.count, "All items have non-empty titles", testName: testName)
+
+            // Verify messageCount > 0
+            let validMsgCount = items.allSatisfy { $0.messageCount > 0 }
+            TestRunner.assertTest(validMsgCount, "All items have messageCount > 0", testName: testName)
+
+            // Verify associated paths exist
+            let sample = items.prefix(20)
+            var pathsValid = true
+            for item in sample {
+                for path in item.associatedPaths {
+                    if !FileManager.default.fileExists(atPath: path) {
+                        pathsValid = false
+                        break
+                    }
+                }
+            }
+            TestRunner.assertTest(pathsValid, "Associated paths for sampled items exist on disk", testName: testName)
+
+            print("  \u{001B}[34m[INFO] Sample Session #1:\u{001B}[0m")
+            print("    ID: \(items[0].sessionId)")
+            print("    Title: \(items[0].title)")
+            print("    Project: \(items[0].displayProjectPath)")
+            print("    Messages: \(items[0].messageCount)")
+            print("    Size: \(items[0].formattedSize)")
+            print("    Date: \(items[0].formattedDate)")
+            print("    Paths: \(items[0].associatedPaths.count) path(s)")
+        }
+    } catch {
+        TestRunner.assertTest(false, "scan() threw error: \(error)", testName: testName)
+    }
+}
+
+// MARK: - Test: Mock Pi Agent Scanner & Cleanup
+
+func testMockPiAgentScanner() async {
+    TestRunner.printSection("Test: Mock Pi Agent Scanner & Cleanup")
+    let testName = "MockPiAgent"
+
+    let tempDir = TestRunner.createTempDirectory(prefix: "pi_mock")
+    defer { try? FileManager.default.removeItem(at: tempDir) }
+
+    let fm = FileManager.default
+
+    let projA = tempDir.appendingPathComponent("agent/sessions/--Users-mock-projectA--")
+    let projB = tempDir.appendingPathComponent("agent/sessions/--Users-mock-projectB--")
+    let tasksDir = tempDir.appendingPathComponent("tasks")
+    let contextModeDir = tempDir.appendingPathComponent("context-mode")
+    let webCacheDir = tempDir.appendingPathComponent("web-search-cache")
+
+    try? fm.createDirectory(at: projA, withIntermediateDirectories: true)
+    try? fm.createDirectory(at: projB, withIntermediateDirectories: true)
+    try? fm.createDirectory(at: tasksDir, withIntermediateDirectories: true)
+    try? fm.createDirectory(at: contextModeDir, withIntermediateDirectories: true)
+    try? fm.createDirectory(at: webCacheDir, withIntermediateDirectories: true)
+
+    // Session 1 in projA: with subfolder and matching task
+    let sid1 = "01a00000-0000-7000-8000-000000000001"
+    let fileBase1 = "2026-09-01T10-00-00-000Z_\(sid1)"
+    let jsonl1 = projA.appendingPathComponent("\(fileBase1).jsonl")
+    let subfolder1 = projA.appendingPathComponent(fileBase1)
+    try? fm.createDirectory(at: subfolder1, withIntermediateDirectories: true)
+    try? "subfolder-data-bytes-123456789".write(to: subfolder1.appendingPathComponent("subdata.txt"), atomically: true, encoding: .utf8)
+
+    let session1Content = """
+    {"type":"session","version":3,"id":"\(sid1)","timestamp":"2026-09-01T10:00:00.000Z","cwd":"/Users/mock/projectA"}
+    {"type":"model_change","id":"m1","parentId":null,"timestamp":"2026-09-01T10:00:01.000Z","provider":"cli-proxy","modelId":"gemini"}
+    {"type":"message","id":"msg1","parentId":"m1","timestamp":"2026-09-01T10:00:02.000Z","message":{"role":"user","content":[{"type":"text","text":"Implement Pi Agent Scanner feature"}]}}
+    {"type":"message","id":"msg2","parentId":"msg1","timestamp":"2026-09-01T10:00:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"Feature implemented."}]}}
+    """
+    try? session1Content.write(to: jsonl1, atomically: true, encoding: .utf8)
+
+    // Task directory matching sid1: <sid1>-99999
+    let task1Dir = tasksDir.appendingPathComponent("\(sid1)-99999")
+    try? fm.createDirectory(at: task1Dir, withIntermediateDirectories: true)
+    try? "{\"id\":\"t1\",\"status\":\"completed\"}".write(to: task1Dir.appendingPathComponent("task.json"), atomically: true, encoding: .utf8)
+
+    // Session 2 in projB: no subfolder, no matching task
+    let sid2 = "01a00000-0000-7000-8000-000000000002"
+    let fileBase2 = "2026-09-02T12-00-00-000Z_\(sid2)"
+    let jsonl2 = projB.appendingPathComponent("\(fileBase2).jsonl")
+    let session2Content = """
+    {"type":"session","version":3,"id":"\(sid2)","timestamp":"2026-09-02T12:00:00.000Z","cwd":"/Users/mock/projectB"}
+    {"type":"message","id":"msg2_1","parentId":null,"timestamp":"2026-09-02T12:00:02.000Z","message":{"role":"user","content":[{"type":"text","text":"Fix bug in project B"}]}}
+    """
+    try? session2Content.write(to: jsonl2, atomically: true, encoding: .utf8)
+
+    // Unmatched task
+    let unmatchedTaskDir = tasksDir.appendingPathComponent("session-12345-12345")
+    try? fm.createDirectory(at: unmatchedTaskDir, withIntermediateDirectories: true)
+    try? "unmatched-task-content".write(to: unmatchedTaskDir.appendingPathComponent("out.txt"), atomically: true, encoding: .utf8)
+
+    // Context mode DB
+    try? "mock-sqlite-db".write(to: contextModeDir.appendingPathComponent("context.db"), atomically: true, encoding: .utf8)
+
+    // Run history
+    let runHistoryURL = tempDir.appendingPathComponent("agent/run-history.jsonl")
+    try? "{\"agent\":\"worker\",\"status\":\"ok\"}\n".write(to: runHistoryURL, atomically: true, encoding: .utf8)
+
+    let scanner = PiAgentScanner(storageURL: tempDir)
+    TestRunner.assertTest(scanner.isInstalled, "Mock scanner isInstalled == true", testName: testName)
+
+    do {
+        let items = try await scanner.scan()
+        TestRunner.assertTest(items.count == 2, "Mock scan detected 2 sessions (found \(items.count))", testName: testName)
+
+        // Session 1 checks
+        if let item1 = items.first(where: { $0.sessionId == sid1 }) {
+            TestRunner.assertTest(item1.title == "Implement Pi Agent Scanner feature", "Session 1 title matches first user message", testName: testName)
+            TestRunner.assertTest(item1.projectPath == "/Users/mock/projectA", "Session 1 projectPath matches", testName: testName)
+            TestRunner.assertTest(item1.messageCount >= 2, "Session 1 messageCount is >= 2 (found: \(item1.messageCount))", testName: testName)
+            TestRunner.assertTest(item1.associatedPaths.contains(jsonl1.path), "Session 1 associatedPaths includes .jsonl", testName: testName)
+            TestRunner.assertTest(item1.associatedPaths.contains(subfolder1.path), "Session 1 associatedPaths includes subfolder", testName: testName)
+            TestRunner.assertTest(item1.associatedPaths.contains(task1Dir.path), "Session 1 associatedPaths includes matching task dir", testName: testName)
+        } else {
+            TestRunner.assertTest(false, "Session 1 not found in scan results", testName: testName)
+        }
+
+        // Test selective deletion: delete item1
+        if let item1 = items.first(where: { $0.sessionId == sid1 }) {
+            let freed = try await scanner.delete(items: [item1])
+            TestRunner.assertTest(freed == item1.sizeInBytes, "delete([item1]) freed item1.sizeInBytes", testName: testName)
+            TestRunner.assertTest(!fm.fileExists(atPath: jsonl1.path), "jsonl1 removed from disk", testName: testName)
+            TestRunner.assertTest(!fm.fileExists(atPath: subfolder1.path), "subfolder1 removed from disk", testName: testName)
+            TestRunner.assertTest(!fm.fileExists(atPath: task1Dir.path), "task1Dir removed from disk", testName: testName)
+            TestRunner.assertTest(!fm.fileExists(atPath: projA.path), "Empty projectA folder was removed", testName: testName)
+            TestRunner.assertTest(fm.fileExists(atPath: projB.path), "projectB folder still exists", testName: testName)
+        }
+
+        // Test cleanAll: clears projectB, tasks, context-mode, web-search-cache
+        let allFreed = try await scanner.cleanAll()
+        TestRunner.assertTest(allFreed > 0, "cleanAll() returned freed bytes > 0 (\(allFreed))", testName: testName)
+        let postScan = try await scanner.scan()
+        TestRunner.assertTest(postScan.isEmpty, "scan() after cleanAll returns 0 items", testName: testName)
+        TestRunner.assertTest(!fm.fileExists(atPath: jsonl2.path), "jsonl2 removed from disk", testName: testName)
+        TestRunner.assertTest(!fm.fileExists(atPath: unmatchedTaskDir.path), "Unmatched task directory removed in cleanAll", testName: testName)
+        TestRunner.assertTest(fm.fileExists(atPath: tasksDir.path), "tasksDir recreated as clean directory", testName: testName)
+        TestRunner.assertTest(fm.fileExists(atPath: contextModeDir.path), "contextModeDir recreated as clean directory", testName: testName)
+    } catch {
+        TestRunner.assertTest(false, "Mock PiAgentScanner threw error: \(error)", testName: testName)
+    }
+}
+
 // MARK: - Main Runner
 
 @main
@@ -663,6 +1342,13 @@ struct Main {
         await testMockClaudeCodeScanner()
         await testMockCodexScanner()
         await testMockDeletion()
+        await testRealClineScannerReadOnly()
+        await testMockClineScanner()
+        await testMockRooCodeScanner()
+        await testMockContinueScanner()
+        await testRealPiAgentScannerReadOnly()
+        await testMockPiAgentScanner()
+        await testUnifiedMultiAgentScan()
 
         let elapsed = Date().timeIntervalSince(startTime)
 
@@ -685,3 +1371,4 @@ struct Main {
         }
     }
 }
+

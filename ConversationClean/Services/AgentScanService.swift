@@ -22,7 +22,11 @@ final class AgentScanService {
     init(scanners: [AgentScanner]? = nil) {
         self.scanners = scanners ?? [
             ClaudeCodeScanner(),
-            CodexScanner()
+            CodexScanner(),
+            ClineScanner(),
+            RooCodeScanner(),
+            ContinueScanner(),
+            PiAgentScanner()
         ]
     }
 

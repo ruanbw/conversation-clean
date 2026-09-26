@@ -135,11 +135,19 @@ struct DetailView: View {
     private var emptyDescription: String {
         switch viewModel.selectedCategory {
         case .all:
-            return "未在 ~/.claude 或 ~/.codex 检测到本地 agent 历史会话文件，或所有会话均已被清理。"
+            return "未在本地检测到 agent 历史会话文件，或所有会话均已被清理。"
         case .claudeCode:
             return "未在 ~/.claude/projects/ 检测到 Claude Code 会话历史记录。"
         case .codex:
             return "未在 ~/.codex/sessions/ 检测到 OpenAI Codex 会话历史记录。"
+        case .cline:
+            return "未在 Cline 存储目录检测到会话任务记录。"
+        case .rooCode:
+            return "未在 Roo Code 存储目录检测到会话任务记录。"
+        case .continueDev:
+            return "未在 ~/.continue/sessions/ 检测到 Continue.dev 会话记录。"
+        case .piAgent:
+            return "未在 ~/.pi/agent/sessions/ 检测到 Pi Agent 会话历史记录。"
         }
     }
 
@@ -148,6 +156,10 @@ struct DetailView: View {
         case .all: return .accentColor
         case .claudeCode: return .orange
         case .codex: return .green
+        case .cline: return .blue
+        case .rooCode: return .purple
+        case .continueDev: return .cyan
+        case .piAgent: return .pink
         }
     }
 }
@@ -240,6 +252,10 @@ struct ConversationRowView: View {
         case .all: return .accentColor.opacity(0.15)
         case .claudeCode: return .orange.opacity(0.18)
         case .codex: return .green.opacity(0.18)
+        case .cline: return .blue.opacity(0.18)
+        case .rooCode: return .purple.opacity(0.18)
+        case .continueDev: return .cyan.opacity(0.18)
+        case .piAgent: return .pink.opacity(0.18)
         }
     }
 
@@ -248,6 +264,10 @@ struct ConversationRowView: View {
         case .all: return .accentColor
         case .claudeCode: return .orange
         case .codex: return .green
+        case .cline: return .blue
+        case .rooCode: return .purple
+        case .continueDev: return .cyan
+        case .piAgent: return .pink
         }
     }
 }

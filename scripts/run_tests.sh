@@ -12,6 +12,10 @@ xcrun swiftc \
   "$ROOT_DIR/ConversationClean/Services/AgentScannerProtocol.swift" \
   "$ROOT_DIR/ConversationClean/Services/ClaudeCodeScanner.swift" \
   "$ROOT_DIR/ConversationClean/Services/CodexScanner.swift" \
+  "$ROOT_DIR/ConversationClean/Services/ClineScanner.swift" \
+  "$ROOT_DIR/ConversationClean/Services/RooCodeScanner.swift" \
+  "$ROOT_DIR/ConversationClean/Services/ContinueScanner.swift" \
+  "$ROOT_DIR/ConversationClean/Services/PiAgentScanner.swift" \
   "$ROOT_DIR/ConversationClean/Services/AgentScanService.swift" \
   "$SCRIPT_DIR/test_scanners.swift" \
   -o "$BIN_PATH"
