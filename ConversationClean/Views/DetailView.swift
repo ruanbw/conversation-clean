@@ -54,15 +54,15 @@ struct DetailView: View {
                 emptyStateView
             } else {
                 List(selection: $selectedConversation) {
-                    ForEach($viewModel.conversations) { $item in
-                        if viewModel.selectedCategory == .all || item.category == viewModel.selectedCategory {
-                            if viewModel.searchText.isEmpty ||
-                                item.title.localizedCaseInsensitiveContains(viewModel.searchText) ||
-                                item.snippet.localizedCaseInsensitiveContains(viewModel.searchText) ||
-                                (item.projectPath?.localizedCaseInsensitiveContains(viewModel.searchText) ?? false) ||
-                                item.sessionId.localizedCaseInsensitiveContains(viewModel.searchText) {
-                                ConversationRowView(item: $item)
-                                    .tag(item)
+                    ForEach(viewModel.filteredConversations) { item in
+                        ConversationRowView(
+                            item: item,
+                            isSelected: Binding(
+                                get: { item.isSelected },
+                                set: { viewModel.setItemSelected(item.id, selected: $0) }
+                            )
+                        )
+                        .tag(item)
                                     .contextMenu {
                                         Button {
                                             viewModel.revealInFinder(item: item)
@@ -94,8 +94,6 @@ struct DetailView: View {
                                             Label("删除此会话", systemImage: "trash")
                                         }
                                     }
-                            }
-                        }
                     }
                 }
                 .listStyle(.inset(alternatesRowBackgrounds: true))
@@ -155,12 +153,13 @@ struct DetailView: View {
 }
 
 struct ConversationRowView: View {
-    @Binding var item: ConversationItem
+    let item: ConversationItem
+    @Binding var isSelected: Bool
     @EnvironmentObject var viewModel: CleanViewModel
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Toggle("", isOn: $item.isSelected)
+            Toggle("", isOn: $isSelected)
                 .labelsHidden()
                 .padding(.top, 2)
 

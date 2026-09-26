@@ -1,8 +1,8 @@
 import Foundation
 
-final class ClaudeCodeScanner: AgentScanner {
+final class ClaudeCodeScanner: AgentScanner, @unchecked Sendable {
     let category: ConversationCategory = .claudeCode
-    var customStorageURL: URL?
+    let customStorageURL: URL?
 
     init(storageURL: URL? = nil) {
         self.customStorageURL = storageURL
@@ -24,15 +24,20 @@ final class ClaudeCodeScanner: AgentScanner {
         FileManager.default.fileExists(atPath: storageURL.path)
     }
 
+    private struct SessionTarget: Sendable {
+        let fileURL: URL
+        let sessionId: String
+        let projectDirURL: URL
+    }
+
     func scan() async throws -> [ConversationItem] {
         guard isInstalled else { return [] }
 
-        let historyMap = loadHistory()
-        var items: [ConversationItem] = []
+        let fileManager = FileManager.default
+        var targets: [SessionTarget] = []
+        var seenSessionIds = Set<String>()
 
         let projectsURL = storageURL.appendingPathComponent("projects")
-        let fileManager = FileManager.default
-
         if fileManager.fileExists(atPath: projectsURL.path) {
             let projectDirs = (try? fileManager.contentsOfDirectory(at: projectsURL, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles])) ?? []
 
@@ -43,22 +48,11 @@ final class ClaudeCodeScanner: AgentScanner {
                 }
 
                 let entries = (try? fileManager.contentsOfDirectory(at: projectDir, includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles])) ?? []
-
-                for entry in entries {
-                    // Only process top-level .jsonl files in the project folder (which are the session files)
-                    guard entry.pathExtension == "jsonl" else { continue }
-
+                for entry in entries where entry.pathExtension == "jsonl" {
                     let sessionId = entry.deletingPathExtension().lastPathComponent
-                    // Exclude special non-session jsonl files if any
-                    if sessionId.isEmpty { continue }
-
-                    let item = parseSession(
-                        fileURL: entry,
-                        sessionId: sessionId,
-                        projectDirURL: projectDir,
-                        history: historyMap[sessionId]
-                    )
-                    items.append(item)
+                    guard !sessionId.isEmpty, !seenSessionIds.contains(sessionId) else { continue }
+                    seenSessionIds.insert(sessionId)
+                    targets.append(SessionTarget(fileURL: entry, sessionId: sessionId, projectDirURL: projectDir))
                 }
             }
         }
@@ -69,19 +63,39 @@ final class ClaudeCodeScanner: AgentScanner {
             let entries = (try? fileManager.contentsOfDirectory(at: directSessionsURL, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])) ?? []
             for entry in entries where entry.pathExtension == "jsonl" {
                 let sessionId = entry.deletingPathExtension().lastPathComponent
-                if !items.contains(where: { $0.sessionId == sessionId }) {
-                    let item = parseSession(
-                        fileURL: entry,
-                        sessionId: sessionId,
-                        projectDirURL: directSessionsURL,
-                        history: historyMap[sessionId]
-                    )
-                    items.append(item)
-                }
+                guard !sessionId.isEmpty, !seenSessionIds.contains(sessionId) else { continue }
+                seenSessionIds.insert(sessionId)
+                targets.append(SessionTarget(fileURL: entry, sessionId: sessionId, projectDirURL: directSessionsURL))
             }
         }
 
-        // Sort items by update date descending (most recent first)
+        guard !targets.isEmpty else { return [] }
+
+        let historyMap = loadHistory()
+        let associatedArtifacts = preIndexAssociatedDirectories()
+
+        // Concurrent multi-core parsing using TaskGroup
+        let items: [ConversationItem] = await withTaskGroup(of: ConversationItem.self) { group in
+            for target in targets {
+                group.addTask {
+                    return self.parseSession(
+                        fileURL: target.fileURL,
+                        sessionId: target.sessionId,
+                        projectDirURL: target.projectDirURL,
+                        history: historyMap[target.sessionId],
+                        associatedArtifacts: associatedArtifacts
+                    )
+                }
+            }
+
+            var collected: [ConversationItem] = []
+            collected.reserveCapacity(targets.count)
+            for await item in group {
+                collected.append(item)
+            }
+            return collected
+        }
+
         return items.sorted(by: { $0.updatedAt > $1.updatedAt })
     }
 
@@ -100,10 +114,7 @@ final class ClaudeCodeScanner: AgentScanner {
             }
         }
 
-        // Clean deleted sessions from history.jsonl
         cleanHistory(excludingSessionIds: deletedSessionIds)
-
-        // Clean any empty project directories
         cleanEmptyProjectDirectories()
 
         return totalBytesFreed
@@ -113,7 +124,6 @@ final class ClaudeCodeScanner: AgentScanner {
         let items = try await scan()
         var freed = try await delete(items: items)
 
-        // Also clean cache, backups, and shell snapshots if they exist
         let extraPaths = [
             storageURL.appendingPathComponent("cache").path,
             storageURL.appendingPathComponent("backups").path,
@@ -124,7 +134,6 @@ final class ClaudeCodeScanner: AgentScanner {
             let size = FileSizeHelper.sizeOf(path: path)
             if FileSizeHelper.removeIfExists(path: path) {
                 freed += size
-                // Re-create empty directory
                 try? FileManager.default.createDirectory(atPath: path, withIntermediateDirectories: true)
             }
         }
@@ -132,9 +141,38 @@ final class ClaudeCodeScanner: AgentScanner {
         return freed
     }
 
-    // MARK: - Private Parsing & History Helpers
+    // MARK: - Pre-indexing & Parsing
 
-    private struct HistoryRecord {
+    private struct AssociatedArtifacts: Sendable {
+        var pathsBySessionId: [String: [String]] = [:]
+        var sizeBySessionId: [String: Int64] = [:]
+    }
+
+    private func preIndexAssociatedDirectories() -> AssociatedArtifacts {
+        var artifacts = AssociatedArtifacts()
+        let fileManager = FileManager.default
+        let dirsToIndex = ["file-history", "plans", "session-env"]
+
+        for dirName in dirsToIndex {
+            let targetDir = storageURL.appendingPathComponent(dirName)
+            guard fileManager.fileExists(atPath: targetDir.path),
+                  let entries = try? fileManager.contentsOfDirectory(at: targetDir, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles]) else {
+                continue
+            }
+
+            for entry in entries {
+                let sid = entry.lastPathComponent
+                guard !sid.isEmpty else { continue }
+                let path = entry.path
+                let size = FileSizeHelper.sizeOf(path: path)
+                artifacts.pathsBySessionId[sid, default: []].append(path)
+                artifacts.sizeBySessionId[sid, default: 0] += size
+            }
+        }
+        return artifacts
+    }
+
+    private struct HistoryRecord: Sendable {
         let displays: [String]
         let project: String?
         let timestamp: Date?
@@ -190,40 +228,29 @@ final class ClaudeCodeScanner: AgentScanner {
         fileURL: URL,
         sessionId: String,
         projectDirURL: URL,
-        history: HistoryRecord?
+        history: HistoryRecord?,
+        associatedArtifacts: AssociatedArtifacts
     ) -> ConversationItem {
         let fileManager = FileManager.default
         var associatedPaths: [String] = [fileURL.path]
 
         // Check for session folder in project dir (e.g. <sessionId>/ for subagents)
         let sessionDirURL = projectDirURL.appendingPathComponent(sessionId)
+        var subagentDirSize: Int64 = 0
         if fileManager.fileExists(atPath: sessionDirURL.path) {
             associatedPaths.append(sessionDirURL.path)
+            subagentDirSize = FileSizeHelper.sizeOf(path: sessionDirURL.path)
         }
 
-        // Check file-history
-        let fileHistoryURL = storageURL.appendingPathComponent("file-history").appendingPathComponent(sessionId)
-        if fileManager.fileExists(atPath: fileHistoryURL.path) {
-            associatedPaths.append(fileHistoryURL.path)
+        // Add pre-indexed paths and sizes (file-history, plans, session-env) without repeated disk probes
+        if let prePaths = associatedArtifacts.pathsBySessionId[sessionId] {
+            associatedPaths.append(contentsOf: prePaths)
         }
+        let preIndexedSize = associatedArtifacts.sizeBySessionId[sessionId] ?? 0
 
-        // Check plans
-        let plansURL = storageURL.appendingPathComponent("plans").appendingPathComponent(sessionId)
-        if fileManager.fileExists(atPath: plansURL.path) {
-            associatedPaths.append(plansURL.path)
-        }
-
-        // Check session-env
-        let sessionEnvURL = storageURL.appendingPathComponent("session-env").appendingPathComponent(sessionId)
-        if fileManager.fileExists(atPath: sessionEnvURL.path) {
-            associatedPaths.append(sessionEnvURL.path)
-        }
-
-        // Calculate total size of all associated files
-        var totalBytes: Int64 = 0
-        for path in associatedPaths {
-            totalBytes += FileSizeHelper.sizeOf(path: path)
-        }
+        // File size of main jsonl
+        let mainFileSize = FileSizeHelper.sizeOf(path: fileURL.path)
+        let totalBytes = mainFileSize + subagentDirSize + preIndexedSize
 
         // File date
         let fileAttrs = try? fileManager.attributesOfItem(atPath: fileURL.path)
@@ -236,49 +263,48 @@ final class ClaudeCodeScanner: AgentScanner {
         var firstUserPrompt: String? = history?.displays.first
         var messageCount: Int = history?.displays.count ?? 0
 
-        // Parse beginning of JSONL to extract cwd, gitBranch, slug, and first prompt if needed
+        // Parse beginning of JSONL using UTF-8 safe decoding
         if let fileHandle = try? FileHandle(forReadingFrom: fileURL) {
             defer { try? fileHandle.close() }
             let headerData = fileHandle.readData(ofLength: 64 * 1024)
-            if let headerString = String(data: headerData, encoding: .utf8) {
-                var lineIdx = 0
-                headerString.enumerateLines { line, stop in
-                    lineIdx += 1
-                    guard let lineData = line.data(using: .utf8),
-                          let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any] else {
-                        return
-                    }
+            let headerString = String(decoding: headerData, as: UTF8.self)
+            var lineIdx = 0
+            headerString.enumerateLines { line, stop in
+                lineIdx += 1
+                guard let lineData = line.data(using: .utf8),
+                      let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any] else {
+                    return
+                }
 
-                    if detectedCwd == nil, let cwd = json["cwd"] as? String {
-                        detectedCwd = cwd
-                    }
-                    if detectedBranch == nil, let branch = json["gitBranch"] as? String {
-                        detectedBranch = branch
-                    }
-                    if detectedSlug == nil, let slug = json["slug"] as? String {
-                        detectedSlug = slug
-                    }
+                if detectedCwd == nil, let cwd = json["cwd"] as? String {
+                    detectedCwd = cwd
+                }
+                if detectedBranch == nil, let branch = json["gitBranch"] as? String {
+                    detectedBranch = branch
+                }
+                if detectedSlug == nil, let slug = json["slug"] as? String {
+                    detectedSlug = slug
+                }
 
-                    if firstUserPrompt == nil || firstUserPrompt?.isEmpty == true {
-                        if let type = json["type"] as? String, type == "user" {
-                            if let msg = json["message"] as? [String: Any] {
-                                if let text = msg["content"] as? String, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                    firstUserPrompt = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                                } else if let arr = msg["content"] as? [[String: Any]] {
-                                    for item in arr {
-                                        if let txt = item["text"] as? String, !txt.isEmpty {
-                                            firstUserPrompt = txt.trimmingCharacters(in: .whitespacesAndNewlines)
-                                            break
-                                        }
+                if firstUserPrompt == nil || firstUserPrompt?.isEmpty == true {
+                    if let type = json["type"] as? String, type == "user" {
+                        if let msg = json["message"] as? [String: Any] {
+                            if let text = msg["content"] as? String, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                firstUserPrompt = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                            } else if let arr = msg["content"] as? [[String: Any]] {
+                                for item in arr {
+                                    if let txt = item["text"] as? String, !txt.isEmpty {
+                                        firstUserPrompt = txt.trimmingCharacters(in: .whitespacesAndNewlines)
+                                        break
                                     }
                                 }
                             }
                         }
                     }
+                }
 
-                    if lineIdx > 50 {
-                        stop = true
-                    }
+                if lineIdx > 50 {
+                    stop = true
                 }
             }
         }

@@ -7,11 +7,38 @@ enum CleanTarget {
     case allInCurrentCategory
 }
 
+struct CategoryStats: Equatable {
+    var count: Int = 0
+    var sizeInBytes: Int64 = 0
+
+    var formattedSize: String {
+        ByteCountFormatter.string(fromByteCount: sizeInBytes, countStyle: .file)
+    }
+}
+
 @MainActor
 class CleanViewModel: ObservableObject {
-    @Published var conversations: [ConversationItem] = []
-    @Published var selectedCategory: ConversationCategory = .all
-    @Published var searchText: String = ""
+    @Published var conversations: [ConversationItem] = [] {
+        didSet {
+            updateCachedStats()
+            updateFilteredConversations()
+        }
+    }
+    @Published var selectedCategory: ConversationCategory = .all {
+        didSet {
+            updateFilteredConversations()
+        }
+    }
+    @Published var searchText: String = "" {
+        didSet {
+            searchSubject.send(searchText)
+        }
+    }
+
+    @Published private(set) var filteredConversations: [ConversationItem] = []
+    @Published private(set) var categoryStats: [ConversationCategory: CategoryStats] = [:]
+    @Published private(set) var totalSize: Int64 = 0
+
     @Published var isScanning: Bool = false
     @Published var isCleaning: Bool = false
     @Published var lastCleanedBytes: Int64 = 0
@@ -21,27 +48,28 @@ class CleanViewModel: ObservableObject {
     @Published var agentInfos: [AgentInfo] = []
 
     private let scanService = AgentScanService.shared
+    private let searchSubject = PassthroughSubject<String, Never>()
+    private var cancellables = Set<AnyCancellable>()
+    private var debouncedSearchText: String = ""
 
     init() {
+        setupSearchDebounce()
+        updateCachedStats()
         Task {
             await scanConversations()
         }
     }
 
-    var filteredConversations: [ConversationItem] {
-        conversations.filter { item in
-            let matchesCategory = (selectedCategory == .all || item.category == selectedCategory)
-            let matchesSearch = searchText.isEmpty ||
-                item.title.localizedCaseInsensitiveContains(searchText) ||
-                item.snippet.localizedCaseInsensitiveContains(searchText) ||
-                (item.projectPath?.localizedCaseInsensitiveContains(searchText) ?? false) ||
-                item.sessionId.localizedCaseInsensitiveContains(searchText)
-            return matchesCategory && matchesSearch
-        }
-    }
-
-    var totalSize: Int64 {
-        conversations.reduce(0) { $0 + $1.sizeInBytes }
+    private func setupSearchDebounce() {
+        searchSubject
+            .debounce(for: .milliseconds(120), scheduler: RunLoop.main)
+            .removeDuplicates()
+            .sink { [weak self] debouncedQuery in
+                guard let self = self else { return }
+                self.debouncedSearchText = debouncedQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+                self.updateFilteredConversations()
+            }
+            .store(in: &cancellables)
     }
 
     var selectedItems: [ConversationItem] {
@@ -62,6 +90,13 @@ class CleanViewModel: ObservableObject {
             if currentFilteredIds.contains(conversations[index].id) {
                 conversations[index].isSelected = select
             }
+        }
+        updateFilteredConversations()
+    }
+
+    func setItemSelected(_ id: UUID, selected: Bool) {
+        if let idx = conversations.firstIndex(where: { $0.id == id }) {
+            conversations[idx].isSelected = selected
         }
     }
 
@@ -133,5 +168,48 @@ class CleanViewModel: ObservableObject {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
+    }
+
+    // MARK: - State Caching & Filtering Optimization
+
+    private func updateCachedStats() {
+        var stats: [ConversationCategory: CategoryStats] = [:]
+        for cat in ConversationCategory.allCases {
+            stats[cat] = CategoryStats()
+        }
+
+        var total: Int64 = 0
+        for item in conversations {
+            total += item.sizeInBytes
+            stats[item.category, default: CategoryStats()].count += 1
+            stats[item.category, default: CategoryStats()].sizeInBytes += item.sizeInBytes
+            stats[.all, default: CategoryStats()].count += 1
+            stats[.all, default: CategoryStats()].sizeInBytes += item.sizeInBytes
+        }
+
+        self.categoryStats = stats
+        self.totalSize = total
+    }
+
+    private func updateFilteredConversations() {
+        let query = debouncedSearchText.isEmpty ? searchText.trimmingCharacters(in: .whitespacesAndNewlines) : debouncedSearchText
+        let targetCategory = selectedCategory
+
+        if query.isEmpty {
+            if targetCategory == .all {
+                filteredConversations = conversations
+            } else {
+                filteredConversations = conversations.filter { $0.category == targetCategory }
+            }
+        } else {
+            filteredConversations = conversations.filter { item in
+                let matchesCategory = (targetCategory == .all || item.category == targetCategory)
+                guard matchesCategory else { return false }
+                return item.title.localizedCaseInsensitiveContains(query) ||
+                    item.snippet.localizedCaseInsensitiveContains(query) ||
+                    (item.projectPath?.localizedCaseInsensitiveContains(query) ?? false) ||
+                    item.sessionId.localizedCaseInsensitiveContains(query)
+            }
+        }
     }
 }

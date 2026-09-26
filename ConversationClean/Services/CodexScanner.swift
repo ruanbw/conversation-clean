@@ -1,8 +1,8 @@
 import Foundation
 
-final class CodexScanner: AgentScanner {
+final class CodexScanner: AgentScanner, @unchecked Sendable {
     let category: ConversationCategory = .codex
-    var customStorageURL: URL?
+    let customStorageURL: URL?
 
     init(storageURL: URL? = nil) {
         self.customStorageURL = storageURL
@@ -24,11 +24,16 @@ final class CodexScanner: AgentScanner {
         FileManager.default.fileExists(atPath: storageURL.path)
     }
 
+    private struct CodexTarget: Sendable {
+        let fileURL: URL
+        let indexInfo: CodexIndexInfo?
+    }
+
     func scan() async throws -> [ConversationItem] {
         guard isInstalled else { return [] }
 
         let indexMap = loadSessionIndex()
-        var items: [ConversationItem] = []
+        var targets: [CodexTarget] = []
         let fileManager = FileManager.default
 
         // Directories to check for sessions
@@ -51,9 +56,26 @@ final class CodexScanner: AgentScanner {
 
                 let baseName = fileURL.deletingPathExtension().lastPathComponent
                 let info = indexMap[fileURL.lastPathComponent] ?? indexMap[baseName]
-                let item = parseCodexSession(fileURL: fileURL, indexInfo: info)
-                items.append(item)
+                targets.append(CodexTarget(fileURL: fileURL, indexInfo: info))
             }
+        }
+
+        guard !targets.isEmpty else { return [] }
+
+        // Parallel parse using TaskGroup across CPU cores
+        let items: [ConversationItem] = await withTaskGroup(of: ConversationItem.self) { group in
+            for target in targets {
+                group.addTask {
+                    return self.parseCodexSession(fileURL: target.fileURL, indexInfo: target.indexInfo)
+                }
+            }
+
+            var collected: [ConversationItem] = []
+            collected.reserveCapacity(targets.count)
+            for await item in group {
+                collected.append(item)
+            }
+            return collected
         }
 
         return items.sorted(by: { $0.updatedAt > $1.updatedAt })
@@ -74,10 +96,7 @@ final class CodexScanner: AgentScanner {
             }
         }
 
-        // Clean deleted sessions from session_index.jsonl if present
         cleanSessionIndex(excludingSessionIds: deletedSessionIds)
-
-        // Clean empty directories in ~/.codex/sessions
         cleanEmptyDirectories(in: storageURL.appendingPathComponent("sessions"))
         cleanEmptyDirectories(in: storageURL.appendingPathComponent("archived_sessions"))
 
@@ -88,7 +107,6 @@ final class CodexScanner: AgentScanner {
         let items = try await scan()
         var freed = try await delete(items: items)
 
-        // Also clean history.jsonl and temp caches if present
         let extraPaths = [
             storageURL.appendingPathComponent("history.jsonl").path,
             storageURL.appendingPathComponent("cache").path,
@@ -107,7 +125,7 @@ final class CodexScanner: AgentScanner {
 
     // MARK: - Private Helpers
 
-    private struct CodexIndexInfo {
+    struct CodexIndexInfo: Sendable {
         let id: String
         let title: String?
         let cwd: String?
@@ -136,12 +154,14 @@ final class CodexScanner: AgentScanner {
                 updatedAt = Date(timeIntervalSince1970: ts > 1_000_000_000_000 ? ts / 1000.0 : ts)
             }
 
-            let rawFilename = json["filename"] as? String ?? "\(id).jsonl"
-            let fileBase = URL(fileURLWithPath: rawFilename).lastPathComponent
+            let filename = json["filename"] as? String ?? "\(id).jsonl"
             let info = CodexIndexInfo(id: id, title: title, cwd: cwd, updatedAt: updatedAt)
-            map[fileBase] = info
-            map[rawFilename] = info
+            map[filename] = info
             map[id] = info
+            if filename.hasSuffix(".jsonl") {
+                let nameWithoutExt = String(filename.dropLast(6))
+                map[nameWithoutExt] = info
+            }
         }
 
         return map
@@ -165,41 +185,39 @@ final class CodexScanner: AgentScanner {
         if let fileHandle = try? FileHandle(forReadingFrom: fileURL) {
             defer { try? fileHandle.close() }
             let headerData = fileHandle.readData(ofLength: 64 * 1024)
-            if let headerString = String(data: headerData, encoding: .utf8) {
-                var lineCount = 0
-                headerString.enumerateLines { line, stop in
-                    lineCount += 1
-                    guard let lineData = line.data(using: .utf8),
-                          let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any] else {
-                        return
-                    }
+            let headerString = String(decoding: headerData, as: UTF8.self)
+            var lineCount = 0
+            headerString.enumerateLines { line, stop in
+                lineCount += 1
+                guard let lineData = line.data(using: .utf8),
+                      let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any] else {
+                    return
+                }
 
-                    if detectedCwd == nil {
-                        detectedCwd = (json["cwd"] ?? json["project"] ?? json["working_directory"]) as? String
-                    }
+                if detectedCwd == nil {
+                    detectedCwd = (json["cwd"] ?? json["project"] ?? json["working_directory"]) as? String
+                }
 
-                    // Extract user message or prompt
-                    if firstPrompt == nil {
-                        if let role = json["role"] as? String, role == "user", let text = json["content"] as? String {
-                            firstPrompt = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                        } else if let prompt = (json["prompt"] ?? json["display"]) as? String {
-                            firstPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
-                        } else if let messages = json["messages"] as? [[String: Any]] {
-                            for msg in messages {
-                                if let role = msg["role"] as? String, role == "user", let content = msg["content"] as? String {
-                                    firstPrompt = content.trimmingCharacters(in: .whitespacesAndNewlines)
-                                    break
-                                }
+                if firstPrompt == nil {
+                    if let role = json["role"] as? String, role == "user", let text = json["content"] as? String {
+                        firstPrompt = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    } else if let prompt = (json["prompt"] ?? json["display"]) as? String {
+                        firstPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+                    } else if let messages = json["messages"] as? [[String: Any]] {
+                        for msg in messages {
+                            if let role = msg["role"] as? String, role == "user", let content = msg["content"] as? String {
+                                firstPrompt = content.trimmingCharacters(in: .whitespacesAndNewlines)
+                                break
                             }
                         }
                     }
-
-                    if lineCount > 40 {
-                        stop = true
-                    }
                 }
-                messageCount = lineCount
+
+                if lineCount > 40 {
+                    stop = true
+                }
             }
+            messageCount = lineCount
         }
 
         let title: String
@@ -252,15 +270,8 @@ final class CodexScanner: AgentScanner {
                 return
             }
 
-            var isExcluded = excludingSessionIds.contains(sid)
-            if !isExcluded, let rawFn = json["filename"] as? String {
-                let base = URL(fileURLWithPath: rawFn).deletingPathExtension().lastPathComponent
-                if excludingSessionIds.contains(base) {
-                    isExcluded = true
-                }
-            }
-
-            if !isExcluded {
+            let fn = (json["filename"] as? String)?.replacingOccurrences(of: ".jsonl", with: "") ?? ""
+            if !excludingSessionIds.contains(sid) && !excludingSessionIds.contains(fn) {
                 retainedLines.append(line)
             }
         }
@@ -284,7 +295,6 @@ final class CodexScanner: AgentScanner {
             }
         }
 
-        // Remove from deepest to shallowest
         for dir in dirs.reversed() {
             FileSizeHelper.removeIfEmptyDirectory(path: dir.path)
         }

@@ -17,15 +17,11 @@ struct SidebarView: View {
 
                         Spacer()
 
-                        let items = viewModel.conversations.filter {
-                            category == .all || $0.category == category
-                        }
-                        let count = items.count
-                        let size = items.reduce(0) { $0 + $1.sizeInBytes }
+                        let stat = viewModel.categoryStats[category] ?? CategoryStats()
 
-                        if count > 0 {
+                        if stat.count > 0 {
                             VStack(alignment: .trailing, spacing: 2) {
-                                Text("\(count)")
+                                Text("\(stat.count)")
                                     .font(.caption)
                                     .fontWeight(.semibold)
                                     .padding(.horizontal, 6)
@@ -33,7 +29,7 @@ struct SidebarView: View {
                                     .background(Color.secondary.opacity(0.12))
                                     .clipShape(Capsule())
 
-                                Text(ByteCountFormatter.string(fromByteCount: size, countStyle: .file))
+                                Text(stat.formattedSize)
                                     .font(.system(size: 10))
                                     .foregroundStyle(.secondary)
                             }
