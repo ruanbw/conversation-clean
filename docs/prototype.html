@@ -1,0 +1,1311 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ConversationClean · 会话清理工作台</title>
+<style>
+/* ─── tokens — tech-utility direction, bound verbatim ─────────────── */
+:root{
+  --bg:      oklch(98% 0.005 250);
+  --surface: oklch(100% 0 0);
+  --fg:      oklch(22% 0.02 240);
+  --muted:   oklch(50% 0.018 240);
+  --border:  oklch(90% 0.008 240);
+  --accent:  oklch(58% 0.16 145);
+  --font-display:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',system-ui,sans-serif;
+  --font-body:   -apple-system,BlinkMacSystemFont,'Inter','Segoe UI',system-ui,sans-serif;
+  --font-mono:   'JetBrains Mono','IBM Plex Mono',ui-monospace,Menlo,monospace;
+  /* state colors */
+  --danger:      oklch(55% 0.19 25);
+  --danger-deep: oklch(47% 0.19 25);
+  --warn:        oklch(62% 0.13 75);
+  --ok:          oklch(55% 0.13 155);
+  --dot-r:       oklch(64% 0.19 25);
+  --dot-y:       oklch(79% 0.15 82);
+  --dot-g:       oklch(65% 0.16 145);
+  /* derived */
+  --accent-soft: color-mix(in oklch, var(--accent) 13%, transparent);
+  --accent-line: color-mix(in oklch, var(--accent) 34%, transparent);
+  --danger-soft: color-mix(in oklch, var(--danger) 10%, transparent);
+  --fg-soft:     color-mix(in oklch, var(--fg) 6%, transparent);
+  --fg-hair:     color-mix(in oklch, var(--fg) 4%, transparent);
+  --r-sm:6px; --r-md:8px; --r-lg:12px; --r-xl:16px;
+  --ctl:34px;
+}
+/* ─── reset ─────────────────────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--bg);color:var(--fg);
+  font-family:var(--font-body);font-size:13px;line-height:1.5;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+img,svg{display:block;max-width:100%}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input{font:inherit;color:inherit}
+input[type="search"]::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none}
+p,h1,h2,h3{margin:0;text-wrap:pretty}
+.num{font-family:var(--font-mono);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.mono{font-family:var(--font-mono)}
+:focus-visible{outline:2px solid var(--fg);outline-offset:2px;border-radius:3px}
+[hidden]{display:none !important}
+/* ─── desk stage ────────────────────────────────────────────────── */
+.desk{
+  min-height:100vh;padding:28px 24px;
+  display:flex;align-items:center;justify-content:center;
+  background:
+    radial-gradient(120% 90% at 50% -10%, color-mix(in oklch, var(--fg) 5%, transparent), transparent 60%),
+    color-mix(in oklch, var(--fg) 3%, var(--bg));
+}
+.window{
+  width:min(1440px,100%);height:min(900px,calc(100vh - 56px));
+  display:flex;flex-direction:column;overflow:hidden;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r-xl);
+  box-shadow:0 1px 2px var(--fg-hair),0 18px 48px -20px color-mix(in oklch,var(--fg) 26%,transparent);
+}
+/* ─── titlebar ──────────────────────────────────────────────────── */
+.titlebar{
+  flex:0 0 auto;display:flex;align-items:center;gap:14px;
+  height:46px;padding:0 16px;border-bottom:1px solid var(--border);
+  background:color-mix(in oklch,var(--bg) 55%,var(--surface));
+}
+.tl{display:flex;gap:8px}
+.tl i{width:12px;height:12px;border-radius:50%;display:block}
+.tl .r{background:var(--dot-r)}.tl .y{background:var(--dot-y)}.tl .g{background:var(--dot-g)}
+.appname{font-size:13px;font-weight:600;letter-spacing:-.01em}
+.appname span{color:var(--muted);font-weight:400}
+.demo-tag{
+  font-family:var(--font-mono);font-size:10px;letter-spacing:.06em;
+  padding:2px 7px;border:1px solid var(--border);border-radius:999px;color:var(--muted);
+}
+.titlebar .sp{flex:1}
+/* ─── toolbar ───────────────────────────────────────────────────── */
+.toolbar{
+  flex:0 0 auto;display:flex;align-items:center;gap:10px;
+  height:52px;padding:0 16px;border-bottom:1px solid var(--border);
+  background:var(--surface);
+}
+.search{position:relative;flex:1;max-width:420px}
+.search svg{position:absolute;left:11px;top:50%;translate:0 -50%;width:15px;height:15px;color:var(--muted);pointer-events:none}
+.search input{
+  width:100%;height:var(--ctl);padding:0 34px 0 33px;
+  background:color-mix(in oklch,var(--fg) 3%,var(--surface));
+  border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;
+}
+.search input::placeholder{color:var(--muted)}
+.search input:hover{border-color:color-mix(in oklch,var(--fg) 22%,var(--border))}
+.search input:focus{outline:none;border-color:var(--fg);background:var(--surface);box-shadow:0 0 0 3px var(--fg-soft)}
+.search .clr{position:absolute;right:6px;top:50%;translate:0 -50%;width:22px;height:22px;border-radius:5px;display:grid;place-items:center;color:var(--muted)}
+.search .clr:hover{background:var(--fg-soft);color:var(--fg)}
+.search .clr svg{position:static;translate:none;width:12px;height:12px}
+/* ─── buttons ───────────────────────────────────────────────────── */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  height:var(--ctl);padding:0 13px;border-radius:var(--r-md);
+  font-size:13px;font-weight:500;letter-spacing:-.005em;white-space:nowrap;
+  border:1px solid transparent;transition:background .14s,border-color .14s,color .14s;
+}
+.btn svg{width:15px;height:15px;flex:0 0 auto}
+.btn-primary{background:var(--accent);color:var(--surface);border-color:var(--accent)}
+.btn-primary:hover{background:color-mix(in oklch,var(--accent) 86%,black);border-color:color-mix(in oklch,var(--accent) 86%,black)}
+.btn-primary:active{background:color-mix(in oklch,var(--accent) 78%,black)}
+.btn-danger{background:var(--danger);color:var(--surface);border-color:var(--danger)}
+.btn-danger:hover{background:var(--danger-deep);border-color:var(--danger-deep)}
+.btn-danger:active{background:color-mix(in oklch,var(--danger-deep) 84%,black)}
+.btn-ghost{background:transparent;color:var(--fg);border-color:transparent}
+.btn-ghost:hover{background:var(--fg-soft)}
+.btn-outline{background:var(--surface);color:var(--fg);border-color:var(--border)}
+.btn-outline:hover{background:var(--fg-soft);border-color:color-mix(in oklch,var(--fg) 20%,var(--border))}
+.btn[disabled]{opacity:.42;cursor:not-allowed;pointer-events:none}
+.btn-sm{height:28px;padding:0 10px;font-size:12px;border-radius:var(--r-sm)}
+/* ─── split ─────────────────────────────────────────────────────── */
+.split{flex:1 1 auto;display:grid;grid-template-columns:272px minmax(0,1fr) 0;min-height:0;transition:grid-template-columns .18s ease}
+.split.inspect{grid-template-columns:272px minmax(0,1fr) 324px}
+/* ─── sidebar ───────────────────────────────────────────────────── */
+.sidebar{
+  border-right:1px solid var(--border);overflow-y:auto;overscroll-behavior:contain;
+  background:color-mix(in oklch,var(--bg) 42%,var(--surface));
+  padding-bottom:16px;
+}
+.sb-sec{padding:12px 12px 2px}
+.sb-sec + .sb-sec{border-top:1px solid var(--border);margin-top:6px}
+.sb-h{
+  display:flex;align-items:center;justify-content:space-between;
+  font-family:var(--font-mono);font-size:10px;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--muted);padding:0 8px 8px;
+}
+.sb-h button{font-family:var(--font-mono);font-size:10px;letter-spacing:.06em;color:var(--muted);text-transform:uppercase}
+.sb-h button:hover{color:var(--fg)}
+.cat{
+  width:100%;display:flex;align-items:center;gap:9px;
+  height:32px;padding:0 8px 0 6px;border-radius:var(--r-sm);
+  text-align:left;position:relative;color:var(--fg);
+}
+.cat + .cat{margin-top:1px}
+.cat:hover{background:var(--fg-hair)}
+.cat.on{background:var(--fg-soft)}
+.cat.on::before{content:"";position:absolute;left:-6px;top:7px;bottom:7px;width:2px;background:var(--fg);border-radius:0 2px 2px 0}
+.cat .gi{width:17px;height:17px;flex:0 0 auto;color:var(--muted)}
+.cat.on .gi{color:var(--fg)}
+.cat .nm{flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cat.on .nm{font-weight:600}
+.cat .ct{font-family:var(--font-mono);font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.cat.on .ct{color:var(--fg)}
+.cat.zero .nm{color:var(--muted)}
+.cat.zero .ct{color:color-mix(in oklch,var(--muted) 70%,transparent)}
+/* distribution — 单色序列堆叠条 + 图例，填充编码 */
+.dist{padding:0 0 4px}
+.d-bar2{display:flex;height:10px;margin:2px 8px 8px;border-radius:5px;overflow:hidden;background:var(--fg-hair)}
+.d-seg{display:block;height:100%;min-width:2px}
+.d-legs{display:flex;flex-direction:column;padding:0 8px}
+.d-leg{display:grid;grid-template-columns:8px minmax(0,1fr) 30px 54px;gap:9px;align-items:center;padding:2px 0;font-size:11.5px}
+.d-leg + .d-leg{border-top:1px solid var(--border)}
+.d-sw{width:8px;height:8px;border-radius:2px}
+.d-ln{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.d-pc,.d-by{font-family:var(--font-mono);font-size:10.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.d-by{text-align:right}
+/* overview */
+.ov{display:flex;gap:10px;padding:2px 8px 10px}
+.ov-cell{flex:1;min-width:0}
+.ov-cell .l{font-size:11px;color:var(--muted)}
+.ov-cell .v{font-family:var(--font-mono);font-size:19px;font-weight:600;letter-spacing:-.03em;font-variant-numeric:tabular-nums;line-height:1.25}
+.ov .btn{width:calc(100% - 16px);margin:0 8px;color:var(--danger);border-color:color-mix(in oklch,var(--danger) 26%,transparent)}
+.ov .btn:hover{background:var(--danger-soft);border-color:var(--danger)}
+.ov-note{font-size:11px;color:var(--muted);padding:0 8px;line-height:1.45}
+.curpath{padding:0 8px 8px}
+.curpath code{display:block;font-family:var(--font-mono);font-size:10.5px;line-height:1.5;color:var(--fg);background:var(--fg-soft);padding:6px 8px;border-radius:var(--r-sm);word-break:break-all}
+.curpath .ov-note{padding:7px 0 2px}
+.curpath-btn{width:100%}
+/* ─── content ───────────────────────────────────────────────────── */
+.content{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--surface)}
+.content-head{
+  flex:0 0 auto;display:flex;align-items:flex-end;gap:16px;
+  padding:16px 20px 13px;border-bottom:1px solid var(--border);
+}
+.ch-title{display:flex;align-items:center;gap:8px;min-width:0}
+.ch-title .gi{width:20px;height:20px;color:var(--fg);flex:0 0 auto}
+.ch-title h1{font-family:var(--font-display);font-size:19px;font-weight:650;letter-spacing:-.015em;line-height:1.2;white-space:nowrap}
+.ch-sub{font-size:12px;color:var(--muted);margin-top:3px}
+.ch-sub b{font-family:var(--font-mono);font-weight:600;color:var(--fg);font-variant-numeric:tabular-nums}
+.content-head .sp{flex:1}
+.seg{display:flex;background:color-mix(in oklch,var(--fg) 4%,var(--surface));border-radius:var(--r-sm);padding:2px;gap:2px}
+.seg button{height:26px;padding:0 10px;border-radius:4px;font-size:12px;color:var(--muted);white-space:nowrap}
+.seg button:hover{color:var(--fg)}
+.seg button.on{background:var(--surface);color:var(--fg);font-weight:550;box-shadow:0 1px 2px var(--fg-hair)}
+/* banners */
+.banner{
+  flex:0 0 auto;display:flex;align-items:center;gap:10px;
+  padding:10px 20px;font-size:12.5px;border-bottom:1px solid var(--border);
+}
+.banner .bi{width:16px;height:16px;flex:0 0 auto}
+.banner.ok{background:var(--accent-soft);color:color-mix(in oklch,var(--accent) 78%,black)}
+.banner.ok .bi{color:var(--accent)}
+.banner b{font-family:var(--font-mono);font-weight:600;font-variant-numeric:tabular-nums}
+.banner .sp{flex:1}
+.banner .btn{height:24px;padding:0 8px;font-size:11.5px}
+.banner .btn:hover{background:color-mix(in oklch,var(--accent) 16%,transparent)}
+.banner.busy{background:color-mix(in oklch,var(--fg) 3%,var(--surface))}
+.banner.busy .bi{color:var(--fg)}
+.spin{width:14px;height:14px;border-radius:50%;border:2px solid var(--border);border-top-color:var(--fg);animation:sp .7s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.sbar{flex:0 0 auto;height:2px;background:var(--fg-hair);overflow:hidden}
+.sbar i{display:block;height:100%;background:var(--fg);width:0;transition:width .2s linear}
+/* list */
+.list{flex:1 1 auto;overflow-y:auto;overscroll-behavior:contain;padding:6px 12px 16px}
+.row{
+  display:grid;grid-template-columns:20px 1fr;gap:11px;align-items:start;
+  padding:11px 10px;border-radius:var(--r-md);cursor:default;
+  border:1px solid transparent;
+}
+.row + .row{margin-top:2px}
+.row:hover{background:var(--fg-hair)}
+.row.sel{background:var(--fg-soft)}
+.row.focus{border-color:color-mix(in oklch,var(--fg) 34%,transparent);background:var(--fg-soft)}
+.cbx{
+  width:16px;height:16px;margin-top:2px;border-radius:4px;
+  border:1.5px solid color-mix(in oklch,var(--fg) 34%,transparent);
+  display:grid;place-items:center;color:transparent;flex:0 0 auto;
+  transition:background .12s,border-color .12s;
+}
+.cbx:hover{border-color:var(--fg);background:var(--fg-hair)}
+.cbx svg{width:11px;height:11px}
+.cbx.on{background:var(--fg);border-color:var(--fg);color:var(--surface)}
+.row.sel .cbx{border-color:var(--fg)}
+.r-l1{display:flex;align-items:center;gap:8px;min-width:0}
+.tag{
+  font-family:var(--font-mono);font-size:10px;letter-spacing:.02em;
+  padding:2px 6px;border-radius:4px;border:1px solid var(--border);
+  color:var(--muted);white-space:nowrap;flex:0 0 auto;
+}
+.r-title{font-size:13.5px;font-weight:600;letter-spacing:-.008em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.r-size{
+  margin-left:auto;font-family:var(--font-mono);font-size:11px;font-weight:500;
+  color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap;flex:0 0 auto;
+}
+.r-snip{font-size:12px;color:var(--muted);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.r-l3{display:flex;align-items:center;gap:7px;margin-top:5px;font-size:11px;color:var(--muted);min-width:0}
+.r-l3 .m{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:230px}
+.r-l3 .m.path{font-family:var(--font-mono);font-size:10.5px;direction:rtl;unicode-bidi:plaintext;text-align:left}
+.r-l3 .sep{color:color-mix(in oklch,var(--muted) 55%,transparent)}
+.r-l3 .sid{margin-left:auto;font-family:var(--font-mono);font-size:10.5px;letter-spacing:.01em;flex:0 0 auto}
+.r-l3 svg{width:11px;height:11px;flex:0 0 auto;opacity:.85}
+.r-acts{display:flex;gap:2px;flex:0 0 auto;opacity:0;transition:opacity .12s;margin-left:8px}
+.row:hover .r-acts,.row.focus .r-acts{opacity:1}
+.r-acts .btn{height:22px;width:22px;padding:0;color:var(--muted)}
+.r-acts .btn:hover{background:var(--danger-soft);color:var(--danger)}
+.r-acts .btn svg{width:13px;height:13px}
+/* empty */
+.empty{flex:1 1 auto;display:grid;place-items:center;padding:32px}
+.empty-in{max-width:390px;text-align:center}
+.empty-in .gi{width:44px;height:44px;color:color-mix(in oklch,var(--muted) 50%,transparent);margin:0 auto 16px}
+.empty-in h2{font-family:var(--font-display);font-size:17px;font-weight:600;letter-spacing:-.01em;margin-bottom:7px}
+.empty-in p{font-size:12.5px;color:var(--muted);line-height:1.6;margin-bottom:6px}
+.empty-in code{font-family:var(--font-mono);font-size:11.5px;background:var(--fg-soft);padding:1px 5px;border-radius:4px;color:var(--fg)}
+.empty-in .btn{margin-top:18px}
+/* batch bar */
+.batchbar{
+  flex:0 0 auto;display:flex;align-items:center;gap:12px;
+  padding:11px 20px;border-top:1px solid var(--border);
+  background:color-mix(in oklch,var(--bg) 45%,var(--surface));
+}
+.batchbar .b-n{font-size:12.5px;color:var(--muted)}
+.batchbar .b-n b{font-family:var(--font-mono);font-weight:600;color:var(--fg);font-variant-numeric:tabular-nums}
+.batchbar .sp{flex:1}
+/* ─── inspector ─────────────────────────────────────────────────── */
+.inspector{
+  border-left:1px solid var(--border);overflow-y:auto;overscroll-behavior:contain;
+  background:color-mix(in oklch,var(--bg) 42%,var(--surface));
+  padding:16px 18px 20px;
+}
+.inspector .close{position:absolute}
+.insp-h{display:flex;align-items:flex-start;gap:9px;margin-bottom:3px}
+.insp-h .gi{width:19px;height:19px;color:var(--fg);margin-top:2px;flex:0 0 auto}
+.insp-h h2{font-family:var(--font-display);font-size:15px;font-weight:600;letter-spacing:-.012em;line-height:1.35}
+.insp-sub{display:flex;align-items:center;gap:7px;margin:7px 0 0}
+.insp-sec{margin-top:18px;padding-top:14px;border-top:1px solid var(--border)}
+.insp-l{font-family:var(--font-mono);font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.kv{display:grid;grid-template-columns:76px 1fr;gap:7px 10px;font-size:12px;align-items:baseline}
+.kv dt{color:var(--muted)}
+.kv dd{margin:0;word-break:break-all}
+.kv dd.mono{font-size:11px;letter-spacing:-.01em}
+.insp-note{
+  display:flex;gap:8px;padding:9px 10px;border-radius:var(--r-sm);
+  background:var(--fg-soft);font-size:11.5px;line-height:1.5;color:var(--fg);
+}
+.insp-note svg{width:14px;height:14px;flex:0 0 auto;margin-top:2px;color:var(--muted)}
+.flist{display:flex;flex-direction:column;gap:2px}
+.fitem{
+  display:flex;align-items:center;gap:7px;padding:6px 7px;border-radius:var(--r-sm);
+  font-family:var(--font-mono);font-size:10.5px;color:var(--muted);text-align:left;width:100%;
+}
+.fitem:hover{background:var(--fg-hair);color:var(--fg)}
+.fitem svg{width:12px;height:12px;flex:0 0 auto;opacity:.8}
+.fitem span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.insp-acts{display:flex;flex-direction:column;gap:5px}
+.insp-acts .btn{justify-content:flex-start;height:30px}
+/* ─── modal / sheet / settings ──────────────────────────────────── */
+.scrim{position:fixed;inset:0;background:color-mix(in oklch,var(--fg) 34%,transparent);display:grid;place-items:center;padding:20px;z-index:40;backdrop-filter:blur(2px)}
+.sheet{
+  width:min(520px,100%);background:var(--surface);border-radius:var(--r-lg);
+  border:1px solid var(--border);overflow:hidden;
+  box-shadow:0 24px 64px -20px color-mix(in oklch,var(--fg) 46%,transparent);
+}
+.sheet-h{padding:20px 22px 0}
+.sheet-h .warn{display:grid;place-items:center;width:38px;height:38px;border-radius:50%;background:var(--danger-soft);color:var(--danger);margin-bottom:13px}
+.sheet-h .warn svg{width:20px;height:20px}
+.sheet-h h2{font-family:var(--font-display);font-size:17px;font-weight:650;letter-spacing:-.015em}
+.sheet-b{padding:0 22px 18px;font-size:13px;line-height:1.6;color:var(--muted);max-height:min(58vh,520px);overflow-y:auto;overscroll-behavior:contain}
+.sheet-hero{padding:14px 22px 0}
+.sheet-b b{color:var(--fg);font-family:var(--font-mono);font-weight:600;font-variant-numeric:tabular-nums}
+.sheet-b .tip{margin-top:11px;padding:9px 11px;background:var(--fg-soft);border-radius:var(--r-sm);font-size:11.5px;display:flex;gap:7px;line-height:1.5}
+.sheet-b .tip svg{width:13px;height:13px;flex:0 0 auto;margin-top:2px}
+.sheet-f{display:flex;justify-content:flex-end;gap:9px;padding:13px 22px;border-top:1px solid var(--border);background:color-mix(in oklch,var(--bg) 45%,var(--surface))}
+
+/* ─── pre-clean disk estimate ─────────────────────────────────────── */
+.est-hero .k{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.11em;color:var(--muted)}
+.est-hero .v{font-family:var(--font-mono);font-size:34px;font-weight:600;letter-spacing:-.04em;line-height:1.06;color:var(--fg);font-variant-numeric:tabular-nums;margin-top:6px}
+.est-hero .v .u{font-size:16px;font-weight:500;letter-spacing:0;color:var(--muted);margin-left:4px}
+.est-hero .s{font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.5}
+.est-hero .s b{color:var(--fg);font-family:var(--font-mono);font-weight:600;font-variant-numeric:tabular-nums}
+
+.est-sec{margin-top:18px;padding-top:16px;border-top:1px solid var(--border)}
+.est-sec .sh{display:flex;align-items:baseline;gap:8px;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.11em;color:var(--muted);margin-bottom:12px}
+.est-sec .sh .p{letter-spacing:0;color:var(--fg);opacity:.72}
+.est-sec .sh .rt{margin-left:auto;letter-spacing:.02em;font-size:9.5px;padding:1px 6px;border-radius:999px;background:var(--fg-soft);color:var(--muted)}
+
+/* benefit bars — value, basis, filled bar */
+.eb{display:grid;grid-template-columns:1fr auto;gap:6px 12px;align-items:baseline}
+.eb + .eb{margin-top:13px}
+.eb .l{font-size:11.5px;color:var(--muted)}
+.eb .v{font-family:var(--font-mono);font-size:11.5px;font-weight:600;color:var(--fg);font-variant-numeric:tabular-nums;white-space:nowrap}
+.eb .t{grid-column:1/-1;height:9px;border-radius:2px;background:var(--surface);border:1px solid var(--border);overflow:hidden}
+.eb .t i{display:block;height:100%;min-width:1.5px;background:var(--fg)}
+.eb .c{grid-column:1/-1;font-size:10.5px;color:var(--muted);margin-top:-1px}
+.eb .c b{font-family:var(--font-mono);font-weight:600;color:var(--fg);font-variant-numeric:tabular-nums}
+
+/* volume capacity — before / after twin bars at true scale */
+.cap{display:grid;grid-template-columns:36px 1fr 96px;gap:9px;align-items:center}
+.cap + .cap{margin-top:7px}
+.cap .lb{font-size:11px;color:var(--muted)}
+.cap .tk{height:15px;border-radius:3px;background:var(--surface);border:1px solid var(--border);display:flex;overflow:hidden}
+.cap .tk .u{background:color-mix(in oklch,var(--fg) 27%,transparent)}
+.cap .tk .g{background:var(--fg);min-width:1.5px}
+.cap.after .lb{color:var(--fg);font-weight:600}
+.cap.after .tk .u{background:color-mix(in oklch,var(--fg) 21%,transparent)}
+.cap .rv{font-family:var(--font-mono);font-size:10.5px;color:var(--muted);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.cap .rv b{color:var(--fg);font-weight:600}
+.cap-d{display:flex;align-items:baseline;flex-wrap:wrap;gap:0 8px;margin-top:11px;padding-top:10px;border-top:1px solid var(--border);font-size:11.5px;color:var(--muted);line-height:1.6}
+.cap-d .d{font-family:var(--font-mono);font-weight:600;color:var(--fg);font-variant-numeric:tabular-nums}
+.lvl{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.02em;padding:1.5px 7px;border-radius:999px;background:var(--fg-soft);color:var(--fg);flex:0 0 auto}
+.lvl.warn{background:color-mix(in oklch,var(--warn) 15%,transparent);color:color-mix(in oklch,var(--warn) 82%,black)}
+.lvl.ok{background:color-mix(in oklch,var(--ok) 14%,transparent);color:color-mix(in oklch,var(--ok) 84%,black)}
+.est-note{margin-top:10px;font-size:10.5px;color:var(--muted);line-height:1.6;display:flex;gap:7px}
+.est-note svg{width:12px;height:12px;flex:0 0 auto;margin-top:2px}
+.est-note b{font-family:var(--font-mono);font-weight:600;color:var(--fg);font-variant-numeric:tabular-nums}
+
+/* composition — filled bars, hatched fill = estimated */
+.cr{display:grid;grid-template-columns:auto minmax(0,1fr) 58px 42px;gap:9px;align-items:center}
+.cr + .cr{margin-top:8px}
+.cr .cn{font-size:11.5px;color:var(--fg);max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cr .cb{height:8px;border-radius:2px;background:var(--fg-soft);overflow:hidden}
+.cr .cb i{display:block;height:100%;min-width:1.5px;background:var(--fg)}
+.cr .cv,.cr .cp{font-family:var(--font-mono);font-size:10.5px;color:var(--muted);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.cr.est .cn{color:var(--muted)}
+.cr.est .cb i{background:repeating-linear-gradient(135deg,var(--fg) 0 2px,transparent 2px 4px);opacity:.55}
+.cr .tag{font-family:var(--font-mono);font-size:9px;letter-spacing:.02em;padding:1px 5px;border-radius:999px;background:var(--fg-soft);color:var(--muted);margin-left:6px}
+.settings{width:min(760px,100%);height:min(560px,calc(100vh - 40px));display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;box-shadow:0 24px 64px -20px color-mix(in oklch,var(--fg) 46%,transparent)}
+.set-tabs{display:flex;gap:2px;padding:12px 14px 0;border-bottom:1px solid var(--border);flex:0 0 auto}
+.set-tabs button{
+  display:flex;align-items:center;gap:7px;height:36px;padding:0 13px;
+  font-size:13px;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;
+}
+.set-tabs button svg{width:15px;height:15px}
+.set-tabs button:hover{color:var(--fg)}
+.set-tabs button.on{color:var(--fg);font-weight:600;border-bottom-color:var(--fg)}
+.set-body{flex:1 1 auto;overflow-y:auto;padding:22px 26px 26px}
+.set-group + .set-group{margin-top:26px;padding-top:22px;border-top:1px solid var(--border)}
+.set-group h3{font-family:var(--font-mono);font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin-bottom:12px}
+.tgl{display:flex;align-items:flex-start;gap:14px;padding:10px 0;cursor:pointer}
+.tgl + .tgl{border-top:1px solid var(--border)}
+.tgl .tt{flex:1;min-width:0}
+.tgl .tt .a{display:block;font-size:13px;font-weight:500}
+.tgl .tt .b{display:block;font-size:11.5px;color:var(--muted);margin-top:2px;line-height:1.5}
+.sw{position:relative;width:38px;height:22px;border-radius:11px;background:color-mix(in oklch,var(--fg) 20%,transparent);flex:0 0 auto;transition:background .16s;margin-top:1px}
+.sw::after{content:"";position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:var(--surface);box-shadow:0 1px 3px var(--fg-hair);transition:translate .16s}
+.tgl input{position:absolute;opacity:0;width:0;height:0}
+.tgl input:checked + .sw{background:var(--fg)}
+.tgl input:checked + .sw::after{translate:16px 0}
+.tgl input:focus-visible + .sw{outline:2px solid var(--fg);outline-offset:2px}
+.path-row{display:flex;align-items:center;gap:11px;padding:10px 0}
+.path-row + .path-row{border-top:1px solid var(--border)}
+.path-row .gi{width:17px;height:17px;color:var(--muted);flex:0 0 auto}
+.path-row .pt{flex:1;min-width:0}
+.path-row .pt .n{font-size:12.5px;font-weight:500;display:flex;align-items:center;gap:7px}
+.pill{font-family:var(--font-mono);font-size:10px;padding:1px 6px;border-radius:999px;letter-spacing:.02em}
+.pill.yes{background:var(--accent-soft);color:color-mix(in oklch,var(--accent) 82%,black)}
+.pill.no{background:var(--fg-soft);color:var(--muted)}
+.path-row .pt .p{display:block;font-family:var(--font-mono);font-size:10.5px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl;unicode-bidi:plaintext;text-align:left}
+.path-row .btn{width:28px;height:28px;padding:0;color:var(--muted);flex:0 0 auto}
+.path-row .btn:hover{background:var(--fg-soft);color:var(--fg)}
+.path-row .btn svg{width:15px;height:15px}
+.about{display:grid;place-items:center;text-align:center;height:100%;padding:20px}
+.about .gi{width:52px;height:52px;color:var(--fg);margin:0 auto 16px}
+.about h2{font-family:var(--font-display);font-size:21px;font-weight:650;letter-spacing:-.02em}
+.about .v{font-family:var(--font-mono);font-size:12px;color:var(--muted);margin-top:5px}
+.about p{font-size:12.5px;color:var(--muted);line-height:1.65;margin-top:16px;max-width:44ch}
+.about .facts{display:flex;gap:26px;margin-top:24px;padding-top:20px;border-top:1px solid var(--border);width:100%;justify-content:center}
+.about .facts div{text-align:center}
+.about .facts .n{font-family:var(--font-mono);font-size:20px;font-weight:600;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.about .facts .l{font-size:11px;color:var(--muted);margin-top:2px}
+/* ─── context menu ──────────────────────────────────────────────── */
+.ctx{
+  position:fixed;z-index:50;min-width:210px;padding:5px;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);
+  box-shadow:0 14px 38px -12px color-mix(in oklch,var(--fg) 40%,transparent);
+}
+.ctx button{display:flex;align-items:center;gap:9px;width:100%;height:30px;padding:0 9px;border-radius:5px;font-size:12.5px;text-align:left}
+.ctx button svg{width:14px;height:14px;color:var(--muted);flex:0 0 auto}
+.ctx button:hover{background:var(--fg-soft)}
+.ctx hr{border:0;border-top:1px solid var(--border);margin:5px 4px}
+.ctx button.danger{color:var(--danger)}
+.ctx button.danger svg{color:var(--danger)}
+.ctx button.danger:hover{background:var(--danger-soft)}
+/* ─── responsive ────────────────────────────────────────────────── */
+@media (max-width:1080px){
+  .split{position:relative}
+  .split.inspect{grid-template-columns:250px minmax(0,1fr) 0}
+  .inspector{position:absolute;right:0;top:0;bottom:0;width:320px;z-index:20;box-shadow:-14px 0 34px -18px color-mix(in oklch,var(--fg) 40%,transparent)}
+}
+@media (max-width:920px){
+  .desk{padding:0;align-items:stretch}
+  .window{height:100vh;border-radius:0;border:0;width:100%}
+  .split,.split.inspect{grid-template-columns:minmax(0,1fr);position:relative}
+  .sidebar{border-right:0;border-bottom:1px solid var(--border);display:flex;overflow-x:auto;overflow-y:hidden;padding:0 8px 8px;gap:6px;align-items:center;max-height:none}
+  .sb-sec{border:0 !important;margin:0 !important;padding:8px 0 0;display:flex;gap:6px;flex:0 0 auto;align-items:center}
+  .sb-sec:not(:first-child):not(:nth-child(2)),.sb-h,.ov-note,.dist,.curpath{display:none}
+  .cat{width:auto;padding:0 12px;border:1px solid var(--border);white-space:nowrap}
+  .cat .ct{font-size:10.5px}
+  .ov{padding:0 8px;gap:18px}
+  .cat.on{border-color:var(--fg);background:var(--fg-soft)}
+  .cat.on::before{display:none}
+  .inspector{position:fixed;inset:0;width:100%;z-index:30;overflow-y:auto}
+  .btn,.btn-sm,.cat,.search input{height:44px}
+  .r-acts .btn{height:44px;width:44px}
+  .r-acts .btn svg{width:16px;height:16px}
+  .content-head{flex-wrap:wrap;gap:10px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none !important;animation:none !important}}
+/* estimate panel: stack the numeric columns instead of squeezing four across a 320px sheet */
+@media (max-width:560px){
+  .sheet-b{padding:0 16px 16px}
+  .sheet-hero{padding:12px 16px 0}
+  .est-hero .v{font-size:29px}
+  .est-hero .v .u{font-size:14px}
+  .cr{grid-template-columns:minmax(0,1fr) auto;gap:4px 8px}
+  .cr .cn{grid-column:1/-1}
+  .cr .cb{grid-column:1/-1;height:7px}
+  .cr .cv{grid-column:1;text-align:left}
+  .cr .cp{grid-column:2}
+  .cap{grid-template-columns:30px minmax(0,1fr) auto;gap:7px}
+  .cap .rv{font-size:10px}
+  .cap-d{gap:6px}
+  .lvl{margin-bottom:2px}
+}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<g id="i-tray" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 12.5h3.6l1.9 2.8h5l1.9-2.8h3.6M3.5 12.5 6 5.6A1.8 1.8 0 0 1 7.7 4.3h8.6a1.8 1.8 0 0 1 1.7 1.3l2.5 6.9v5.7a1.8 1.8 0 0 1-1.8 1.8H5.3a1.8 1.8 0 0 1-1.8-1.8z"/></g><g id="i-terminal" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2.8" y="4.6" width="18.4" height="14.8" rx="2"/><path d="M6.4 9.6 9 12l-2.6 2.4M12.4 14.6h5"/></g><g id="i-code" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8.6 8 4.6 12l4 4M15.4 8l4 4-4 4M13.4 5.6l-2.8 12.8"/></g><g id="i-cpu" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="7.4" y="7.4" width="9.2" height="9.2" rx="1.4"/><path d="M10 4.6v2.8M14 4.6v2.8M10 16.6v2.8M14 16.6v2.8M4.6 10h2.8M4.6 14h2.8M16.6 10h2.8M16.6 14h2.8"/></g>
+<g id="i-bolt" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13.4 3.2 6.2 13.4h4.6l-1.4 7.4 7.6-10.6h-4.8z"/></g><g id="i-spark" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.4 3.6 13 8.2l4.6 1.6-4.6 1.6-1.6 4.6-1.6-4.6L5.2 9.8l4.6-1.6z"/><path d="m17.4 15.4.9 2.5 2.5.9-2.5.9-.9 2.5-.9-2.5-2.5-.9 2.5-.9z"/></g><g id="i-play" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2.8" y="4.6" width="18.4" height="14.8" rx="2"/><path d="M10.2 8.6 15.4 12l-5.2 3.4z"/></g><g id="i-chat" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7.2A2.2 2.2 0 0 1 6.2 5h7.6a2.2 2.2 0 0 1 2.2 2.2v3.6a2.2 2.2 0 0 1-2.2 2.2H9.4l-3.8 2.8v-2.8H6.2A2.2 2.2 0 0 1 4 10.8z"/><path d="M17.6 9.4h.2a2.2 2.2 0 0 1 2.2 2.2v3.6a2.2 2.2 0 0 1-2.2 2.2h-.6v2.4l-3.4-2.4h-2"/></g>
+<g id="i-cursor" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.4 12.4 11l-4.2.9L6.4 16z"/><path d="M15.4 3.4v2.4M20.2 8.6l-2.1 1.2M19.4 14.2h-2.4"/></g><g id="i-wind" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.4 8.6h11.2a2.6 2.6 0 1 0-2.6-2.6M3.4 13.6h8.2a2.6 2.6 0 1 1-2.6 2.6M3.4 11.1h16.4"/></g><g id="i-ring" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.2"/><path d="m13.2 8.2-3 4.6h2.6l-1 3 3.2-4.6h-2.6z"/></g><g id="i-shield" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.4 19 6v5.2c0 4.2-2.9 7.4-7 8.9-4.1-1.5-7-4.7-7-8.9V6z"/><path d="M12 3.4v16.7M8.4 8.6h7.2"/></g>
+<g id="i-textbox" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7.4V6a1.6 1.6 0 0 1 1.6-1.6h12.8A1.6 1.6 0 0 1 20 6v12a1.6 1.6 0 0 1-1.6 1.6H5.6A1.6 1.6 0 0 1 4 18v-1.4M12 4.4v15.2M8 8.6h8M8 15.4h8"/></g><g id="i-hand" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8.4 11.4V5.8a1.5 1.5 0 0 1 3 0v5M11.4 10.4V4.6a1.5 1.5 0 0 1 3 0v6M14.4 10.6a1.5 1.5 0 0 1 3 0v4.8a5.4 5.4 0 0 1-5.4 5.4h-1A5.4 5.4 0 0 1 5.6 15.4V12a1.5 1.5 0 0 1 2.8 0"/></g><g id="i-layers" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.4 20 7.4l-8 4-8-4zM4 12.2l8 4 8-4M4 16.6l8 4 8-4"/></g><g id="i-folder" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.6 6.6A1.6 1.6 0 0 1 5.2 5h3.9l2 2.6h7.7a1.6 1.6 0 0 1 1.6 1.6v8.8a1.6 1.6 0 0 1-1.6 1.6H5.2a1.6 1.6 0 0 1-1.6-1.6z"/></g>
+<g id="i-search" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.4" cy="10.4" r="6.6"/><path d="m15.3 15.3 5.3 5.3"/></g><g id="i-refresh" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20.2 12a8.2 8.2 0 1 1-2.7-6.1"/><path d="M20.2 3.8v4.6h-4.6"/></g><g id="i-trash" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.4 6.6h15.2M9.4 6.6V4.9a1 1 0 0 1 1-1h3.2a1 1 0 0 1 1 1v1.7M6.4 6.6l.9 12.1a1.6 1.6 0 0 0 1.6 1.4h6.2a1.6 1.6 0 0 0 1.6-1.4l.9-12.1M10 10.6v5.8M14 10.6v5.8"/></g><g id="i-gear" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.1"/><path d="M12 3.4v2.4M12 18.2v2.4M20.6 12h-2.4M5.8 12H3.4M18 6l-1.7 1.7M7.7 16.3 6 18M18 18l-1.7-1.7M7.7 7.7 6 6"/></g>
+<g id="i-copy" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9.2 9.6A1.6 1.6 0 0 1 10.8 8h7.6A1.6 1.6 0 0 1 20 9.6v8.8a1.6 1.6 0 0 1-1.6 1.6h-7.6a1.6 1.6 0 0 1-1.6-1.6z"/><path d="M14.8 8V5.6A1.6 1.6 0 0 0 13.2 4h-7.6A1.6 1.6 0 0 0 4 5.6v8.8a1.6 1.6 0 0 0 1.6 1.6H9"/></g><g id="i-check" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.6 4.6 4.6L19 7.4"/></g><g id="i-close" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m6.6 6.6 10.8 10.8M17.4 6.6 6.6 17.4"/></g><g id="i-warn" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4.2 20.8 19.4H3.2zM12 9.8v4.4M12 16.6v.4"/></g>
+<g id="i-info" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.4"/><path d="M12 11.2v5.6M12 7.6v.6"/></g><g id="i-bubble" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.4 5.6h11.2A1.6 1.6 0 0 1 17.2 7.2v5.6a1.6 1.6 0 0 1-1.6 1.6H9l-4.6 3.4zM8.4 9.4h5M8.4 12h3"/></g><g id="i-branch" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.4" cy="5.8" r="2.2"/><circle cx="6.4" cy="18.2" r="2.2"/><circle cx="17.6" cy="8.4" r="2.2"/><path d="M6.4 8v8M17.6 10.6c0 3.1-2.6 4.2-5.6 4.4"/></g><g id="i-hash" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9.4 4.4 7.6 19.6M16.4 4.4l-1.8 15.2M4.4 9h15.2M3.6 15h15.2"/></g>
+<g id="i-panel" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.4" y="4.8" width="17.2" height="14.4" rx="2"/><path d="M14.6 4.8v14.4"/></g><g id="i-external" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4.4h5.6V10M19.6 4.4 11.4 12.6M17 13.6V18a1.6 1.6 0 0 1-1.6 1.6H5.6A1.6 1.6 0 0 1 4 18V8.2a1.6 1.6 0 0 1 1.6-1.6h4.6"/></g><g id="i-clock" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.4"/><path d="M12 6.8v5.4l3.4 2.1"/></g>
+</defs></svg>
+
+<div class="desk">
+  <div class="window" role="application" aria-label="ConversationClean 会话清理工作台" data-od-id="app-window">
+
+    <!-- ─── titlebar ─────────────────────────────────────────── -->
+    <header class="titlebar" data-od-id="titlebar">
+      <div class="tl" aria-hidden="true"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+      <span class="appname">ConversationClean <span>· 会话清理</span></span>
+      <span class="demo-tag">演示数据</span>
+      <span class="sp"></span>
+      <button class="btn btn-ghost btn-sm" id="btnPanel" aria-pressed="false" title="显示/隐藏检视器">
+        <svg><use href="#i-panel"/></svg><span class="plabel">检视器</span>
+      </button>
+      <button class="btn btn-ghost btn-sm" id="btnSettings" data-od-id="open-settings">
+        <svg><use href="#i-gear"/></svg><span class="plabel">设置</span>
+      </button>
+    </header>
+
+    <!-- ─── toolbar ──────────────────────────────────────────── -->
+    <div class="toolbar" data-od-id="toolbar">
+      <div class="search">
+        <svg><use href="#i-search"/></svg>
+        <input id="q" type="search" placeholder="搜索标题、摘要、项目路径或会话 ID" aria-label="搜索会话" autocomplete="off" />
+        <button class="clr" id="qClear" hidden aria-label="清除搜索"><svg><use href="#i-close"/></svg></button>
+      </div>
+      <span class="sp" style="flex:1"></span>
+      <button class="btn btn-ghost" id="btnCleanAll" title="清除当前分类下的全部会话">
+        <svg><use href="#i-trash"/></svg><span class="plabel">清除本分类</span>
+      </button>
+      <button class="btn btn-primary" id="btnScan" data-od-id="scan-all">
+        <svg><use href="#i-refresh"/></svg><span class="plabel">一键扫描</span>
+      </button>
+    </div>
+
+    <!-- ─── split ────────────────────────────────────────────── -->
+    <div class="split" id="split" data-od-id="split">
+
+      <!-- sidebar -->
+      <aside class="sidebar" data-od-id="sidebar" aria-label="Agent 分类与统计">
+        <div class="sb-sec">
+          <div class="sb-h"><span>Agent 分类</span><button id="btnZero">仅显示有数据</button></div>
+          <div id="catList"></div>
+        </div>
+
+        <div class="sb-sec" data-od-id="overview">
+          <div class="sb-h"><span>统计概览</span><span id="agCount"></span></div>
+          <div class="ov">
+            <div class="ov-cell"><div class="l">总缓存占用</div><div class="v" id="ovSize">—</div></div>
+            <div class="ov-cell"><div class="l">总会话数</div><div class="v" id="ovCount">—</div></div>
+          </div>
+          <div class="ov-note" id="ovNote">删除会同时清理关联快照、索引行与空项目目录。</div>
+        </div>
+
+        <div class="sb-sec">
+          <div class="sb-h"><span>存储分布</span><span id="distTop">Top 5</span></div>
+          <div class="dist" id="dist"></div>
+        </div>
+
+        <div class="sb-sec" data-od-id="current-path">
+          <div class="sb-h"><span>当前分类存储路径</span></div>
+          <div class="curpath">
+            <code id="curPath">—</code>
+            <p class="ov-note" id="curNote"></p>
+            <button class="btn btn-ghost btn-sm curpath-btn" id="btnRevealPath"><svg><use href="#i-external"/></svg>在 Finder 中打开</button>
+          </div>
+        </div>
+      </aside>
+
+      <!-- content -->
+      <main class="content" data-od-id="conversation-list">
+        <div class="content-head">
+          <div style="min-width:0">
+            <div class="ch-title">
+              <svg class="gi"><use href="#i-tray" id="chIcon"/></svg>
+              <h1 id="chName">全部会话</h1>
+            </div>
+            <p class="ch-sub" id="chSub"></p>
+          </div>
+          <span class="sp"></span>
+          <div class="seg" role="group" aria-label="排序方式" id="sortSeg">
+            <button data-sort="date" class="on">最近更新</button>
+            <button data-sort="size">占用空间</button>
+            <button data-sort="msgs">对话轮数</button>
+          </div>
+          <button class="btn btn-outline btn-sm" id="btnAll" data-od-id="select-all">全选当前</button>
+        </div>
+
+        <div class="sbar" id="sbar" hidden><i></i></div>
+
+        <div class="banner ok" id="okBanner" hidden data-od-id="clean-success">
+          <svg class="bi"><use href="#i-check"/></svg>
+          <span id="okText"></span>
+          <span class="sp"></span>
+          <button class="btn btn-ghost btn-sm" id="okClose">知道了</button>
+        </div>
+
+        <div class="list" id="list" data-od-id="list-rows" role="list"></div>
+
+        <div class="empty" id="empty" hidden>
+          <div class="empty-in">
+            <svg class="gi"><use href="#i-tray" id="emIcon"/></svg>
+            <h2 id="emTitle"></h2>
+            <p id="emDesc"></p>
+            <p id="emPath"></p>
+            <button class="btn btn-outline" id="btnRescan"><svg><use href="#i-refresh"/></svg>重新扫描</button>
+          </div>
+        </div>
+
+        <div class="batchbar" id="batchbar" data-od-id="batch-bar">
+          <span class="b-n">已选中 <b id="bCount">0</b> 项 · <b id="bSize">0 KB</b></span>
+          <span class="sp"></span>
+          <button class="btn btn-ghost btn-sm" id="btnClearSel">取消选择</button>
+          <button class="btn btn-ghost btn-sm" id="btnRevealAll"><svg><use href="#i-folder"/></svg>在 Finder 中显示</button>
+          <button class="btn btn-danger" id="btnCleanSel" data-od-id="clean-selected">
+            <svg><use href="#i-trash"/></svg><span class="plabel">清理选中项</span>
+          </button>
+        </div>
+      </main>
+
+      <!-- inspector -->
+      <aside class="inspector" id="inspector" data-od-id="inspector" aria-label="会话详情" hidden></aside>
+    </div>
+  </div>
+</div>
+
+<!-- ─── confirm sheet ──────────────────────────────────────────── -->
+<div class="scrim" id="scrim" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="shTitle" data-od-id="confirm-dialog">
+    <div class="sheet-h">
+      <div class="warn"><svg><use href="#i-warn"/></svg></div>
+      <h2 id="shTitle">确认清除会话？</h2>
+    </div>
+    <div class="sheet-hero" id="estHero"></div>
+    <div class="sheet-b" id="shBody">
+      <div id="estBody"></div>
+      <div class="tip" id="shTip">
+        <svg><use href="#i-info"/></svg>
+        <span id="shTipTxt"></span>
+      </div>
+    </div>
+    <div class="sheet-f">
+      <button class="btn btn-ghost" id="shCancel">取消</button>
+      <button class="btn btn-danger" id="shOk">确认清除</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── settings ──────────────────────────────────────────────── -->
+<div class="scrim" id="setScrim" hidden>
+  <div class="settings" role="dialog" aria-modal="true" aria-label="设置" data-od-id="settings-window">
+    <div class="set-tabs" role="tablist">
+      <button role="tab" data-tab="general" class="on" aria-selected="true"><svg><use href="#i-gear"/></svg>通用</button>
+      <button role="tab" data-tab="paths" aria-selected="false"><svg><use href="#i-folder"/></svg>Agent 路径</button>
+      <button role="tab" data-tab="about" aria-selected="false"><svg><use href="#i-info"/></svg>关于</button>
+    </div>
+    <div class="set-body" id="setBody"></div>
+  </div>
+</div>
+
+<!-- ─── context menu ──────────────────────────────────────────── -->
+<div class="ctx" id="ctx" hidden role="menu"></div>
+
+<script>
+(function(){
+"use strict";
+
+/* ═══ data ═══════════════════════════════════════════════════════
+   Storage paths are the real defaults from each scanner's storageURL.
+   Session rows are labelled sample data (see 演示数据 tag).        */
+
+var AGENTS = [
+  {k:"claude",  n:"Claude Code",     i:"i-terminal", p:"~/.claude/projects", det:true}, {k:"codex",   n:"Codex",           i:"i-code",     p:"~/.codex/sessions",  det:true},
+  {k:"pi",      n:"Pi Agent",        i:"i-cpu",      p:"~/.pi/agent/sessions", det:true, idx:"~/.pi/agent/context-mode", idxNote:"context-mode SQLite 索引行同步删除"}, {k:"cline",   n:"Cline",           i:"i-bolt",     p:"~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/tasks", det:true},
+  {k:"roo",     n:"Roo Code",        i:"i-spark",    p:"~/Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline", det:true}, {k:"cont",    n:"Continue",        i:"i-play",     p:"~/.continue/sessions", det:true},
+  {k:"copilot", n:"Copilot / VS Code",i:"i-chat",    p:"~/Library/Application Support/Code/User/workspaceStorage", det:true, idx:"state.vscdb", idxNote:"state.vscdb 索引行同步删除"}, {k:"cursor",  n:"Cursor",          i:"i-cursor",   p:"~/Library/Application Support/Cursor/User/workspaceStorage", det:true, idx:"state.vscdb", idxNote:"state.vscdb 索引行同步删除"},
+  {k:"windsurf",n:"Windsurf",        i:"i-wind",     p:"~/Library/Application Support/Windsurf/User/workspaceStorage", det:true, idx:"state.vscdb", idxNote:"state.vscdb 索引行同步删除"}, {k:"trae",    n:"Trae",            i:"i-ring",     p:"~/Library/Application Support/Trae/User/workspaceStorage", det:true, idx:"state.vscdb", idxNote:"state.vscdb 索引行同步删除"},
+  {k:"anti",    n:"Antigravity",     i:"i-layers",   p:"~/.gemini/antigravity", det:true, idx:"state.vscdb", idxNote:"state.vscdb 索引行同步删除"}, {k:"aider",   n:"Aider",           i:"i-terminal", p:"~/.aider", det:false},
+  {k:"viking",  n:"OpenViking",      i:"i-shield",   p:"~/.openviking", det:false}, {k:"zed",     n:"Zed AI",          i:"i-textbox",  p:"~/Library/Application Support/Zed", det:false},
+  {k:"ohands",  n:"OpenHands",       i:"i-hand",     p:"~/.openhands", det:false}
+];
+var AMAP = {}; AGENTS.forEach(function(a){AMAP[a.k]=a;});
+
+var ALL = {k:"all", n:"全部会话", i:"i-tray", p:"", det:true};
+
+var RAW = [
+  ["claude","修复 NavigationSplitView 侧栏选中态丢失","选中分类切换后 List(selection:) 未同步，刷新才生效","~/projects/conversation-clean","main",184,2_411_724,3,"4f2a91c7"], ["claude","为 AgentScannerProtocol 补充文档注释","统一 storageURL / isInstalled / scan / delete 四个成员的语义","~/projects/conversation-clean","main",96,884_736,19,"b1d70e42"],
+  ["claude","重构 SidebarView 的统计概览区块","把 CategoryStats 缓存从每次渲染改为 didSet 触发","~/projects/conversation-clean","feat/sidebar-stats",212,3_918_204,52,"9ce24ab8"], ["claude","排查 state.vscdb 写入锁导致的删除失败","SQLITE_BUSY: database is locked，重试三次后仍失败","~/Library/Application Support/Code/User","main",143,2_204_160,74,"e07f3d15"],
+  ["codex","重写 CodexScanner 的 ISO8601 解析","DateParsing 每秒被调用 2000 次，DateFormatter 成为瓶颈","~/Developer/atlas-api","main",271,5_242_880,8,"3a9c6e02"], ["codex","为 sessions 目录补齐空目录清理","递归删除后遗留 40+ 个空 project 目录","~/Developer/atlas-api","fix/empty-dirs",88,1_310_720,41,"6d20b7f4"],
+  ["codex","设计双层索引原子清理的失败补偿","文件已删但索引行残留，需要可重入的补偿队列","~/Developer/atlas-api","main",154,2_723_840,120,"7b4ef901"], ["pi","实现 context-mode 索引同步删除","会话文件与 SQLite 索引行必须成对移除","~/projects/conversation-clean","feat/vscode-index",319,6_815_744,26,"5c81a3d7"],
+  ["pi","会话列表虚拟化性能压测","2400 行时滚动掉帧 22ms，定位到重复的 DateFormatter","~/projects/conversation-clean","perf/list",205,4_194_304,67,"2f8b6e30"], ["pi","统一 FileSizeHelper 的字节统计口径","单会话与全量统计相差 3.2%，源于稀疏文件的 st_blocks","~/projects/conversation-clean","main",73,1_073_741,155,"a93d5c68"],
+  ["cline","修复 taskHistory.json 解析崩溃","旧版本 checkpoint 目录缺 ui_messages.json","~/Developer/shop-admin","fix/checkpoint",118,1_863_936,33,"8d40a1c5"], ["cline","把 tasks 目录扫描改为惰性分页","单次扫描阻塞主线程 380ms","~/Developer/shop-admin","main",64,912_384,142,"e5a27b19"],
+  ["roo","补齐 Roo Code 的 globalStorage 路径回退","roo-cline 扩展 ID 变更后路径失效","~/Developer/shop-admin","main",47,655_360,166,"d18f4b60"], ["cont","Continue 会话的 branch 字段为空","部分 JSONL 缺少 gitBranch，需从 run-history 回填","~/Developer/notes-cli","fix/branch",92,1_310_720,55,"3cb7e259"],
+  ["cont","为 .continue/sessions 增加日期兜底","文件系统 mtime 与内容时间戳偏差最大 3 天","~/Developer/notes-cli","main",61,838_860,88,"7e29a4d3"], ["copilot","清理 workspaceStorage 下的 chatEditingSessions","编辑态会话未被 chatSessions 扫描器覆盖","~/Developer/notes-cli","main",167,2_936_832,14,"4e6c9b28"],
+  ["copilot","state.vscdb 幽灵会话排查","文件已删但 itemTable 仍可查到，重启 IDE 后报错","~/Developer/notes-cli","fix/ghost",233,4_325_376,96,"9a15f7c3"], ["cursor","Cursor workspaceStorage 哈希目录命名规则","确认使用 md5(workspacePath) 前 16 位","~/Developer/ledger-service","main",102,1_863_936,22,"6d92e8b4"],
+  ["cursor","为 Cursor 补齐 chatEditingSessions 扫描","仅扫 chatSessions 导致 12 个会话漏统计","~/Developer/ledger-service","fix/editing",78,1_245_184,58,"2b7f4c10"], ["windsurf","Windsurf 检测逻辑改为三级回退","直接 User 目录 → workspaceStorage → 版本化目录","~/Developer/ledger-service","main",134,2_415_616,36,"a04d6f92"],
+  ["trae","Trae 会话的 associatedPaths 补全","从 cascade 目录回溯原始 jsonl 路径","~/Developer/ledger-service","main",85,1_310_720,71,"8c6e3b17"], ["anti","Antigravity conversations 目录结构对齐","env 指定的会话根与默认不一致","~/Developer/design-tokens","main",56,917_504,128,"d5071c8a"],
+  ["anti","antigravity 的 sqlite 索引清理测试","mock 夹具缺少 workspaceState 表，需补建","~/projects/conversation-clean","test/antigravity",41,589_824,205,"3e91a4d6"]
+];
+
+var items = RAW.map(function(r,i){
+  var a = AMAP[r[0]];
+  return {
+    id:"s"+i, agent:r[0], title:r[1], snip:r[2], proj:r[3], branch:r[4],
+    msgs:r[5], size:r[6], ago:r[7], sid:r[8], sel:false
+  };
+});
+var NOW = Date.now();
+
+/* ═══ prefs (persisted) ═════════════════════════════════════════ */
+var KEY="cc.proto.v1";
+var P = {cat:"all", sort:"date", panel:false, zero:false, confirm:true, autoScan:true, syncSnap:true, dropEmpty:true};
+try{ var raw = localStorage.getItem(KEY); if(raw) Object.assign(P, JSON.parse(raw)); }catch(e){}
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(P)); }catch(e){} }
+
+/* ═══ helpers ════════════════════════════════════════════════════ */
+var $ = function(s){ return document.querySelector(s); };
+function icon(id, cls){ return '<svg class="'+(cls||"")+'" aria-hidden="true"><use href="#'+id+'"/></svg>'; }
+function fmtBytes(b){
+  if(!b) return "0 KB";
+  var u=["KB","MB","GB","TB"], n=b, i=-1;
+  do { n/=1024; i++; } while(n>=1024 && i<u.length-1);
+  return (n<10? n.toFixed(1) : String(Math.round(n)))+" "+u[i];
+}
+function pad(n){ return n<10? "0"+n : ""+n; }
+function dateOf(it){ return new Date(NOW - it.ago*3600e3); }
+function fmtDate(it){
+  var d = dateOf(it), now = new Date(NOW);
+  var sameDay = d.toDateString() === now.toDateString();
+  if(sameDay) return "今天 "+pad(d.getHours())+":"+pad(d.getMinutes());
+  var diff = (now - d)/86400e3;
+  if(diff < 1) return "昨天 "+pad(d.getHours())+":"+pad(d.getMinutes());
+  if(diff < 7) return Math.floor(diff)+" 天前";
+  return (d.getMonth()+1)+"月"+d.getDate()+"日";
+}
+function fmtFull(it){
+  var d = dateOf(it);
+  return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())+" "+pad(d.getHours())+":"+pad(d.getMinutes());
+}
+function mid(p){ return p.split("/").pop(); }
+function shortPath(p){ var x = p.split("/"); return x.length>2? "…/"+x.slice(-2).join("/") : p; }
+function esc(s){ return String(s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];}); }
+
+function agentOf(k){ return k==="all" ? ALL : AMAP[k]; }
+function visible(){
+  var q = $("#q").value.trim().toLowerCase();
+  var out = items.filter(function(it){
+    if(P.cat!=="all" && it.agent!==P.cat) return false;
+    if(!q) return true;
+    return (it.title+" "+it.snip+" "+it.proj+" "+it.sid).toLowerCase().indexOf(q) >= 0;
+  });
+  if(P.sort==="size") out.sort(function(a,b){ return b.size-a.size; });
+  else if(P.sort==="msgs") out.sort(function(a,b){ return b.msgs-a.msgs; });
+  else out.sort(function(a,b){ return a.ago-b.ago; });
+  return out;
+}
+function catStat(k){
+  var n=0, b=0;
+  for(var i=0;i<items.length;i++){
+    if(k==="all" || items[i].agent===k){ n++; b+=items[i].size; }
+  }
+  return {n:n, b:b};
+}
+function total(){ var b=0; for(var i=0;i<items.length;i++) b+=items[i].size; return b; }
+function selected(){ return items.filter(function(it){ return it.sel; }); }
+function selBytes(){ return selected().reduce(function(s,it){ return s+it.size; },0); }
+
+/* ═══ render: sidebar ═══════════════════════════════════════════ */
+function renderCats(){
+  var html="", all = catStat("all");
+  var list = P.zero ? AGENTS.filter(function(a){ return catStat(a.k).n>0; }) : AGENTS;
+  html += catBtn(ALL, all);
+  list.forEach(function(a){ html += catBtn(a, catStat(a.k)); });
+  $("#catList").innerHTML = html;
+}
+function catBtn(a, st){
+  var on = P.cat===a.k, zero = st.n===0;
+  var right = st.n ? String(st.n) : (a.det ? "空闲" : "未安装");
+  return '<button class="cat'+(on?" on":"")+(zero?" zero":"")+'" data-cat="'+a.k+'" aria-current="'+(on?"true":"false")+'">'
+    + icon(a.i,"gi") + '<span class="nm">'+a.n+'</span>'
+    + '<span class="ct">'+right+'</span></button>';
+}
+function renderDist(){
+  var all = catStat("all");
+  if(!all.b){
+    $("#distTop").textContent = "—";
+    $("#dist").innerHTML = '<p class="ov-note" style="padding:0">暂无可统计的会话。</p>';
+    return;
+  }
+  var ranked = AGENTS.map(function(a){ return {a:a, b:catStat(a.k).b}; })
+    .filter(function(r){ return r.b>0; })
+    .sort(function(x,y){ return y.b-x.b; });
+  var segs = ranked.slice(0,5).map(function(r){ return {n:r.a.n, b:r.b}; });
+  if(ranked.length>5){
+    var rest = ranked.slice(5).reduce(function(s,r){ return s+r.b; },0);
+    segs.push({n:"其他 "+(ranked.length-5)+" 款", b:rest});
+  }
+  var RAMP = [100,80,63,49,38,26];
+  $("#distTop").textContent = fmtBytes(all.b);
+  $("#dist").innerHTML =
+      '<div class="d-bar2" role="img" aria-label="各 Agent 存储占比">'
+    +   segs.map(function(r,i){
+          return '<span class="d-seg" style="flex:'+r.b+';background:color-mix(in oklch, var(--fg) '+RAMP[i]+'%, transparent)" title="'+esc(r.n)+' · '+fmtBytes(r.b)+'"></span>';
+        }).join("")
+    + '</div>'
+    + '<div class="d-legs">'
+    +   segs.map(function(r,i){
+          return '<div class="d-leg"><span class="d-sw" style="background:color-mix(in oklch, var(--fg) '+RAMP[i]+'%, transparent)"></span>'
+            + '<span class="d-ln">'+esc(r.n)+'</span>'
+            + '<span class="d-pc">'+(r.b/all.b*100).toFixed(0)+'%</span>'
+            + '<span class="d-by">'+fmtBytes(r.b)+'</span></div>';
+        }).join("")
+    + '</div>';
+}
+function renderCurPath(){
+  var a = agentOf(P.cat);
+  var det = AGENTS.filter(function(x){ return x.det; }).length;
+  $("#agCount").textContent = det+" / "+AGENTS.length+" 已安装";
+  if(P.cat==="all"){
+    $("#curPath").textContent = AGENTS.length+" 款 Agent 的本地存储目录";
+    $("#curNote").textContent = "选择左侧任一分类，可查看它实际写入磁盘的确切路径。";
+  } else {
+    $("#curPath").textContent = a.p;
+    $("#curNote").textContent = !a.det
+      ? "未在本机检测到该 Agent 的存储目录，列表为空。"
+      : (a.idx ? "双层索引同步："+a.idx : "清理时同步删除快照与子代理数据。");
+  }
+}
+function renderOverview(){
+  var all = catStat("all");
+  $("#ovSize").textContent = fmtBytes(all.b);
+  $("#ovCount").textContent = all.n;
+  $("#ovNote").textContent = P.dropEmpty
+    ? "删除会同时清理关联快照、索引行与空项目目录。"
+    : "空项目目录将保留在磁盘上（已在设置中关闭）。";
+}
+
+/* ═══ render: list ══════════════════════════════════════════════ */
+var focusId = null;
+function renderList(){
+  var rows = visible(), a = agentOf(P.cat), q = $("#q").value.trim();
+  var all = catStat("all");
+
+  $("#chIcon").setAttribute("href","#"+a.i);
+  $("#chName").textContent = a.n;
+  var sel = selected();
+  var sub;
+  if(q) sub = '在 '+esc(a.n)+' 中匹配 <b>'+rows.length+'</b> 条 · 全部 <b>'+all.n+'</b> 条 · 已选中 <b>'+sel.length+'</b> 项（<b>'+fmtBytes(selBytes())+'</b>）';
+  else  sub = '共 <b>'+rows.length+'</b> 个会话项，占用 <b>'+fmtBytes(rows.reduce(function(s,i){return s+i.size;},0))+'</b> · 已选中 <b>'+sel.length+'</b> 项（<b>'+fmtBytes(selBytes())+'</b>）';
+  $("#chSub").innerHTML = sub;
+
+  var allSel = rows.length>0 && rows.every(function(r){ return r.sel; });
+  $("#btnAll").textContent = allSel? "取消全选" : "全选当前";
+  $("#btnAll").disabled = rows.length===0;
+  $("#btnCleanAll").disabled = rows.length===0;
+  $("#btnCleanAll").querySelector(".plabel").textContent = P.cat==="all"? "清除全部" : "清除本分类";
+
+  if(rows.length===0){
+    $("#list").hidden = true; $("#empty").hidden = false;
+    $("#emIcon").setAttribute("href","#"+a.i);
+    $("#emTitle").textContent = q? "没有匹配的会话" : "暂无 "+a.n+" 会话记录";
+    $("#emDesc").innerHTML = q
+      ? '当前分类下没有标题、摘要、项目路径或会话 ID 包含「'+esc(q)+'」的记录。'
+      : (P.cat==="all" ? "未在本地检测到任何 Agent 历史会话文件，或所有会话均已被清理。" : "未在下面的存储路径中检测到该 Agent 的会话文件。");
+    $("#emPath").innerHTML = (q||P.cat==="all") ? "" : "存储路径：<code>"+esc(a.p)+"</code>";
+    return;
+  }
+  $("#list").hidden = false; $("#empty").hidden = true;
+
+  $("#list").innerHTML = rows.map(function(it){
+    var ag = AMAP[it.agent];
+    return '<div class="row'+(it.sel?" sel":"")+(focusId===it.id?" focus":"")+'" role="listitem" data-id="'+it.id+'" tabindex="0" data-od-id="conv-row-'+it.agent+'">'
+      + '<button class="cbx'+(it.sel?" on":"")+'" data-act="sel" role="checkbox" aria-checked="'+(it.sel?"true":"false")+'" aria-label="选择 '+esc(it.title)+'">'+icon("i-check")+'</button>'
+      + '<div style="min-width:0">'
+      +   '<div class="r-l1"><span class="tag">'+esc(ag.n)+'</span>'
+      +     '<span class="r-title">'+esc(it.title)+'</span>'
+      +     '<span class="r-size">'+fmtBytes(it.size)+'</span></div>'
+      +   '<div class="r-snip">'+esc(it.snip)+'</div>'
+      +   '<div class="r-l3">'
+      +     icon("i-folder")+'<span class="m path">'+esc(shortPath(it.proj))+'</span>'
+      +     '<span class="sep">·</span>'+icon("i-branch")+'<span class="m">'+esc(it.branch)+'</span>'
+      +     '<span class="sep">·</span>'+icon("i-bubble")+'<span class="m">'+it.msgs+' 轮对话</span>'
+      +     '<span class="sep">·</span>'+icon("i-clock")+'<span class="m">'+fmtDate(it)+'</span>'
+      +     '<span class="sid">#'+it.sid+'</span>'
+      +     '<span class="r-acts">'
+      +       '<button class="btn" data-act="del" title="删除此会话" aria-label="删除此会话">'+icon("i-trash")+'</button>'
+      +     '</span>'
+      +   '</div>'
+      + '</div></div>';
+  }).join("");
+}
+
+/* ═══ render: batch bar + inspector ═════════════════════════════ */
+function renderBatch(){
+  var sel = selected();
+  $("#bCount").textContent = sel.length;
+  $("#bSize").textContent = fmtBytes(selBytes());
+  $("#btnCleanSel").disabled = sel.length===0;
+  $("#btnRevealAll").disabled = sel.length===0;
+  $("#btnClearSel").disabled = sel.length===0;
+  $("#batchbar").querySelector(".plabel").textContent = "清理选中项"+(sel.length? "（"+sel.length+"）":"");
+}
+function renderInspector(){
+  var box = $("#inspector");
+  box.hidden = !P.panel;
+  if(!P.panel) return;
+  var it = items.filter(function(x){ return x.id===focusId; })[0];
+  if(!it){
+    box.innerHTML = '<p class="ov-note" style="padding:8px 0">选择一条会话以查看完整元数据、关联文件与索引同步说明。</p>';
+    return;
+  }
+  var ag = AMAP[it.agent];
+  var files = [
+    it.proj+"/.session",
+    (ag.p)+"/"+it.sid+".jsonl"
+  ];
+  if(ag.idx) files.push(ag.idx);
+  box.innerHTML =
+    '<div class="insp-h">'+icon(ag.i,"gi")+'<h2>'+esc(it.title)+'</h2></div>'
+  + '<div class="insp-sub"><span class="tag">'+esc(ag.n)+'</span><span class="num" style="font-size:11px;color:var(--muted)">'+fmtBytes(it.size)+'</span></div>'
+  + '<div class="insp-sec"><div class="insp-l">元数据</div><dl class="kv">'
+  +   '<dt>会话 ID</dt><dd class="mono">'+it.sid+'</dd>'
+  +   '<dt>项目路径</dt><dd class="mono">'+esc(it.proj)+'</dd>'
+  +   '<dt>Git 分支</dt><dd class="mono">'+esc(it.branch)+'</dd>'
+  +   '<dt>对话轮数</dt><dd class="num">'+it.msgs+'</dd>'
+  +   '<dt>最后更新</dt><dd class="num">'+fmtFull(it)+'</dd>'
+  +   '<dt>存储路径</dt><dd class="mono">'+esc(ag.p)+'</dd>'
+  + '</dl></div>'
+  + '<div class="insp-sec"><div class="insp-l">摘要</div><p style="font-size:12px;line-height:1.6;color:var(--muted)">'+esc(it.snip)+'</p></div>'
+  + (ag.idxNote? '<div class="insp-sec"><div class="insp-l">原子清理</div><div class="insp-note">'+icon("i-info")+'<span>'+esc(ag.idxNote)+'，不会留下幽灵会话。</span></div></div>':'')
+  + '<div class="insp-sec"><div class="insp-l">关联文件</div><div class="flist">'
+  +   files.map(function(f){ return '<button class="fitem" data-copy="'+esc(f)+'">'+icon("i-folder")+'<span>'+esc(f)+'</span></button>'; }).join("")
+  + '</div></div>'
+  + '<div class="insp-sec"><div class="insp-l">操作</div><div class="insp-acts">'
+  +   '<button class="btn btn-outline" data-act="reveal">'+icon("i-folder")+'在 Finder 中显示</button>'
+  +   '<button class="btn btn-outline" data-copy="'+esc(it.proj)+'">'+icon("i-copy")+'复制项目路径</button>'
+  +   '<button class="btn btn-outline" data-copy="'+esc(it.sid)+'">'+icon("i-copy")+'复制会话 ID</button>'
+  +   '<button class="btn btn-outline" id="inspDel" style="color:var(--danger);border-color:color-mix(in oklch,var(--danger) 26%,transparent)">'+icon("i-trash")+'删除此会话</button>'
+  + '</div></div>';
+}
+
+function renderAll(){
+  renderCats(); renderCurPath(); renderDist(); renderOverview();
+  renderList(); renderBatch(); renderInspector();
+  $("#qClear").hidden = !$("#q").value;
+  $("#split").classList.toggle("inspect", P.panel);
+  $("#btnPanel").setAttribute("aria-pressed", P.panel?"true":"false");
+  $("#btnPanel").style.background = P.panel? "var(--fg-soft)" : "";
+  $("#btnPanel").style.color = P.panel? "var(--fg)" : "";
+  document.querySelectorAll("#sortSeg button").forEach(function(b){
+    b.classList.toggle("on", b.dataset.sort===P.sort);
+  });
+  $("#btnZero").textContent = P.zero? "显示全部" : "仅显示有数据";
+}
+
+/* ═══ actions ═══════════════════════════════════════════════════ */
+function setCat(k){ P.cat=k; focusId=null; save(); renderAll(); }
+function toggle(id){
+  items.forEach(function(it){ if(it.id===id) it.sel=!it.sel; });
+  renderAll();
+}
+function toggleAll(){
+  var rows = visible();
+  var allSel = rows.length && rows.every(function(r){ return r.sel; });
+  rows.forEach(function(r){ r.sel = !allSel; });
+  renderAll();
+}
+
+/* clean flow */
+var pending = null;
+/* sample volume for the estimate panel — demo figure, not read from the host.
+   Sized in GiB so it matches what Finder reports for a 1 TB drive. */
+var GiB = Math.pow(1024,3);
+var VOL = {name:"/System/Volumes/Data", cap:994*GiB, used:912*GiB};
+/* stated basis for the second index layer (state.vscdb / context-mode) */
+var IDX_PER = 34*1024;
+
+function splitB(b){ var s = fmtBytes(b).split(" "); return {v:s[0], u:s[1]}; }
+/* volume figures need two decimals — a few hundred MB on a ~1 TB volume is
+   below the resolution of fmtBytes, which would print the same number twice */
+function fmtVol(b){ return (b/GiB).toFixed(2)+" GB"; }
+/* total reclaimable across every session, on the same basis as the current estimate */
+function cleanableAll(){
+  var n = 0;
+  if(P.syncSnap) items.forEach(function(it){ var a = AMAP[it.agent]; if(a && a.idx) n++; });
+  return total() + n*IDX_PER;
+}
+/* one benefit row — label, value, filled bar against its basis, caption */
+function estBar(label, val, basis, capTxt){
+  var w = basis ? val/basis*100 : 0;
+  return '<div class="eb"><div class="l">'+label+'</div>'
+    +'<div class="v">'+fmtBytes(val)+'</div>'
+    +'<div class="t"><i style="width:'+(val>0? Math.max(w,0.5).toFixed(3):"0")+'%"></i></div>'
+    +'<div class="c">'+capTxt+'</div></div>';
+}
+
+function askClean(list, label, catName){
+  pending = list;
+  renderEstimate(list, label);
+  $("#scrim").hidden = false;
+  $("#shCancel").focus();
+}
+
+function renderEstimate(list, label){
+  /* main file bytes are measured; the index/snapshot layer is estimated,
+     and charged only to agents that actually keep a second index */
+  var mainB = list.reduce(function(s,i){ return s+i.size; },0);
+  var idxN = 0, idxLayer = [], seen = {};
+  if(P.syncSnap) list.forEach(function(i){
+    var a = AMAP[i.agent];
+    if(!a || !a.idx) return;
+    idxN++;
+    if(!seen[a.idx]){ seen[a.idx] = 1; idxLayer.push(a.idx); }
+  });
+  var idxB = idxN*IDX_PER, totalB = mainB + idxB, allB = cleanableAll();
+
+  /* composition by agent — keep the name, the count is only used for the overflow row */
+  var by = {}, order = [];
+  list.forEach(function(i){
+    var k = agentOf(i.agent).n;
+    if(!by[k]){ by[k] = {name:k, cnt:0, b:0}; order.push(k); }
+    by[k].b += i.size; by[k].cnt++;
+  });
+  var rows = order.map(function(k){ return by[k]; })
+    .sort(function(a,b){ return b.b-a.b; });
+  var MAIN_MAX = 5, restB = 0, restN = 0;
+  rows.slice(MAIN_MAX).forEach(function(r){ restB += r.b; restN += r.cnt; });
+
+  var hb = splitB(totalB);
+
+  /* hero — kept outside the scrolling body so the headline figure is never clipped */
+  $("#estHero").innerHTML = '<div class="est-hero"><div class="k">预计释放</div>'
+    +'<div class="v">'+hb.v+'<span class="u">'+hb.u+'</span></div>'
+    +'<div class="s">将删除'+(label? '「'+label+'」的 ' : ' ')+'<b>'+list.length+'</b> 个会话文件，'
+    +'覆盖 <b>'+order.length+'</b> 个 Agent。此操作不可撤销。</div></div>';
+
+  var h = [];
+
+  /* where the gain lands */
+  h.push('<div class="est-sec"><div class="sh">收益位置</div>'
+    + estBar("占全部可清理空间", totalB, allB, '全部可清理 <b>'+fmtBytes(allB)+'</b> · 本次占 <b>'+(allB? (totalB/allB*100).toFixed(1):"0")+'%</b>')
+    + estBar("占卷总容量", totalB, VOL.cap, '卷容量 <b>'+fmtBytes(VOL.cap)+'</b> · 本次占 <b>'+(totalB/VOL.cap*100).toFixed(3)+'%</b>')
+    +'</div>');
+
+  /* volume capacity before / after, drawn at true scale */
+  var uB = VOL.used/VOL.cap, uA = (VOL.used-totalB)/VOL.cap;
+  var fB = VOL.cap-VOL.used, fA = fB+totalB, gPct = totalB/VOL.cap*100;
+  var lv = gPct<0.5 ? ["warn","量级微小"] : gPct<5 ? ["warn","量级有限"] : ["ok","量级显著"];
+  h.push('<div class="est-sec"><div class="sh">卷占用 <span class="p">'+VOL.name+'</span><span class="rt">演示数据</span></div>'
+    +'<div class="cap"><div class="lb">清理前</div>'
+    +  '<div class="tk"><i class="u" style="width:'+(uB*100).toFixed(3)+'%"></i></div>'
+    +  '<div class="rv"><b>'+(uB*100).toFixed(3)+'%</b> 已用</div></div>'
+    +'<div class="cap after"><div class="lb">清理后</div>'
+    +  '<div class="tk"><i class="u" style="width:'+(uA*100).toFixed(3)+'%"></i><i class="g" style="width:'+Math.max(gPct,0.16).toFixed(3)+'%"></i></div>'
+    +  '<div class="rv"><b>'+(uA*100).toFixed(3)+'%</b> 已用</div></div>'
+    +'<div class="cap-d"><span class="lvl '+lv[0]+'">'+lv[1]+'</span>'
+    +'<span>可用空间 <span class="d">'+fmtVol(fB)+' → '+fmtVol(fA)+'</span>（+'+(totalB/fB*100).toFixed(2)+'%），相当于卷容量的 <span class="d">'+gPct.toFixed(3)+'%</span>。</span></div>'
+    +'<div class="est-note"><svg><use href="#i-info"/></svg><span>实际释放可能低于预估：APFS 稀疏文件按分配块回收，Time Machine 本地快照仍保留旧数据块，被其他进程占用的文件句柄也会延后释放。'
+    + (items.length>list.length ? '本次之外另有 <b>'+(items.length-list.length)+'</b> 个会话占用 <b>'+fmtBytes(Math.max(allB-totalB,0))+'</b>，未纳入本次预估。' : '')
+    +'</span></div></div>');
+
+  /* composition */
+  h.push('<div class="est-sec"><div class="sh">空间构成</div>');
+  rows.slice(0,MAIN_MAX).forEach(function(r){ h.push(crRow(r.name, r.b, totalB)); });
+  if(restN) h.push(crRow('其余 '+restN+' 个会话', restB, totalB));
+  if(idxB) h.push(crRow(idxLayer.length===1? '索引行 · '+mid(idxLayer[0]) : '索引行与快照 · '+idxLayer.length+' 层', idxB, totalB, '估算', true));
+  h.push('</div>');
+
+  $("#estBody").innerHTML = h.join("");
+  $("#shBody").scrollTop = 0;
+  $("#shTipTxt").innerHTML = P.syncSnap
+    ? '将同步删除快照、子代理数据与 SQLite 索引行'+(P.dropEmpty? '，并移除空项目目录':'')+'；索引层按命中的 '+idxN+' 个会话、每会话 34 KB 估算。'
+    : '当前已关闭快照同步清理，仅删除主会话文件，索引行与快照会残留在原处。';
+  $("#shOk").textContent = "确认清除 · "+fmtBytes(totalB);
+}
+
+function crRow(name, bytes, basis, tag, isEst){
+  var w = basis ? bytes/basis*100 : 0;
+  return '<div class="cr'+(isEst?" est":"")+'"><div class="cn">'+esc(name)
+    +(tag? '<span class="tag">'+tag+'</span>':'')+'</div>'
+    +'<div class="cb"><i style="width:'+w.toFixed(2)+'%"></i></div>'
+    +'<div class="cv">'+fmtBytes(bytes)+'</div>'
+    +'<div class="cp">'+(basis? (bytes/basis*100).toFixed(1):"0")+'%</div></div>';
+}
+function doClean(){
+  if(!pending || !pending.length){ $("#scrim").hidden=true; return; }
+  var b = pending.reduce(function(s,i){ return s+i.size; },0);
+  var ids = {}; pending.forEach(function(i){ ids[i.id]=1; });
+  $("#scrim").hidden = true;
+  runBusy("正在清理 "+pending.length+" 个会话…", function(){
+    items = items.filter(function(i){ return !ids[i.id]; });
+    focusId = null;
+    showOk(b, pending.length);
+  });
+}
+function showOk(bytes, n){
+  var all = catStat("all");
+  $("#okText").innerHTML = '清理完成 · 删除 <b>'+n+'</b> 个会话，释放 <b>'+fmtBytes(bytes)+'</b> 磁盘空间，剩余 <b>'+all.n+'</b> 个会话。';
+  $("#okBanner").hidden = false;
+  renderAll();
+}
+
+/* busy / scan simulation */
+var busyTimer = null;
+function runBusy(label, done){
+  $("#okBanner").hidden = true;
+  var bar = $("#sbar"), fill = bar.querySelector("i");
+  bar.hidden = false; fill.style.width = "0%";
+  $("#btnScan").disabled = true; $("#btnCleanAll").disabled = true; $("#btnCleanSel").disabled = true;
+  var pct = 0;
+  busyTimer = setInterval(function(){
+    pct = Math.min(100, pct + 7 + Math.random()*13);
+    fill.style.width = pct+"%";
+    if(pct>=100){
+      clearInterval(busyTimer); busyTimer=null;
+      setTimeout(function(){
+        bar.hidden = true; fill.style.width = "0%";
+        $("#btnScan").disabled = false; $("#btnCleanAll").disabled = false; $("#btnCleanSel").disabled = false;
+        done();
+      }, 220);
+    }
+  }, 90);
+}
+
+/* ═══ events ════════════════════════════════════════════════════ */
+$("#catList").addEventListener("click", function(e){
+  var b = e.target.closest("[data-cat]"); if(!b) return;
+  setCat(b.dataset.cat);
+});
+$("#btnZero").addEventListener("click", function(){ P.zero=!P.zero; save(); renderCats(); });
+$("#btnRevealPath").addEventListener("click", function(){
+  var a = agentOf(P.cat);
+  flashOk(P.cat==="all"
+    ? "已定位全部 15 款 Agent 的存储根目录。"
+    : (a.det? "已在 Finder 中打开 "+esc(mid(a.p))+" 的存储目录。" : a.n+" 未在本机安装或无存储目录可打开。"));
+});
+$("#sortSeg").addEventListener("click", function(e){
+  var b = e.target.closest("[data-sort]"); if(!b) return;
+  P.sort = b.dataset.sort; save(); renderAll();
+});
+$("#q").addEventListener("input", function(){ renderList(); $("#qClear").hidden = !$("#q").value; });
+$("#qClear").addEventListener("click", function(){ $("#q").value=""; renderAll(); $("#q").focus(); });
+$("#btnAll").addEventListener("click", toggleAll);
+$("#btnClearSel").addEventListener("click", function(){ items.forEach(function(i){ i.sel=false; }); renderAll(); });
+$("#btnPanel").addEventListener("click", function(){ P.panel=!P.panel; save(); renderAll(); });
+$("#btnRevealAll").addEventListener("click", function(){ flashOk("已在 Finder 中显示 "+selected().length+" 个会话文件位置。"); });
+$("#okClose").addEventListener("click", function(){ $("#okBanner").hidden=true; });
+function flashOk(t){ $("#okText").innerHTML=t; $("#okBanner").hidden=false; }
+
+$("#btnCleanSel").addEventListener("click", function(){
+  var sel = selected(); if(!sel.length) return;
+  if(P.confirm) askClean(sel, "选中", "");
+  else { var b=selBytes(), ids={}; sel.forEach(function(i){ids[i.id]=1;});
+    runBusy("正在清理 "+sel.length+" 个会话…", function(){ items=items.filter(function(i){return !ids[i.id];}); focusId=null; showOk(b, sel.length); }); }
+});
+$("#btnCleanAll").addEventListener("click", function(){
+  var rows = visible(); if(!rows.length) return;
+  if(P.confirm) askClean(rows, P.cat==="all"? "当前列表全部" : agentOf(P.cat).n+" 下的全部", "");
+  else { var b=rows.reduce(function(s,i){return s+i.size;},0), ids={}; rows.forEach(function(i){ids[i.id]=1;});
+    runBusy("正在清理 "+rows.length+" 个会话…", function(){ items=items.filter(function(i){return !ids[i.id];}); focusId=null; showOk(b, rows.length); }); }
+});
+$("#btnScan").addEventListener("click", function(){
+  runBusy("正在并发扫描 15 款 Agent 的存储目录…", function(){
+    flashOk("扫描完成 · 命中 <b>"+catStat("all").n+"</b> 个会话，合计 <b>"+fmtBytes(total())+"</b>。");
+  });
+});
+$("#btnRescan").addEventListener("click", function(){
+  runBusy("正在重新扫描…", function(){ flashOk("重新扫描完成 · 命中 <b>"+catStat("all").n+"</b> 个会话。"); });
+});
+$("#shCancel").addEventListener("click", function(){ $("#scrim").hidden=true; pending=null; });
+$("#shOk").addEventListener("click", doClean);
+$("#scrim").addEventListener("mousedown", function(e){ if(e.target===$("#scrim")){ $("#scrim").hidden=true; pending=null; } });
+
+/* list interactions */
+var list = $("#list");
+list.addEventListener("click", function(e){
+  var row = e.target.closest(".row"); if(!row) return;
+  var act = e.target.closest("[data-act]");
+  if(act && act.dataset.act==="sel"){ toggle(row.dataset.id); return; }
+  if(act && act.dataset.act==="del"){ delOne(row.dataset.id); return; }
+  focusId = row.dataset.id;
+  if(!P.panel){ P.panel=true; save(); }
+  renderAll();
+});
+list.addEventListener("keydown", function(e){
+  if(e.key!==" " && e.key!=="Enter") return;
+  var row = e.target.closest(".row"); if(!row) return;
+  e.preventDefault();
+  if(e.key==="Enter"){ focusId = row.dataset.id; if(!P.panel){ P.panel=true; save(); } renderAll(); list.querySelector('[data-id="'+focusId+'"]').focus(); }
+  else toggle(row.dataset.id);
+});
+list.addEventListener("contextmenu", function(e){
+  var row = e.target.closest(".row"); if(!row) return;
+  e.preventDefault();
+  focusId = row.dataset.id; if(!P.panel){ P.panel=true; save(); } renderAll();
+  openCtx(e.clientX, e.clientY, row.dataset.id);
+});
+function delOne(id){
+  var it = items.filter(function(x){ return x.id===id; })[0]; if(!it) return;
+  if(P.confirm) askClean([it], "", "");
+  else { var b=it.size; runBusy("正在清理 1 个会话…", function(){ items=items.filter(function(x){return x.id!==id;}); focusId=null; showOk(b,1); }); }
+}
+
+/* context menu */
+function openCtx(x, y, id){
+  var it = items.filter(function(v){ return v.id===id; })[0]; if(!it) return;
+  var m = $("#ctx");
+  m.innerHTML =
+      '<button data-c="reveal">'+icon("i-folder")+'在 Finder 中显示</button>'
+    + '<button data-c="copypath">'+icon("i-copy")+'复制项目路径</button>'
+    + '<button data-c="copysid">'+icon("i-hash")+'复制会话 ID</button>'
+    + '<hr/><button class="danger" data-c="del">'+icon("i-trash")+'删除此会话</button>';
+  m.hidden = false;
+  var w = m.offsetWidth, h = m.offsetHeight;
+  m.style.left = Math.min(x, window.innerWidth-w-10)+"px";
+  m.style.top  = Math.min(y, window.innerHeight-h-10)+"px";
+  m.onclick = function(e){
+    var b = e.target.closest("[data-c]"); if(!b) return;
+    m.hidden = true;
+    if(b.dataset.c==="reveal") flashOk("已在 Finder 中显示「"+esc(mid(it.proj))+"」的会话文件。");
+    else if(b.dataset.c==="copypath") copy(it.proj, "已复制项目路径");
+    else if(b.dataset.c==="copysid") copy(it.sid, "已复制会话 ID");
+    else if(b.dataset.c==="del") delOne(id);
+  };
+}
+function copy(text, okMsg){
+  if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).catch(function(){});
+  flashOk(okMsg+"：<b>"+esc(text.length>44? text.slice(0,42)+"…" : text)+"</b>");
+}
+document.addEventListener("click", function(e){
+  var m = $("#ctx");
+  if(!m.hidden && !m.contains(e.target)) m.hidden = true;
+});
+
+/* inspector interactions */
+$("#inspector").addEventListener("click", function(e){
+  var cp = e.target.closest("[data-copy]");
+  if(cp){ copy(cp.dataset.copy, "已复制到剪贴板"); return; }
+  if(e.target.closest("#inspDel")){ delOne(focusId); return; }
+  if(e.target.closest('[data-act="reveal"]')){ flashOk("已在 Finder 中显示该会话文件位置。"); }
+});
+
+/* ═══ settings ══════════════════════════════════════════════════ */
+var tab = "general";
+$("#btnSettings").addEventListener("click", function(){ $("#setScrim").hidden=false; renderSettings(); });
+$("#setScrim").addEventListener("mousedown", function(e){ if(e.target===$("#setScrim")) $("#setScrim").hidden=true; });
+document.querySelectorAll(".set-tabs button").forEach(function(b){
+  b.addEventListener("click", function(){
+    tab = b.dataset.tab;
+    document.querySelectorAll(".set-tabs button").forEach(function(x){
+      x.classList.toggle("on", x===b);
+      x.setAttribute("aria-selected", x===b?"true":"false");
+    });
+    renderSettings();
+  });
+});
+function tgl(id, key, title, desc){
+  return '<label class="tgl"><span class="tt"><span class="a">'+title+'</span><span class="b">'+desc+'</span></span>'
+    + '<input type="checkbox" id="'+id+'" data-pref="'+key+'"'+(P[key]?" checked":"")+'><span class="sw"></span></label>';
+}
+function renderSettings(){
+  var b = $("#setBody");
+  if(tab==="general"){
+    b.innerHTML =
+      '<div class="set-group"><h3>扫描与清理</h3>'
+      + tgl("s1","autoScan","启动应用时自动扫描会话","沿用 CleanViewModel 初始化时的首次扫描行为")
+      + tgl("s2","syncSnap","删除会话时同步清除快照与子代理数据","关闭后仅删除主会话文件，快照与子代理目录将保留")
+      + tgl("s3","dropEmpty","删除会话后自动移除空项目目录","清理后递归移除不再包含任何会话的空目录")
+      + '</div>'
+      + '<div class="set-group"><h3>安全策略</h3>'
+      + tgl("s4","confirm","执行清理操作前弹出二次确认","关闭后清理将立即执行，不可撤销")
+      + '</div>';
+  } else if(tab==="paths"){
+    b.innerHTML = '<div class="set-group"><h3>受支持的 Local Agents（'+AGENTS.length+' 款）</h3>'
+      + AGENTS.map(function(a){
+          var st = catStat(a.k);
+          return '<div class="path-row">'+icon(a.i,"gi")
+            + '<span class="pt"><span class="n">'+a.n
+            +   '<span class="pill '+(a.det?"yes":"no")+'">'+(a.det? (st.n? st.n+" 会话" : "已检测到") : "未发现")+'</span></span>'
+            +   '<span class="p" title="'+esc(a.p)+'">'+esc(a.p)+'</span></span>'
+            + (a.det? '<button class="btn btn-ghost" data-reveal="'+esc(a.n)+'" title="在 Finder 中打开" aria-label="在 Finder 中打开 '+esc(a.n)+'">'+icon("i-external")+'</button>':'')
+            + '</div>';
+        }).join("")
+      + '</div>';
+  } else {
+    b.innerHTML = '<div class="about">'
+      + icon("i-tray","gi")
+      + '<h2>ConversationClean</h2><p class="v">版本 1.0.0 · macOS 14.0 Sonoma 及以上</p>'
+      + '<p>全面支持 15 款本地 CLI、IDE 插件、AI 原生编辑器及自主 Agent 框架的会话扫描与安全清理。'
+      + '对同时维护「会话文件 + SQLite 索引」的 Agent，删除会话时同步清理索引行，避免幽灵会话残留。</p>'
+      + '<div class="facts">'
+      +   '<div><div class="n">15</div><div class="l">受支持 Agent</div></div>'
+      +   '<div><div class="n">6</div><div class="l">双层索引同步</div></div>'
+      +   '<div><div class="n">1</div><div class="l">并发扫描任务组</div></div>'
+      + '</div></div>';
+  }
+}
+$("#setBody").addEventListener("change", function(e){
+  var k = e.target.dataset.pref; if(!k) return;
+  P[k] = e.target.checked; save(); renderOverview(); renderCats();
+});
+$("#setBody").addEventListener("click", function(e){
+  var r = e.target.closest("[data-reveal]"); if(!r) return;
+  flashOk("已在 Finder 中打开 "+esc(r.dataset.reveal)+" 的存储目录。");
+});
+
+/* ═══ keyboard ══════════════════════════════════════════════════ */
+document.addEventListener("keydown", function(e){
+  if((e.metaKey||e.ctrlKey) && e.key.toLowerCase()==="f"){ e.preventDefault(); $("#q").focus(); $("#q").select(); return; }
+  if(e.key==="Escape"){
+    if(!$("#ctx").hidden){ $("#ctx").hidden=true; return; }
+    if(!$("#setScrim").hidden){ $("#setScrim").hidden=true; return; }
+    if(!$("#scrim").hidden){ $("#scrim").hidden=true; pending=null; return; }
+  }
+});
+
+/* ═══ boot ═══════════════════════════════════════════════════════ */
+if(window.innerWidth<=920){ P.panel = false; }
+renderAll();
+})();
+</script>
+</body>
+</html>

@@ -41,6 +41,10 @@
 		CC0100332D00000100000001 /* CursorScanner+JSONL.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200332D00000100000001 /* CursorScanner+JSONL.swift */; };
 		CC0100342D00000100000001 /* CursorScanner+StateDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200342D00000100000001 /* CursorScanner+StateDatabase.swift */; };
 		CC0100352D00000100000001 /* CursorScanner+DirectoryScan.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200352D00000100000001 /* CursorScanner+DirectoryScan.swift */; };
+		CC01D1012D00000100000001 /* CCTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC02D1012D00000100000001 /* CCTheme.swift */; };
+		CC01D1022D00000100000001 /* CCComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC02D1022D00000100000001 /* CCComponents.swift */; };
+		CC01D1032D00000100000001 /* ConversationListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC02D1032D00000100000001 /* ConversationListView.swift */; };
+		CC01D1042D00000100000001 /* CleanConfirmSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC02D1042D00000100000001 /* CleanConfirmSheet.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -80,6 +84,10 @@
 		CC0200332D00000100000001 /* CursorScanner+JSONL.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CursorScanner+JSONL.swift"; sourceTree = "<group>"; };
 		CC0200342D00000100000001 /* CursorScanner+StateDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CursorScanner+StateDatabase.swift"; sourceTree = "<group>"; };
 		CC0200352D00000100000001 /* CursorScanner+DirectoryScan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CursorScanner+DirectoryScan.swift"; sourceTree = "<group>"; };
+		CC02D1012D00000100000001 /* CCTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CCTheme.swift; sourceTree = "<group>"; };
+		CC02D1022D00000100000001 /* CCComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CCComponents.swift; sourceTree = "<group>"; };
+		CC02D1032D00000100000001 /* ConversationListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationListView.swift; sourceTree = "<group>"; };
+		CC02D1042D00000100000001 /* CleanConfirmSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanConfirmSheet.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -107,6 +115,7 @@
 				CC0200012D00000100000001 /* ConversationCleanApp.swift */,
 				CC0200022D00000100000001 /* ContentView.swift */,
 				CC0400032D00000100000001 /* Models */,
+				CC04D1002D00000100000001 /* DesignSystem */,
 				CC0400042D00000100000001 /* ViewModels */,
 				CC0400052D00000100000001 /* Views */,
 				CC0400082D00000100000001 /* Core */,
@@ -125,6 +134,16 @@
 			path = Models;
 			sourceTree = "<group>";
 		};
+		CC04D1002D00000100000001 /* DesignSystem */ = {
+			isa = PBXGroup;
+			children = (
+				CC02D1012D00000100000001 /* CCTheme.swift */,
+				CC02D1022D00000100000001 /* CCComponents.swift */,
+			);
+			path = DesignSystem;
+			sourceTree = "<group>";
+		};
+
 		CC0400042D00000100000001 /* ViewModels */ = {
 			isa = PBXGroup;
 			children = (
@@ -136,6 +155,8 @@
 		CC0400052D00000100000001 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				CC02D1032D00000100000001 /* ConversationListView.swift */,
+				CC02D1042D00000100000001 /* CleanConfirmSheet.swift */,
 				CC0200052D00000100000001 /* SidebarView.swift */,
 				CC0200062D00000100000001 /* DetailView.swift */,
 				CC0200072D00000100000001 /* SettingsView.swift */,
@@ -292,6 +313,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CC01D1012D00000100000001 /* CCTheme.swift in Sources */,
+				CC01D1022D00000100000001 /* CCComponents.swift in Sources */,
+				CC01D1032D00000100000001 /* ConversationListView.swift in Sources */,
+				CC01D1042D00000100000001 /* CleanConfirmSheet.swift in Sources */,
 				CC0100012D00000100000001 /* ConversationCleanApp.swift in Sources */,
 				CC0100022D00000100000001 /* ContentView.swift in Sources */,
 				CC0100032D00000100000001 /* ConversationItem.swift in Sources */,

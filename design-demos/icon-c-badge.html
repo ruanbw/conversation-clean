@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>方向 C — Modern Badge</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+    background: #1e1e1e;
+    color: #e0e0e0;
+    min-height: 100vh;
+    padding: 48px 32px;
+  }
+  .header {
+    max-width: 900px;
+    margin: 0 auto 48px;
+    text-align: center;
+  }
+  .header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    color: #f5f5f5;
+    margin-bottom: 8px;
+  }
+  .header p {
+    font-size: 15px;
+    color: #999;
+    margin-bottom: 16px;
+  }
+  .badge-tag {
+    display: inline-block;
+    background: #D98C00;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 14px;
+    border-radius: 20px;
+    letter-spacing: 0.5px;
+  }
+  .section-title {
+    max-width: 900px;
+    margin: 40px auto 20px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #aaa;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .showcase {
+    max-width: 900px;
+    margin: 0 auto;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 32px;
+    justify-content: center;
+  }
+  .icon-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  .icon-card .label {
+    font-size: 12px;
+    color: #777;
+    font-variant-numeric: tabular-nums;
+  }
+  .icon-card .label span {
+      color: #bbb;
+      font-weight: 500;
+  }
+  .dock-bg {
+    background: linear-gradient(180deg, #3a3a3c 0%, #2c2c2e 100%);
+    border-radius: 24px;
+    padding: 40px;
+    display: flex;
+    gap: 28px;
+    justify-content: center;
+    align-items: flex-end;
+    max-width: 900px;
+    margin: 0 auto;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+  .finder-bg {
+    background: #2d2d2d;
+    border-radius: 12px;
+    padding: 32px;
+    display: flex;
+    gap: 32px;
+    align-items: center;
+    max-width: 900px;
+    margin: 0 auto;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+    border: 1px solid #444;
+  }
+  .finder-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .finder-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    color: #ccc;
+  }
+  .finder-item.active {
+    background: #D98C00;
+    color: #fff;
+    padding: 6px 12px;
+    border-radius: 6px;
+  }
+  .grid-bg {
+    background: #252525;
+    border-radius: 16px;
+    padding: 36px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 32px;
+    justify-items: center;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  svg { display: block; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>方向 C — Modern Badge</h1>
+  <p>ConversationClean macOS 应用图标 — 现代徽章风格</p>
+  <span class="badge-tag">BADGE STYLE</span>
+</div>
+
+<div class="section-title">多尺寸预览 — 中性灰背景</div>
+<div class="grid-bg">
+  <div class="icon-card">
+    <svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="bg512" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#FFFFFF"/>
+          <stop offset="100%" stop-color="#F0F0F0"/>
+        </linearGradient>
+        <linearGradient id="bubble512" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#E8A020"/>
+          <stop offset="100%" stop-color="#C87E00"/>
+        </linearGradient>
+      </defs>
+      <rect width="512" height="512" rx="114" fill="url(#bg512)"/>
+      <rect x="24" y="24" width="464" height="464" rx="100" fill="none" stroke="#D98C00" stroke-width="3" opacity="0.3"/>
+      <path d="M256 108 C194 108 150 152 150 210 C150 252 176 290 214 310 L204 356 L256 330 C268 332 280 333 292 333 C354 333 398 289 398 231 C398 152 318 108 256 108Z" fill="url(#bubble512)"/>
+      <path d="M322 180 L334 206 L360 218 L334 230 L322 256 L310 230 L284 218 L310 206 Z" fill="#5C3A00" opacity="0.85"/>
+      <path d="M300 240 L308 258 L326 266 L308 274 L300 292 L292 274 L274 266 L292 258 Z" fill="#5C3A00" opacity="0.65"/>
+      <path d="M200 270 L208 288 L226 296 L208 304 L200 322 L192 304 L174 296 L192 288 Z" fill="#5C3A00" opacity="0.65"/>
+    </svg>
+    <div class="label"><span>512</span> × 512</div>
+  </div>
+
+  <div class="icon-card">
+    <svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="bg256" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#FFFFFF"/>
+          <stop offset="100%" stop-color="#F0F0F0"/>
+        </linearGradient>
+        <linearGradient id="bubble256" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#E8A020"/>
+          <stop offset="100%" stop-color="#C87E00"/>
+        </linearGradient>
+      </defs>
+      <rect width="256" height="256" rx="57" fill="url(#bg256)"/>
+      <rect x="12" y="12" width="232" height="232" rx="50" fill="none" stroke="#D98C00" stroke-width="2" opacity="0.3"/>
+      <path d="M128 54 C97 54 75 76 75 105 C75 126 88 145 107 155 L102 178 L128 165 C134 166 140 167 146 167 C177 167 199 145 199 116 C199 76 159 54 128 54Z" fill="url(#bubble256)"/>
+      <path d="M161 90 L167 103 L180 109 L167 115 L161 128 L155 115 L142 109 L155 103 Z" fill="#5C3A00" opacity="0.85"/>
+      <path d="M150 120 L154 129 L163 133 L154 137 L150 146 L146 137 L137 133 L146 129 Z" fill="#5C3A00" opacity="0.65"/>
+      <path d="M100 135 L104 144 L113 148 L104 152 L100 161 L96 152 L87 148 L96 144 Z" fill="#5C3A00" opacity="0.65"/>
+    </svg>
+    <div class="label"><span>256</span> × 256</div>
+  </div>
+
+  <div class="icon-card">
+    <svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="bg128" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#FFFFFF"/>
+          <stop offset="100%" stop-color="#F0F0F0"/>
+        </linearGradient>
+      </defs>
+      <rect width="128" height="128" rx="29" fill="url(#bg128)"/>
+      <rect x="6" y="6" width="116" height="116" rx="25" fill="none" stroke="#D98C00" stroke-width="1.5" opacity="0.3"/>
+      <path d="M64 27 C49 27 37 38 37 52 C37 63 44 72 53 77 L51 89 L64 82 C67 83 70 83 73 83 C88 83 100 72 100 58 C100 38 80 27 64 27Z" fill="#D98C00"/>
+      <path d="M80 45 L83 52 L90 55 L83 58 L80 65 L77 58 L70 55 L77 52 Z" fill="#5C3A00" opacity="0.85"/>
+      <path d="M75 60 L77 65 L82 67 L77 69 L75 74 L73 69 L68 67 L73 65 Z" fill="#5C3A00" opacity="0.65"/>
+      <path d="M50 67 L52 72 L57 74 L52 76 L50 81 L48 76 L43 74 L48 72 Z" fill="#5C3A00" opacity="0.65"/>
+    </svg>
+    <div class="label"><span>128</span> × 128</div>
+  </div>
+
+  <div class="icon-card">
+    <svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+      <rect width="64" height="64" rx="14" fill="#FFFFFF"/>
+      <rect x="3" y="3" width="58" height="58" rx="12" fill="none" stroke="#D98C00" stroke-width="1" opacity="0.3"/>
+      <path d="M32 14 C24 14 18 20 18 27 C18 32 22 37 27 39 L26 45 L32 42 C34 42 36 42 38 42 C46 42 52 36 52 29 C52 20 40 14 32 14Z" fill="#D98C00"/>
+      <path d="M40 23 L42 27 L46 29 L42 31 L40 35 L38 31 L34 29 L38 27 Z" fill="#5C3A00" opacity="0.85"/>
+      <path d="M37 30 L38 33 L41 34 L38 35 L37 38 L36 35 L33 34 L36 33 Z" fill="#5C3A00" opacity="0.65"/>
+      <path d="M25 33 L26 36 L29 37 L26 38 L25 41 L24 38 L21 37 L24 36 Z" fill="#5C3A00" opacity="0.65"/>
+    </svg>
+    <div class="label"><span>64</span> × 64</div>
+  </div>
+
+  <div class="icon-card">
+    <svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <rect width="32" height="32" rx="7" fill="#FFFFFF"/>
+      <rect x="2" y="2" width="28" height="28" rx="6" fill="none" stroke="#D98C00" stroke-width="0.8" opacity="0.3"/>
+      <path d="M16 7 C11 7 8 11 8 15 C8 18 11 21 14 22 L13 26 L16 24 C18 24 20 24 22 24 C27 24 30 21 30 16 C30 10 21 7 16 7Z" fill="#D98C00"/>
+      <path d="M20 11 L21 13 L24 14 L21 15 L20 17 L19 15 L16 14 L19 13 Z" fill="#5C3A00" opacity="0.85"/>
+      <path d="M18 15 L19 17 L21 18 L19 19 L18 21 L17 19 L15 18 L17 17 Z" fill="#5C3A00" opacity="0.65"/>
+      <path d="M12 16 L13 18 L15 19 L13 20 L12 22 L11 20 L9 19 L11 18 Z" fill="#5C3A00" opacity="0.65"/>
+    </svg>
+    <div class="label"><span>32</span> × 32</div>
+  </div>
+
+  <div class="icon-card">
+    <svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+      <rect width="16" height="16" rx="4" fill="#FFFFFF"/>
+      <path d="M8 4 C5 4 3 6 3 8.5 C3 10.5 5 12 7 12.5 L6.5 14 L8 13 C10 13 12 11.5 12 9 C12 5.5 11 4 8 4Z" fill="#D98C00"/>
+      <path d="M10 5.5 L10.5 6.5 L11.5 7 L10.5 7.5 L10 8.5 L9.5 7.5 L8.5 7 L9.5 6.5 Z" fill="#5C3A00" opacity="0.85"/>
+      <path d="M9 7.5 L9.5 8.5 L10.5 9 L9.5 9.5 L9 10.5 L8.5 9.5 L7.5 9 L8.5 8.5 Z" fill="#5C3A00" opacity="0.65"/>
+    </svg>
+    <div class="label"><span>16</span> × 16</div>
+  </div>
+</div>
+
+<div class="section-title">macOS Dock 模拟</div>
+<div class="dock-bg">
+  <div class="icon-card">
+    <svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+      <rect width="64" height="64" rx="14" fill="#FFFFFF"/>
+      <rect x="3" y="3" width="58" height="58" rx="12" fill="none" stroke="#D98C00" stroke-width="1" opacity="0.3"/>
+      <path d="M32 14 C24 14 18 20 18 27 C18 32 22 37 27 39 L26 45 L32 42 C34 42 36 42 38 42 C46 42 52 36 52 29 C52 20 40 14 32 14Z" fill="#D98C00"/>
+      <path d="M40 23 L42 27 L46 29 L42 31 L40 35 L38 31 L34 29 L38 27 Z" fill="#5C3A00" opacity="0.85"/>
+      <path d="M37 30 L38 33 L41 34 L38 35 L37 38 L36 35 L33 34 L36 33 Z" fill="#5C3A00" opacity="0.65"/>
+      <path d="M25 33 L26 36 L29 37 L26 38 L25 41 L24 38 L21 37 L24 36 Z" fill="#5C3A00" opacity="0.65"/>
+    </svg>
+  </div>
+  <div class="icon-card">
+    <svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+      <rect width="64" height="64" rx="14" fill="#2A2A2A"/>
+      <rect width="64" height="64" rx="14" fill="#1a1a1a" opacity="0.5"/>
+    </svg>
+  </div>
+  <div class="icon-card">
+    <svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+      <rect width="64" height="64" rx="14" fill="#007AFF"/>
+    </svg>
+  </div>
+  <div class="icon-card">
+    <svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+      <rect width="64" height="64" rx="14" fill="#34C759"/>
+    </svg>
+  </div>
+</div>
+
+<div class="section-title">Finder 侧边栏模拟</div>
+<div class="finder-bg">
+  <div class="finder-sidebar">
+    <div class="finder-item active">
+      <svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+        <rect width="20" height="20" rx="4" fill="rgba(255,255,255,0.2)"/>
+        <path d="M10 4 C6 4 3 6.5 3 9 C3 11 5 13 7 13.5 L6.5 15 L10 14 C12 14 14 12.5 14 9.5 C14 5.5 12 4 10 4Z" fill="rgba(255,255,255,0.9)"/>
+        <path d="M12 6 L12.5 7.5 L14 8 L12.5 8.5 L12 10 L11.5 8.5 L10 8 L11.5 7.5 Z" fill="rgba(255,255,255,0.7)"/>
+      </svg>
+      ConversationClean
+    </div>
+    <div class="finder-item">
+      <svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+        <rect width="20" height="20" rx="4" fill="#555"/>
+        <circle cx="10" cy="10" r="3" fill="rgba(255,255,255,0.6)"/>
+      </svg>
+      Applications
+    </div>
+    <div class="finder-item">
+      <svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+        <rect width="20" height="20" rx="4" fill="#555"/>
+        <path d="M5 10 L9 14 L15 6" stroke="rgba(255,255,255,0.6)" stroke-width="2" fill="none"/>
+      </svg>
+      Documents
+    </div>
+    <div class="finder-item">
+      <svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+        <rect width="20" height="20" rx="4" fill="#555"/>
+        <path d="M6 14 L10 6 L14 14 Z" fill="rgba(255,255,255,0.6)"/>
+      </svg>
+      Downloads
+    </div>
+  </div>
+  <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap: 24px; justify-items: center;">
+    <div class="icon-card">
+      <svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+        <rect width="64" height="64" rx="14" fill="#FFFFFF"/>
+        <rect x="3" y="3" width="58" height="58" rx="12" fill="none" stroke="#D98C00" stroke-width="1" opacity="0.3"/>
+        <path d="M32 14 C24 14 18 20 18 27 C18 32 22 37 27 39 L26 45 L32 42 C34 42 36 42 38 42 C46 42 52 36 52 29 C52 20 40 14 32 14Z" fill="#D98C00"/>
+        <path d="M40 23 L42 27 L46 29 L42 31 L40 35 L38 31 L34 29 L38 27 Z" fill="#5C3A00" opacity="0.85"/>
+        <path d="M37 30 L38 33 L41 34 L38 35 L37 38 L36 35 L33 34 L36 33 Z" fill="#5C3A00" opacity="0.65"/>
+        <path d="M25 33 L26 36 L29 37 L26 38 L25 41 L24 38 L21 37 L24 36 Z" fill="#5C3A00" opacity="0.65"/>
+      </svg>
+      <div class="label" style="color:#999;">App Icon</div>
+    </div>
+    <div class="icon-card">
+      <svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+        <rect width="64" height="64" rx="14" fill="#1C1C1E"/>
+        <path d="M32 8 L38 24 L56 24 L42 34 L48 52 L32 42 L16 52 L22 34 L8 24 L26 24 Z" fill="#FFD60A" opacity="0.6"/>
+      </svg>
+      <div class="label" style="color:#999;">Other App</div>
+    </div>
+    <div class="icon-card">
+      <svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+        <rect width="64" height="64" rx="14" fill="#1C1C1E"/>
+        <circle cx="32" cy="32" r="16" fill="none" stroke="#0A84FF" stroke-width="3"/>
+        <path d="M32 20 L32 32 L42 38" stroke="#0A84FF" stroke-width="3" fill="none"/>
+      </svg>
+      <div class="label" style="color:#999;">Other App</div>
+    </div>
+  </div>
+</div>
+
+<div class="section-title">深色模式预览</div>
+<div class="showcase" style="gap: 24px;">
+  <div class="icon-card" style="background: #1C1C1E; padding: 32px; border-radius: 20px;">
+    <svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="bgD" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#FFFFFF"/>
+          <stop offset="100%" stop-color="#E8E8E8"/>
+        </linearGradient>
+      </defs>
+      <rect width="256" height="256" rx="57" fill="url(#bgD)"/>
+      <rect x="12" y="12" width="232" height="232" rx="50" fill="none" stroke="#D98C00" stroke-width="2" opacity="0.4"/>
+      <path d="M128 54 C97 54 75 76 75 105 C75 126 88 145 107 155 L102 178 L128 165 C134 166 140 167 146 167 C177 167 199 145 199 116 C199 76 159 54 128 54Z" fill="#D98C00"/>
+      <path d="M161 90 L167 103 L180 109 L167 115 L161 128 L155 115 L142 109 L155 103 Z" fill="#5C3A00" opacity="0.85"/>
+      <path d="M150 120 L154 129 L163 133 L154 137 L150 146 L146 137 L137 133 L146 129 Z" fill="#5C3A00" opacity="0.65"/>
+      <path d="M100 135 L104 144 L113 148 L104 152 L100 161 L96 152 L87 148 L96 144 Z" fill="#5C3A00" opacity="0.65"/>
+    </svg>
+    <div class="label" style="color:#666;">Dark Mode 256</div>
+  </div>
+  <div class="icon-card" style="background: #1C1C1E; padding: 32px; border-radius: 20px;">
+    <svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+      <rect width="128" height="128" rx="29" fill="#FFFFFF"/>
+      <rect x="6" y="6" width="116" height="116" rx="25" fill="none" stroke="#D98C00" stroke-width="1.5" opacity="0.4"/>
+      <path d="M64 27 C49 27 37 38 37 52 C37 63 44 72 53 77 L51 89 L64 82 C67 83 70 83 73 83 C88 83 100 72 100 58 C100 38 80 27 64 27Z" fill="#D98C00"/>
+      <path d="M80 45 L83 52 L90 55 L83 58 L80 65 L77 58 L70 55 L77 52 Z" fill="#5C3A00" opacity="0.85"/>
+      <path d="M75 60 L77 65 L82 67 L77 69 L75 74 L73 69 L68 67 L73 65 Z" fill="#5C3A00" opacity="0.65"/>
+      <path d="M50 67 L52 72 L57 74 L52 76 L50 81 L48 76 L43 74 L48 72 Z" fill="#5C3A00" opacity="0.65"/>
+    </svg>
+    <div class="label" style="color:#666;">Dark Mode 128</div>
+  </div>
+</div>
+
+</body>
+</html>

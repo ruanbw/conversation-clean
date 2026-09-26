@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>方向 B — Subtle Depth</title>
+<style>
+  :root {
+    --orange-hi: #E89A00;
+    --orange-mid: #D98C00;
+    --orange-lo: #C77E00;
+    --ink: #2B2B2E;
+    --ink-soft: #6B6B70;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Helvetica Neue", sans-serif;
+    background: #F4F4F6;
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+  }
+  header {
+    padding: 56px 64px 40px;
+    border-bottom: 1px solid #E2E2E6;
+    background: #FFFFFF;
+  }
+  .tag {
+    display: inline-block;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    color: var(--orange-mid);
+    background: rgba(217, 140, 0, 0.10);
+    border-radius: 999px;
+    padding: 5px 12px;
+    margin-bottom: 14px;
+  }
+  h1 { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; }
+  .sub { margin-top: 8px; font-size: 14px; color: var(--ink-soft); }
+  main { padding: 48px 64px 72px; max-width: 1180px; margin: 0 auto; }
+
+  .icon {
+    position: relative;
+    border-radius: 22.37%;
+    overflow: hidden;
+    background:
+      radial-gradient(120% 90% at 30% 16%, rgba(255,255,255,0.32) 0%, rgba(255,255,255,0.06) 44%, rgba(255,255,255,0) 62%),
+      linear-gradient(158deg, #ECA100 0%, var(--orange-mid) 44%, var(--orange-lo) 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.38),
+      inset 0 -1px 1px rgba(146,86,0,0.22);
+  }
+  .icon svg { display: block; width: 100%; height: 100%; }
+
+  .hero {
+    display: flex;
+    align-items: center;
+    gap: 56px;
+    background: #FFFFFF;
+    border: 1px solid #E6E6EA;
+    border-radius: 20px;
+    padding: 48px 56px;
+    margin-bottom: 40px;
+  }
+  .hero .icon { width: 220px; height: 220px; flex-shrink: 0; }
+  .hero h2 { font-size: 20px; font-weight: 700; margin-bottom: 14px; }
+  .hero p { font-size: 14px; line-height: 1.7; color: var(--ink-soft); max-width: 460px; }
+  .chips { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+  .chip {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; color: var(--ink-soft);
+    background: #F6F6F8; border: 1px solid #E8E8EC;
+    border-radius: 8px; padding: 7px 12px;
+  }
+  .chip i { width: 14px; height: 14px; border-radius: 4px; display: block; }
+
+  section.panel { margin-bottom: 40px; }
+  .panel-title {
+    font-size: 13px; font-weight: 600; letter-spacing: 0.04em;
+    color: var(--ink-soft); margin-bottom: 16px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .panel-title::after { content: ""; flex: 1; height: 1px; background: #E2E2E6; }
+  .stage {
+    border-radius: 20px;
+    padding: 40px 44px;
+    display: flex; align-items: flex-end; gap: 34px; flex-wrap: wrap;
+  }
+  .stage.light { background: #E9E9ED; border: 1px solid #DEDEE3; }
+  .stage.dark  { background: #17171B; border: 1px solid #26262C; }
+  .cell { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .cell span { font-size: 11px; font-weight: 600; color: #8A8A90; font-variant-numeric: tabular-nums; }
+  .stage.dark .cell span { color: #77777E; }
+
+  .dock-wrap {
+    background: #17171B;
+    border-radius: 20px;
+    border: 1px solid #26262C;
+    padding: 44px;
+    display: flex; flex-direction: column; align-items: center; gap: 22px;
+  }
+  .dock {
+    display: flex; align-items: center; gap: 14px;
+    background: rgba(255,255,255,0.13);
+    border: 1px solid rgba(255,255,255,0.16);
+    border-radius: 26px;
+    padding: 14px 20px;
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+  }
+  .dock .icon { box-shadow: 0 4px 14px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.38), inset 0 -1px 1px rgba(146,86,0,0.22); }
+  .dock-label { font-size: 11px; color: #77777E; font-weight: 600; letter-spacing: 0.04em; }
+
+  .notes {
+    background: #FFFFFF; border: 1px solid #E6E6EA; border-radius: 20px;
+    padding: 32px 40px;
+  }
+  .notes h3 { font-size: 14px; font-weight: 700; margin-bottom: 14px; }
+  .notes ul { list-style: none; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 32px; }
+  .notes li { font-size: 13px; color: var(--ink-soft); line-height: 1.6; padding-left: 16px; position: relative; }
+  .notes li::before { content: ""; position: absolute; left: 0; top: 9px; width: 6px; height: 6px; border-radius: 2px; background: var(--orange-mid); }
+  .notes b { color: var(--ink); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="bubbleGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#EEEEEE"/>
+    </linearGradient>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="1.2" stdDeviation="1" flood-color="#8A5200" flood-opacity="0.30"/>
+    </filter>
+    <symbol id="cc-glyph" viewBox="0 0 64 64">
+      <path filter="url(#soft)" fill="url(#bubbleGrad)" d="M20 13 L40 13 Q49 13 49 22 L49 31 Q49 40 40 40 L27 40 L21 47 L22 40 L20 40 Q11 40 11 31 L11 22 Q11 13 20 13 Z"/>
+      <path filter="url(#soft)" fill="#FFFFFF" d="M48 9.5 Q49.1 15.9 55.5 17 Q49.1 18.1 48 24.5 Q46.9 18.1 40.5 17 Q46.9 15.9 48 9.5 Z"/>
+    </symbol>
+  </defs>
+</svg>
+
+<header>
+  <div class="tag">方向 B · SUBTLE DEPTH</div>
+  <h1>方向 B — Subtle Depth</h1>
+  <p class="sub">微妙质感 — 橙色径向渐变背景 + 白色图形 1–2px 轻投影，参考 CleanMyMac X 的层次处理</p>
+</header>
+
+<main>
+  <div class="hero">
+    <div class="icon"><svg><use href="#cc-glyph"/></svg></div>
+    <div>
+      <h2>对话气泡 × 清洁 Sparkle</h2>
+      <p>圆角矩形对话气泡承载「会话」语义，右上角叠加四角星 Sparkle 表达「清洁」。白色图形带极轻暖色投影，在橙色渐变背景上形成微妙立体感，整体保持 macOS 原生图标的克制与简洁。</p>
+      <div class="chips">
+        <div class="chip"><i style="background:#E89A00"></i>#E89A00 高光</div>
+        <div class="chip"><i style="background:#D98C00"></i>#D98C00 主色</div>
+        <div class="chip"><i style="background:#C77E00"></i>#C77E00 暗部</div>
+        <div class="chip">圆角 22.37% Squircle</div>
+        <div class="chip">投影 1–2px / 30%</div>
+      </div>
+    </div>
+  </div>
+
+  <section class="panel">
+    <div class="panel-title">多尺寸预览 · 浅色背景（Finder 效果）</div>
+    <div class="stage light">
+      <div class="cell"><div class="icon" style="width:16px;height:16px"><svg><use href="#cc-glyph"/></svg></div><span>16</span></div>
+      <div class="cell"><div class="icon" style="width:32px;height:32px"><svg><use href="#cc-glyph"/></svg></div><span>32</span></div>
+      <div class="cell"><div class="icon" style="width:64px;height:64px"><svg><use href="#cc-glyph"/></svg></div><span>64</span></div>
+      <div class="cell"><div class="icon" style="width:128px;height:128px"><svg><use href="#cc-glyph"/></svg></div><span>128</span></div>
+      <div class="cell"><div class="icon" style="width:256px;height:256px"><svg><use href="#cc-glyph"/></svg></div><span>256</span></div>
+      <div class="cell"><div class="icon" style="width:512px;height:512px"><svg><use href="#cc-glyph"/></svg></div><span>512</span></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-title">多尺寸预览 · 深色背景（Dock 效果）</div>
+    <div class="stage dark">
+      <div class="cell"><div class="icon" style="width:16px;height:16px"><svg><use href="#cc-glyph"/></svg></div><span>16</span></div>
+      <div class="cell"><div class="icon" style="width:32px;height:32px"><svg><use href="#cc-glyph"/></svg></div><span>32</span></div>
+      <div class="cell"><div class="icon" style="width:64px;height:64px"><svg><use href="#cc-glyph"/></svg></div><span>64</span></div>
+      <div class="cell"><div class="icon" style="width:128px;height:128px"><svg><use href="#cc-glyph"/></svg></div><span>128</span></div>
+      <div class="cell"><div class="icon" style="width:256px;height:256px"><svg><use href="#cc-glyph"/></svg></div><span>256</span></div>
+      <div class="cell"><div class="icon" style="width:512px;height:512px"><svg><use href="#cc-glyph"/></svg></div><span>512</span></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-title">macOS Dock 模拟</div>
+    <div class="dock-wrap">
+      <div class="dock">
+        <div class="icon" style="width:72px;height:72px"><svg><use href="#cc-glyph"/></svg></div>
+        <div class="icon" style="width:56px;height:56px"><svg><use href="#cc-glyph"/></svg></div>
+        <div class="icon" style="width:44px;height:44px"><svg><use href="#cc-glyph"/></svg></div>
+      </div>
+      <div class="dock-label">DOCK PREVIEW · 毛玻璃底栏</div>
+    </div>
+  </section>
+
+  <section class="notes">
+    <h3>规格说明</h3>
+    <ul>
+      <li><b>背景</b>：线性渐变 158°（#ECA100 → #D98C00 → #C77E00），叠加 30% 位置径向高光</li>
+      <li><b>形状</b>：macOS Squircle，圆角半径 22.37%，连续曲率</li>
+      <li><b>图形</b>：白色对话气泡（#FFF → #EEE 微渐变）+ 四角星 Sparkle</li>
+      <li><b>投影</b>：feDropShadow dy=1.2 / blur=1 / 30% 暖棕色，1–2px 轻投影</li>
+      <li><b>内高光</b>：顶部 inset 1px 白色 38%，底部 inset 暗橙 22%</li>
+      <li><b>实现</b>：纯 HTML/CSS/SVG，矢量清晰，无外部图片依赖</li>
+    </ul>
+  </section>
+</main>
+
+</body>
+</html>

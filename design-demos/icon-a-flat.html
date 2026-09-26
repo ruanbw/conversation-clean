@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>方向 A — Flat Minimal</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', sans-serif;
+    background: #1e1e1e;
+    color: #e0e0e0;
+    min-height: 100vh;
+    padding: 48px 24px;
+  }
+  .header {
+    text-align: center;
+    margin-bottom: 48px;
+  }
+  .header h1 {
+    font-size: 28px;
+    font-weight: 600;
+    color: #f0f0f0;
+    margin-bottom: 8px;
+  }
+  .header p {
+    font-size: 14px;
+    color: #888;
+  }
+  .badge {
+    display: inline-block;
+    background: #D98C00;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 12px;
+    border-radius: 12px;
+    margin-bottom: 12px;
+    letter-spacing: 0.5px;
+  }
+  .showcase {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: flex-end;
+    gap: 40px;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  .icon-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  .icon-label {
+    font-size: 12px;
+    color: #666;
+    font-variant-numeric: tabular-nums;
+  }
+  .dock-bg {
+    background: rgba(255,255,255,0.08);
+    border-radius: 16px;
+    padding: 16px;
+    backdrop-filter: blur(10px);
+  }
+  .finder-bg {
+    background: rgba(255,255,255,0.04);
+    border-radius: 8px;
+    padding: 12px;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="badge">DIRECTION A</div>
+  <h1>Flat Minimal</h1>
+  <p>纯色橙底 · 白色对话气泡 + Sparkle ✦ · 完全扁平无阴影</p>
+</div>
+
+<div class="showcase">
+
+  <div class="icon-item">
+    <div class="dock-bg">
+      <svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+        <path d="M114 0L398 0C461 0 512 51 512 114L512 398C512 461 461 512 398 512L114 512C51 512 0 461 0 398L0 114C0 51 51 0 114 0Z" fill="#D98C00"/>
+        <path d="M130 140h252c22 0 40 18 40 40v120c0 22-18 40-40 40H220l-60 50v-50h-30c-22 0-40-18-40-40V180c0-22 18-40 40-40z" fill="#fff"/>
+        <path d="M256 170l8.5 25.5L290 204l-25.5 8.5L256 238l-8.5-25.5L222 204l25.5-8.5z" fill="#D98C00"/>
+        <path d="M310 250l5 15 15 5-15 5-5 15-5-15-15-5 15-5z" fill="#D98C00"/>
+      </svg>
+    </div>
+    <span class="icon-label">512 × 512</span>
+  </div>
+
+  <div class="icon-item">
+    <div class="dock-bg">
+      <svg width="256" height="256" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+        <path d="M114 0L398 0C461 0 512 51 512 114L512 398C512 461 461 512 398 512L114 512C51 512 0 461 0 398L0 114C0 51 51 0 114 0Z" fill="#D98C00"/>
+        <path d="M130 140h252c22 0 40 18 40 40v120c0 22-18 40-40 40H220l-60 50v-50h-30c-22 0-40-18-40-40V180c0-22 18-40 40-40z" fill="#fff"/>
+        <path d="M256 170l8.5 25.5L290 204l-25.5 8.5L256 238l-8.5-25.5L222 204l25.5-8.5z" fill="#D98C00"/>
+        <path d="M310 250l5 15 15 5-15 5-5 15-5-15-15-5 15-5z" fill="#D98C00"/>
+      </svg>
+    </div>
+    <span class="icon-label">256 × 256</span>
+  </div>
+
+  <div class="icon-item">
+    <div class="dock-bg">
+      <svg width="128" height="128" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+        <path d="M114 0L398 0C461 0 512 51 512 114L512 398C512 461 461 512 398 512L114 512C51 512 0 461 0 398L0 114C0 51 51 0 114 0Z" fill="#D98C00"/>
+        <path d="M130 140h252c22 0 40 18 40 40v120c0 22-18 40-40 40H220l-60 50v-50h-30c-22 0-40-18-40-40V180c0-22 18-40 40-40z" fill="#fff"/>
+        <path d="M256 170l8.5 25.5L290 204l-25.5 8.5L256 238l-8.5-25.5L222 204l25.5-8.5z" fill="#D98C00"/>
+        <path d="M310 250l5 15 15 5-15 5-5 15-5-15-15-5 15-5z" fill="#D98C00"/>
+      </svg>
+    </div>
+    <span class="icon-label">128 × 128</span>
+  </div>
+
+  <div class="icon-item">
+    <div class="finder-bg">
+      <svg width="64" height="64" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+        <path d="M114 0L398 0C461 0 512 51 512 114L512 398C512 461 461 512 398 512L114 512C51 512 0 461 0 398L0 114C0 51 51 0 114 0Z" fill="#D98C00"/>
+        <path d="M130 140h252c22 0 40 18 40 40v120c0 22-18 40-40 40H220l-60 50v-50h-30c-22 0-40-18-40-40V180c0-22 18-40 40-40z" fill="#fff"/>
+        <path d="M256 170l8.5 25.5L290 204l-25.5 8.5L256 238l-8.5-25.5L222 204l25.5-8.5z" fill="#D98C00"/>
+        <path d="M310 250l5 15 15 5-15 5-5 15-5-15-15-5 15-5z" fill="#D98C00"/>
+      </svg>
+    </div>
+    <span class="icon-label">64 × 64</span>
+  </div>
+
+  <div class="icon-item">
+    <div class="finder-bg">
+      <svg width="32" height="32" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+        <path d="M114 0L398 0C461 0 512 51 512 114L512 398C512 461 461 512 398 512L114 512C51 512 0 461 0 398L0 114C0 51 51 0 114 0Z" fill="#D98C00"/>
+        <path d="M130 140h252c22 0 40 18 40 40v120c0 22-18 40-40 40H220l-60 50v-50h-30c-22 0-40-18-40-40V180c0-22 18-40 40-40z" fill="#fff"/>
+        <path d="M256 170l8.5 25.5L290 204l-25.5 8.5L256 238l-8.5-25.5L222 204l25.5-8.5z" fill="#D98C00"/>
+        <path d="M310 250l5 15 15 5-15 5-5 15-5-15-15-5 15-5z" fill="#D98C00"/>
+      </svg>
+    </div>
+    <span class="icon-label">32 × 32</span>
+  </div>
+
+  <div class="icon-item">
+    <div class="finder-bg">
+      <svg width="16" height="16" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+        <path d="M114 0L398 0C461 0 512 51 512 114L512 398C512 461 461 512 398 512L114 512C51 512 0 461 0 398L0 114C0 51 51 0 114 0Z" fill="#D98C00"/>
+        <path d="M130 140h252c22 0 40 18 40 40v120c0 22-18 40-40 40H220l-60 50v-50h-30c-22 0-40-18-40-40V180c0-22 18-40 40-40z" fill="#fff"/>
+        <path d="M256 170l8.5 25.5L290 204l-25.5 8.5L256 238l-8.5-25.5L222 204l25.5-8.5z" fill="#D98C00"/>
+        <path d="M310 250l5 15 15 5-15 5-5 15-5-15-15-5 15-5z" fill="#D98C00"/>
+      </svg>
+    </div>
+    <span class="icon-label">16 × 16</span>
+  </div>
+
+</div>
+
+</body>
+</html>
