@@ -15,6 +15,10 @@
 		CC0100062D00000100000001 /* DetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200062D00000100000001 /* DetailView.swift */; };
 		CC0100072D00000100000001 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200072D00000100000001 /* SettingsView.swift */; };
 		CC0100082D00000100000001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CC0200082D00000100000001 /* Assets.xcassets */; };
+		CC0100102D00000100000001 /* AgentScannerProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200102D00000100000001 /* AgentScannerProtocol.swift */; };
+		CC0100112D00000100000001 /* ClaudeCodeScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200112D00000100000001 /* ClaudeCodeScanner.swift */; };
+		CC0100122D00000100000001 /* CodexScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200122D00000100000001 /* CodexScanner.swift */; };
+		CC0100132D00000100000001 /* AgentScanService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200132D00000100000001 /* AgentScanService.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -28,6 +32,10 @@
 		CC0200072D00000100000001 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		CC0200082D00000100000001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		CC0200092D00000100000001 /* ConversationClean.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ConversationClean.entitlements; sourceTree = "<group>"; };
+		CC0200102D00000100000001 /* AgentScannerProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentScannerProtocol.swift; sourceTree = "<group>"; };
+		CC0200112D00000100000001 /* ClaudeCodeScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeCodeScanner.swift; sourceTree = "<group>"; };
+		CC0200122D00000100000001 /* CodexScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexScanner.swift; sourceTree = "<group>"; };
+		CC0200132D00000100000001 /* AgentScanService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentScanService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -57,6 +65,7 @@
 				CC0400032D00000100000001 /* Models */,
 				CC0400042D00000100000001 /* ViewModels */,
 				CC0400052D00000100000001 /* Views */,
+				CC0400072D00000100000001 /* Services */,
 				CC0200082D00000100000001 /* Assets.xcassets */,
 				CC0200092D00000100000001 /* ConversationClean.entitlements */,
 			);
@@ -87,6 +96,17 @@
 				CC0200072D00000100000001 /* SettingsView.swift */,
 			);
 			path = Views;
+			sourceTree = "<group>";
+		};
+		CC0400072D00000100000001 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				CC0200102D00000100000001 /* AgentScannerProtocol.swift */,
+				CC0200112D00000100000001 /* ClaudeCodeScanner.swift */,
+				CC0200122D00000100000001 /* CodexScanner.swift */,
+				CC0200132D00000100000001 /* AgentScanService.swift */,
+			);
+			path = Services;
 			sourceTree = "<group>";
 		};
 		CC0400062D00000100000001 /* Products */ = {
@@ -173,6 +193,10 @@
 				CC0100052D00000100000001 /* SidebarView.swift in Sources */,
 				CC0100062D00000100000001 /* DetailView.swift in Sources */,
 				CC0100072D00000100000001 /* SettingsView.swift in Sources */,
+				CC0100102D00000100000001 /* AgentScannerProtocol.swift in Sources */,
+				CC0100112D00000100000001 /* ClaudeCodeScanner.swift in Sources */,
+				CC0100122D00000100000001 /* CodexScanner.swift in Sources */,
+				CC0100132D00000100000001 /* AgentScanService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

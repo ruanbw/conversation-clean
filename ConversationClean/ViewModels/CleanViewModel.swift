@@ -1,5 +1,11 @@
 import Foundation
 import Combine
+import AppKit
+
+enum CleanTarget {
+    case selected
+    case allInCurrentCategory
+}
 
 @MainActor
 class CleanViewModel: ObservableObject {
@@ -10,9 +16,16 @@ class CleanViewModel: ObservableObject {
     @Published var isCleaning: Bool = false
     @Published var lastCleanedBytes: Int64 = 0
     @Published var showCleanSuccessAlert: Bool = false
+    @Published var showCleanConfirmAlert: Bool = false
+    @Published var cleanTarget: CleanTarget = .selected
+    @Published var agentInfos: [AgentInfo] = []
+
+    private let scanService = AgentScanService.shared
 
     init() {
-        loadSampleData()
+        Task {
+            await scanConversations()
+        }
     }
 
     var filteredConversations: [ConversationItem] {
@@ -20,7 +33,9 @@ class CleanViewModel: ObservableObject {
             let matchesCategory = (selectedCategory == .all || item.category == selectedCategory)
             let matchesSearch = searchText.isEmpty ||
                 item.title.localizedCaseInsensitiveContains(searchText) ||
-                item.snippet.localizedCaseInsensitiveContains(searchText)
+                item.snippet.localizedCaseInsensitiveContains(searchText) ||
+                (item.projectPath?.localizedCaseInsensitiveContains(searchText) ?? false) ||
+                item.sessionId.localizedCaseInsensitiveContains(searchText)
             return matchesCategory && matchesSearch
         }
     }
@@ -37,6 +52,10 @@ class CleanViewModel: ObservableObject {
         selectedItems.reduce(0) { $0 + $1.sizeInBytes }
     }
 
+    var currentCategorySize: Int64 {
+        filteredConversations.reduce(0) { $0 + $1.sizeInBytes }
+    }
+
     func selectAll(_ select: Bool) {
         let currentFilteredIds = Set(filteredConversations.map { $0.id })
         for index in conversations.indices {
@@ -47,79 +66,72 @@ class CleanViewModel: ObservableObject {
     }
 
     func scanConversations() async {
+        guard !isScanning else { return }
         isScanning = true
-        // 模拟扫描耗时
-        try? await Task.sleep(nanoseconds: 800_000_000)
-        loadSampleData()
+        let scanned = await scanService.scanAll()
+        conversations = scanned
+        agentInfos = scanService.getAgentInfos(from: scanned)
         isScanning = false
     }
 
-    func cleanSelected() async {
-        let itemsToDelete = selectedItems
-        guard !itemsToDelete.isEmpty else { return }
+    func requestCleanSelected() {
+        guard !selectedItems.isEmpty else { return }
+        cleanTarget = .selected
+        showCleanConfirmAlert = true
+    }
 
+    func requestCleanAll() {
+        guard !filteredConversations.isEmpty else { return }
+        cleanTarget = .allInCurrentCategory
+        showCleanConfirmAlert = true
+    }
+
+    func executeClean() async {
+        guard !isCleaning else { return }
         isCleaning = true
-        try? await Task.sleep(nanoseconds: 600_000_000)
 
-        let cleaned = itemsToDelete.reduce(0) { $0 + $1.sizeInBytes }
+        let itemsToDelete: [ConversationItem]
+        switch cleanTarget {
+        case .selected:
+            itemsToDelete = selectedItems
+        case .allInCurrentCategory:
+            itemsToDelete = filteredConversations
+        }
+
+        guard !itemsToDelete.isEmpty else {
+            isCleaning = false
+            return
+        }
+
+        let freedBytes = await scanService.delete(items: itemsToDelete)
         let idsToDelete = Set(itemsToDelete.map { $0.id })
         conversations.removeAll { idsToDelete.contains($0.id) }
+        agentInfos = scanService.getAgentInfos(from: conversations)
 
-        lastCleanedBytes = cleaned
+        lastCleanedBytes = freedBytes > 0 ? freedBytes : itemsToDelete.reduce(0) { $0 + $1.sizeInBytes }
         isCleaning = false
         showCleanSuccessAlert = true
     }
 
-    private func loadSampleData() {
-        let calendar = Calendar.current
-        let now = Date()
+    func deleteSingle(item: ConversationItem) async {
+        let freedBytes = await scanService.delete(items: [item])
+        conversations.removeAll { $0.id == item.id }
+        agentInfos = scanService.getAgentInfos(from: conversations)
+        lastCleanedBytes = freedBytes > 0 ? freedBytes : item.sizeInBytes
+        showCleanSuccessAlert = true
+    }
 
-        conversations = [
-            ConversationItem(
-                id: UUID(),
-                title: "SwiftUI macOS 架构设计探讨",
-                category: .claude,
-                messageCount: 42,
-                sizeInBytes: 1024 * 340,
-                updatedAt: calendar.date(byAdding: .hour, value: -2, to: now) ?? now,
-                snippet: "关于如何组织 View、ViewModel 以及状态管理的深入讨论..."
-            ),
-            ConversationItem(
-                id: UUID(),
-                title: "Xcode 工程自动生成脚本排错",
-                category: .chatGPT,
-                messageCount: 18,
-                sizeInBytes: 1024 * 180,
-                updatedAt: calendar.date(byAdding: .day, value: -1, to: now) ?? now,
-                snippet: "分析 project.pbxproj 的各个 UUID 与 buildConfiguration..."
-            ),
-            ConversationItem(
-                id: UUID(),
-                title: "Gemini 2.5 Pro 多模态能力评测",
-                category: .gemini,
-                messageCount: 56,
-                sizeInBytes: 1024 * 720,
-                updatedAt: calendar.date(byAdding: .day, value: -3, to: now) ?? now,
-                snippet: "对长上下文以及图像识别 benchmark 进行统计对比..."
-            ),
-            ConversationItem(
-                id: UUID(),
-                title: "Cursor 全局快捷键与工作流配置",
-                category: .cursor,
-                messageCount: 25,
-                sizeInBytes: 1024 * 210,
-                updatedAt: calendar.date(byAdding: .day, value: -5, to: now) ?? now,
-                snippet: "整理常用的提示词模版和键盘快捷键绑定..."
-            ),
-            ConversationItem(
-                id: UUID(),
-                title: "本地临时历史日志归档",
-                category: .other,
-                messageCount: 88,
-                sizeInBytes: 1024 * 1024 * 4,
-                updatedAt: calendar.date(byAdding: .day, value: -14, to: now) ?? now,
-                snippet: "已过期的旧会话本地缓存与草稿文件，建议定期清理释放空间。"
-            )
-        ]
+    func revealInFinder(item: ConversationItem) {
+        if let firstPath = item.associatedPaths.first, FileManager.default.fileExists(atPath: firstPath) {
+            NSWorkspace.shared.selectFile(firstPath, inFileViewerRootedAtPath: "")
+        } else if let projectPath = item.projectPath, FileManager.default.fileExists(atPath: projectPath) {
+            NSWorkspace.shared.selectFile(projectPath, inFileViewerRootedAtPath: "")
+        }
+    }
+
+    func copyToClipboard(text: String) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
     }
 }
