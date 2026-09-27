@@ -1,0 +1,39 @@
+appId: com.conversationclean.app
+productName: ConversationClean
+directories:
+  buildResources: build
+  output: release
+files:
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!scripts/*'
+  - '!docs/*'
+  - '!design-demos/*'
+  - '!electron.vite.config.{js,ts,mjs,cjs}'
+  - '!vitest.config.{js,ts,mjs,cjs}'
+  - '!{.eslintrc,.eslintignore,.prettierrc,.prettierignore,.editorconfig,.gitignore,.npmrc}'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+asar: true
+mac:
+  category: public.app-category.utilities
+  target:
+    - target: dmg
+      arch:
+        - arm64
+        - x64
+  darkModeSupport: true
+  # 未签名构建：本地开发用，CI 出正式包时补 notarization 配置。
+  identity: null
+dmg:
+  artifactName: ${productName}-${version}-${arch}.${ext}
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+linux:
+  target:
+    - target: AppImage
+      arch:
+        - x64
+npmRebuild: false

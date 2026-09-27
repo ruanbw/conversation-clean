@@ -1,0 +1,560 @@
+/**
+ * 清理前的二次确认弹层。
+ *
+ * 视觉基线 `design-demos/ui-a-precision.html` + `docs/prototype.html` 的
+ * `#scrim > .sheet`（.sheet-h / .sheet-hero / .sheet-b / .sheet-f）
+ * 与 `renderEstimate()` 生成的四个内容块，结构与配色逐条照抄
+ * Swift 版 `Views/CleanConfirmSheet.swift`。
+ *
+ * 铁律（见 docs/porting-guide.md §3.1）：
+ * · 颜色 / 间距 / 字号一律 `var(--token)`，本文件里没有裸 hex。
+ * · 只有**结构性尺寸**（条高 9/14/8/5、面板宽 520、读数列宽 38/56/96）
+ *   用了裸 px —— tokens.css 里没有这些档位，Swift 版也是写死的常量，
+ *   照抄比编一个 token 更接近基准。
+ * · 字号也**不**用 `calc()` 拼档位：26px 主读数、9/10px 徽标分别对应
+ *   `--text-hero-readout` / `--text-badge-small` / `--text-badge-tiny`。
+ */
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-sheet);
+  display: grid;
+  place-items: center;
+  padding: var(--space-xxl);
+  /* 遮罩底色：fg 34% —— tokens 没有单独的 scrim 档，用 t1 现算。 */
+  background: color-mix(in srgb, var(--t1) 34%, transparent);
+  backdrop-filter: blur(2px);
+}
+
+.panel {
+  /* 弹层左右 22pt：tokens 的 20 + 2，用 calc 表达，不落裸值。 */
+  --sheet-pad: calc(var(--space-xxl) + var(--space-xxs));
+
+  display: flex;
+  flex-direction: column;
+  width: min(520px, 100%);
+  max-height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  border: var(--space-hair) solid var(--line);
+  border-radius: var(--radius-window);
+  box-shadow: 0 24px 64px -20px color-mix(in srgb, var(--t1) 46%, transparent);
+}
+
+.panel:focus {
+  outline: none;
+}
+
+/* ---- ① 头部（.sheet-h） ---- */
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-l);
+  padding: var(--space-xl) var(--sheet-pad) 0;
+}
+
+.warn {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  border-radius: 50%;
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: var(--text-hero);
+  line-height: 1;
+}
+
+.headerTitle {
+  margin: 0;
+  font-size: var(--text-card-title);
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.015em;
+  color: var(--t1);
+}
+
+/* ---- ② 预计释放（.sheet-hero） ----
+   刻意留在滚动区之外：清理目标再多也不该把 headline 滚没。 */
+
+.heroCard {
+  margin: var(--space-l) var(--sheet-pad) 0;
+  padding: var(--space-ll);
+  background: var(--surface);
+  border: var(--space-hair) solid var(--line);
+  border-radius: var(--radius-card);
+}
+
+.heroLabel {
+  font-size: var(--text-section-head);
+  font-weight: var(--weight-medium);
+  letter-spacing: 0.11em;
+  color: var(--t3);
+}
+
+.heroFigure {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-xs);
+  margin-top: var(--space-s);
+}
+
+/* Swift 版是 `Theme.Typo.num(26, .semibold)`，对应 `--text-hero-readout`。 */
+.heroValue {
+  font-size: var(--text-hero-readout);
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.03em;
+  line-height: 1.06;
+  color: var(--t1);
+}
+
+.heroUnit {
+  font-size: var(--text-size-num-strong);
+  font-weight: var(--weight-medium);
+  color: var(--t2);
+}
+
+.heroEmpty {
+  color: var(--t3);
+}
+
+.heroCaption {
+  margin-top: var(--space-m);
+  font-size: var(--text-row-sub);
+  line-height: 1.5;
+  color: var(--t2);
+}
+
+/* 说明句里的数字：半粗 + 表格数字 + t1 前景。
+   Swift 用 `base.monospacedDigit().weight(.semibold)`，不是等宽设计字体。 */
+.fig {
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+  color: var(--t1);
+}
+
+/* ---- ③ 滚动区（.sheet-b） ---- */
+
+.scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* 原型 `.sheet-b{max-height:min(58vh,520px)}`；内容不足一屏时顶对齐。
+     18px = 原型 `.sheet-b{padding-bottom:18px}`。 */
+  max-height: min(58vh, 520px);
+  padding-bottom: calc(var(--space-xl) + var(--space-xxs));
+}
+
+/* ---- 通用分区（.est-sec） ----
+   顶线走满幅，内容再往里缩 22pt —— 与 Swift 的「hairline 在外、内边距在内」同构。 */
+
+.section {
+  margin-top: calc(var(--space-xl) + var(--space-xxs));
+  padding: var(--space-xl) var(--sheet-pad) 0;
+  border-top: var(--space-hair) solid var(--line);
+}
+
+.sectionHead {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-m);
+  margin-bottom: var(--space-l);
+}
+
+.sectionLabel {
+  font-size: var(--text-section-head);
+  font-weight: var(--weight-medium);
+  letter-spacing: 0.11em;
+  color: var(--t3);
+}
+
+.sectionPath {
+  font-family: var(--font-mono);
+  font-size: var(--text-row-sub);
+  color: var(--t2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sectionBadge {
+  margin-left: auto;
+  padding: var(--space-xxs) var(--space-s);
+  font-family: var(--font-mono);
+  font-size: var(--text-badge-tiny);
+  color: var(--t2);
+  background: var(--sunken);
+  border-radius: var(--radius-chip);
+}
+
+/* ---- ④ 收益条（.eb） ---- */
+
+.ebRow + .ebRow {
+  margin-top: var(--space-l);
+}
+
+.ebTop {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-l);
+}
+
+.ebLabel {
+  font-size: var(--text-nav-item);
+  color: var(--t2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ebValue {
+  margin-left: auto;
+  font-size: var(--text-size-num);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+  color: var(--t1);
+  white-space: nowrap;
+}
+
+.ebTrack {
+  height: 9px;
+  margin-top: var(--space-s);
+  border-radius: var(--radius-chip-small);
+  /* 靛蓝 11% 轨道：tokens 只给了 6% 的 --accent-soft，这里按 Swift 原值现算。 */
+  background: color-mix(in srgb, var(--accent) 11%, transparent);
+  overflow: hidden;
+}
+
+/* 靛蓝渐变填充。原型是 `var(--fg)` 黑灰 —— 深色下变白条、浅色下像禁用态。 */
+.ebFill {
+  height: 100%;
+  min-width: 1.5px;
+  background: linear-gradient(90deg, var(--accent-2), var(--accent));
+  border-radius: var(--radius-chip-small);
+}
+
+.ebCaption {
+  margin-top: var(--space-s);
+  font-size: var(--text-row-sub);
+  color: var(--t3);
+}
+
+/* ---- ⑤ 卷容量双条（.cap） ---- */
+
+.capRow {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) 96px;
+  gap: var(--space-m);
+  align-items: center;
+}
+
+.capRow + .capRow {
+  margin-top: calc(var(--space-s) + var(--space-hair));
+}
+
+.capLabel {
+  font-size: var(--text-row-title);
+  color: var(--t2);
+  white-space: nowrap;
+}
+
+.capAfter .capLabel {
+  font-weight: var(--weight-semibold);
+  color: var(--t1);
+}
+
+.capTrack {
+  display: flex;
+  height: 14px;
+  border-radius: var(--radius-micro);
+  background: var(--sunken);
+  border: var(--space-hair) solid var(--line);
+  overflow: hidden;
+}
+
+.capUsed {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-2), var(--accent));
+}
+
+/* 「清理后」那条多出来的一刀 = 这次能拿回多少，全弹唯一该用语义色的地方。 */
+.capGain {
+  height: 100%;
+  min-width: 1.5px;
+  background: var(--success);
+}
+
+.capReadout {
+  font-size: var(--text-badge-tiny);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.capReadoutMuted {
+  font-family: var(--font-mono);
+  color: var(--t3);
+}
+
+/* ---- ⑥ 量级徽标 + 可用空间变化（.cap-d） ---- */
+
+.capDetail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--space-m);
+  margin-top: var(--space-ms);
+  padding-top: var(--space-ms);
+  border-top: var(--space-hair) solid var(--line);
+  font-size: var(--text-row-sub);
+  line-height: 1.6;
+  color: var(--t2);
+}
+
+/* Swift 版的 `.lvl` 是 mono(9.5, .medium)，落在 `--text-badge-small` 这一档。 */
+.lvl {
+  flex: 0 0 auto;
+  padding: 1.5px var(--space-s);
+  border-radius: 999px;
+  font-size: var(--text-badge-small);
+  font-weight: var(--weight-medium);
+  letter-spacing: 0.02em;
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 14%, transparent);
+}
+
+/* Swift 版是 `NSColor.systemOrange`；token 化后的 `--warning` 是同一语义的档位
+   （深色下比 systemOrange 更亮，不会发糊）。「量级有限」是提醒不是错误，
+   所以走警示橙而不是 `--danger`。 */
+.lvlWarn {
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+
+/* ---- ⑦ 释放说明（.est-note） ---- */
+
+.note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-s);
+  margin-top: var(--space-ms);
+  padding: var(--space-ms);
+  border-radius: var(--radius-control);
+  /* 免责说明用 sunken 而不是强调色：靛蓝会被读成「重点提示」。 */
+  background: var(--sunken);
+  font-size: var(--text-row-sub);
+  line-height: 1.6;
+  color: var(--t3);
+}
+
+.noteIcon {
+  flex: 0 0 auto;
+  margin-top: var(--space-xxs);
+  color: var(--t3);
+}
+
+/* ---- ⑧ 空间构成（.stack + .cr） ---- */
+
+.stack {
+  display: flex;
+  gap: var(--space-xxs);
+  height: 8px;
+  margin-bottom: var(--space-l);
+  border-radius: 999px;
+  background: var(--sunken);
+  overflow: hidden;
+}
+
+.stackSeg {
+  height: 100%;
+  flex: 0 0 auto;
+  min-width: 1px;
+  border-radius: var(--radius-fine);
+}
+
+.stackCaption {
+  margin-bottom: var(--space-s);
+  font-size: var(--text-row-sub);
+  color: var(--t3);
+}
+
+.crRow {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 168px) minmax(0, 1fr) 38px 56px;
+  gap: var(--space-s);
+  align-items: center;
+  height: 22px;
+}
+
+.crSwatch {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-chip-small);
+}
+
+.crNameCell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  min-width: 0;
+}
+
+.crName {
+  font-size: var(--text-nav-item);
+  color: var(--t1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.crEstimated .crName {
+  color: var(--t2);
+}
+
+.crTag {
+  flex: 0 0 auto;
+  padding: var(--space-hair) var(--space-s);
+  font-family: var(--font-mono);
+  font-size: var(--text-badge-small);
+  color: var(--t3);
+  background: var(--sunken);
+  border-radius: 999px;
+}
+
+.crBar {
+  height: 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 11%, transparent);
+  overflow: hidden;
+}
+
+.crBarFill {
+  height: 100%;
+  min-width: 1.5px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent-2), var(--accent));
+}
+
+/* 斜纹 = 「这段不是实测」的唯一记号。颜色取该段自己的 distColor（currentColor）。 */
+.crBarEst {
+  height: 100%;
+  min-width: 1.5px;
+  border-radius: 999px;
+  background-image: repeating-linear-gradient(
+    135deg,
+    currentcolor 0 var(--space-xxs),
+    transparent var(--space-xxs) var(--space-xs)
+  );
+}
+
+/* 堆叠条上的估算段：斜纹用面板底色，靠透出下层表现「空」。 */
+.stackEst {
+  background-image: repeating-linear-gradient(
+    135deg,
+    var(--bg) 0 var(--space-xxs),
+    transparent var(--space-xxs) var(--space-xs)
+  );
+}
+
+.crPct {
+  font-size: var(--text-nav-count);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--t2);
+  white-space: nowrap;
+}
+
+.crSize {
+  font-size: var(--text-nav-count);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--t3);
+  white-space: nowrap;
+}
+
+/* ---- ⑨ 提示块（.sheet-b .tip） ---- */
+
+.tipWrap {
+  margin-top: var(--space-ms);
+  padding: 0 var(--sheet-pad);
+}
+
+.tip {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-s);
+  padding: calc(var(--space-m) + var(--space-hair)) var(--space-ms);
+  border-radius: var(--radius-control);
+  background: var(--accent-soft);
+  border: var(--space-hair) solid var(--accent-edge);
+  font-size: var(--text-row-sub);
+  line-height: 1.5;
+  color: var(--t2);
+}
+
+.tipIcon {
+  flex: 0 0 auto;
+  margin-top: var(--space-xxs);
+  color: var(--accent);
+}
+
+/* ---- ⑩ 页脚（.sheet-f） ---- */
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-m);
+  padding: var(--space-l) var(--sheet-pad);
+  border-top: var(--space-hair) solid var(--line);
+  background: var(--bg);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  height: var(--size-button);
+  padding: 0 var(--space-ms);
+  border: var(--space-hair) solid transparent;
+  border-radius: var(--radius-control);
+  font-size: var(--text-nav-item);
+  font-weight: var(--weight-medium);
+  color: var(--t1);
+  white-space: nowrap;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    opacity var(--dur-fast) var(--ease-out);
+}
+
+.btnGhost {
+  background: var(--surface);
+  border-color: var(--line-2);
+}
+
+.btnGhost:hover:not(:disabled) {
+  background: var(--bg);
+}
+
+.btnDanger {
+  padding: 0 var(--space-xl);
+  /* 红底上的字取 --bg：浅色下是近白的字配深红，深色下是深字配亮红，
+     两边都落在色阶的另一端，不用为「按钮上的白」单开一个 token。 */
+  color: var(--bg);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--danger) 86%, var(--surface)),
+    var(--danger)
+  );
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--danger) 30%, transparent);
+}
+
+.btnDanger:hover:not(:disabled) {
+  opacity: 0.88;
+}
+
+.btn:disabled {
+  /* 禁用态走 opacity 而不是系统 tint —— 粉红色的禁用按钮是这个项目修掉的硬伤。 */
+  opacity: 0.4;
+}

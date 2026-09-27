@@ -1,6 +1,6 @@
 # ConversationClean (macOS)
 
-基于 Swift 6 + SwiftUI 构建的 macOS 原生应用，用于扫描并清理本机各类 AI 编码 Agent / IDE 遗留的会话数据。
+基于 **Electron 44 + React 19 + TypeScript 5.9** 构建的 macOS 应用，用于扫描并清理本机各类 AI 编码 Agent / IDE 遗留的会话数据。
 
 <img src="docs/app-screenshot.png" alt="ConversationClean 主界面：左侧为 Agent 分类与工具，中间为可搜索、可排序的会话列表，右侧为选中会话的元数据" width="900">
 
@@ -10,18 +10,53 @@
 
 ## 🌟 项目特性
 
-- **15 款 Agent 全覆盖**：统一 `AgentScanner` 协议接入 CLI Agent（Claude Code、Codex、Pi Agent、Cline、Roo Code、Continue.dev、OpenViking、Aider、Zed AI、OpenHands）与 VS Code 系 IDE（VS Code Chat、Cursor、Windsurf、Trae、Antigravity）。
-- **双层索引原子清理**：对同时维护「会话文件 + SQLite 索引」的 Agent（VS Code 系 `state.vscdb`、Pi Agent context-mode），删除会话时同步清理索引，避免幽灵会话残留。
-- **全自绘 UI**：隐藏标题栏 + 手搓三栏（`ContentView`），红黄绿浮在自有背景上。**零系统 UI 控件**——列表、勾选框、按钮、分段器、搜索框、空态、开关全部手绘（`DrawnControls.swift`），只保留 `Button` / `TextField` 作为交互原语并在系统剥掉外观。视觉 100% 可控，不受 macOS 版本控件改版影响。
-- **设计系统 token 化**：色彩、间距、圆角、排版集中在 `Theme.swift`。8pt baseline grid、圆角 6/8/10pt、正文 13pt（macOS 真实值，非 iOS 的 17pt），视图里不允许出现颜色与字号字面量。
-- **三栏表面梯**：侧栏 / 列表 / 详情栏分属四级不同底色，不再是三块同色白板拼贴。
-- **可拖拽三栏**：两条分隔条可拖动并记忆列宽（`@AppStorage`），上限随窗口宽度动态收窄，缩窗口不会把三栏挤变形。
-- **键盘可达**：⌘R 扫描、⌘Delete 清理、⌘F 聚焦搜索、↑↓ 移动选中、Esc 逐级清空（先清搜索词，再清勾选）。自绘列表自己补齐了系统 `List` 自带的键盘导航。
-- **体积优先的信息层级**：清理工具里「多大」比「叫什么」重要，所以体积数字的视觉重量**高于**会话标题。数据可视化用同 hue 的靛蓝明度阶梯（可区分但不成彩虹），深浅色均已配降级值。
-- **清晰的 MVVM 架构**：`Models/` 数据模型、`ViewModels/` 状态管理、`Views/` 界面组件。
-- **并发扫描**：`AgentScanService` 通过 `withTaskGroup` 并发调度全部扫描器。
-- **标准 Xcode 工程**：自带完整的 `ConversationClean.xcodeproj` 与共享构建 Scheme。
-- **App Sandbox**：预置标准 `.entitlements` 权限配置。
+- **15 款 Agent 全覆盖**：统一 `AgentScanner` 协议接入 CLI Agent（Claude Code、Codex、Pi Agent、Cline、Roo Code、Continue、OpenViking、Aider、Zed AI、OpenHands）与 VS Code 系 IDE（Copilot / VS Code Chat、Cursor、Windsurf、Trae、Antigravity）。未安装的 Agent 也照列，只是置灰 —— 装没装是运行时的事，不该写进模型里。
+- **双层索引原子清理**：对同时维护「会话文件 + SQLite 索引」的 Agent（VS Code 系 `state.vscdb`、Copilot `session-store.db`、Pi Agent context-mode、Claude Code `sessions-index.json`），删会话时同步裁剪索引。只删正文、留着索引行，Agent 侧就会留下一批永远查不到的幽灵会话 —— 那比不删还糟。
+- **全自绘 UI**：隐藏标题栏 + 手搓三栏（`App.tsx`），红黄绿浮在自有背景上。列表、勾选框、按钮、分段器、搜索框、空态、开关、图标全部自绘，只保留原生 `<button>` / `<input>` 作交互原语并在 CSS 里剥掉系统外观 —— 换成 `div onClick` 会同时失去键盘可达、焦点环与语义角色，那是拿可用性换一张皮。SF Symbols 在 Electron 里不存在，全部换成 1.6px 描边的自绘 SVG。
+- **设计系统 token 化**：色彩、间距、圆角、排版集中在 `styles/tokens.css`，那里是全应用**唯一**允许出现颜色与字号字面量的地方。8pt baseline grid、正文 13px（macOS 真实值，不是 iOS 的 17px），深浅色用 `light-dark()` 一处切换。
+  - 档位不是随手取的：详情栏大号读数用 **21px 而不是 22px** —— 栏宽更大，同号数字显得小一号；确认弹层 26px，因为弹层更宽、那是整个面板唯一需要抢眼的东西。分布色阶是**同一 hue（250°）的明度阶梯**而不是彩虹：相邻段亮度差 ≥12% 保证可区分，同 hue 保证堆起来是一族颜色而不是一串语义不明的色块。
+- **三栏表面梯 + 可拖拽**：侧栏 / 列表 / 详情栏分属四级不同底色（`--sidebar` / `--bg` / `--surface` / `--sunken`），不再是三块同色白板拼贴。两条分隔条可拖动并记忆列宽，上限随窗口宽度**动态收窄** —— 固定 max 会拼出「窗口 1000px 时列表 760 + 侧栏 420，剩下不够详情栏 minWidth」的挤变形破图。
+- **键盘可达**：⌘R 扫描、⌘Delete 清理、⌘F 聚焦搜索、↑↓ 移动选中、Esc 逐级清空（先清搜索词，再清勾选）。原生 `keyboardShortcut` 在 Electron 里不存在，全部在 `App.tsx` 手写 `keydown`。⌘F 的语义是「请把搜索框拉到焦点」而不是「当前是否聚焦」，所以它是**自增计数**不是 boolean —— 否则用户已在搜索框里时再按 ⌘F，视图收不到通知，光标也不会重新全选。
+- **体积优先的信息层级**：清理工具里「多大」比「叫什么」重要，所以体积数字的视觉重量**高于**会话标题。数字列一律 `tabular-nums`，否则右对齐时会跳。
+- **1024 进制**：不用 `ByteCountFormatter`（它按 1000 进制，同一条 2,411,724 字节会打成 2.4 MB，而 `du` / `df` / `ls -h` 显示 2.3 MB）。这个应用通篇在讲磁盘占用，用的必须是 1024。
+- **真实数据，不演数字**：卷容量读 `fs.statfsSync` 真值 + 沿路径上溯找挂载点 + `diskutil` 取卷名；读不到就整块返回 `null`、UI 整节不渲染。宁可少一节，也不能拿一个写死的演示分母去承诺用户「清理后 91.750% 已用」。
+- **并发扫描，串行删除**：`registry.ts` 用 `Promise.all` 调度 15 个扫描器并逐个 `catch`，一个 Agent 挂掉不能拖垮整次扫描；但删除是串行的 —— 多个扫描器同时删磁盘上同一批目录会互相干扰，收益远小于风险。
+
+---
+
+## 🛠️ 技术栈与架构
+
+**三段进程。** `src/main/` 持有全部 IO（扫描、删除、偏好、卷容量、shell），窗口是 `titleBarStyle: 'hiddenInset'` 的自绘三栏。`src/preload/index.ts` 用 `contextBridge.exposeInMainWorld` 挂 11 个白名单函数 —— 渲染进程拿不到 `ipcRenderer` 本身是刻意的，`ipcRenderer.send('anything:else')` 会是一条提权路径。`src/renderer/` 是 React 19 + `useSyncExternalStore`，零 Node 依赖，`index.html` 里有 `Content-Security-Policy`（禁 `eval` 与远程脚本）。
+
+App Sandbox 的 `.entitlements` 概念在 Electron 下不存在，隔离改由 `contextIsolation: true` + `nodeIntegration: false` + preload 白名单 + CSP 承担。`sandbox: false` 是必需妥协：`electron-vite` 在 `type: module` 下把 preload 编译成 ESM（`index.mjs`），ESM preload 要关掉 sandbox 才能工作，两者必须同时改。
+
+**扫描器协议。** `core/scanner.ts` 的 `AgentScanner` 只有 5 个成员：`category` / `isInstalled` / `storagePath` / `scan()` / `delete()` / `cleanAll()`。三条约定：`scan()` **绝不**修改任何文件，连 mtime 都不许写；`delete()` 返回的「实际释放字节数」必须走 `CleanPrefs.freedBytesBeforeDelete` 扣掉被保留的快照，否则 UI 会报一个比实际大的数；`associatedPaths` 列出这条会话真正占盘的全部路径，删除时逐条删，抛错只发生在「这个 Agent 整个不可用」时 —— 一个坏 JSONL 不该让整个分类清空。`deleteItemsWithPaths()` 收口了「逐条删 + 记账」的公共部分，十几个扫描器只写自己那部分索引清理。
+
+**15 款 Agent 对照。** 侧栏顺序即 `AGENT_CATEGORIES` 的顺序（`all` 打头）。Cline / Roo Code / Continue 是跑在 VS Code 里的扩展，只是按数据形态归到 `cli/` 目录。
+
+| 目录 | 分类（显示名） | 默认数据目录（`~/` 下） | 环境变量 |
+|---|---|---|---|
+| `cli/` | Claude Code | `.claude` | `CLAUDE_HOME` |
+| `cli/` | Codex | `.codex` | `CODEX_HOME` |
+| `cli/` | Pi Agent | `.pi` | `PI_HOME` |
+| `cli/` | Cline | `…/Code/User/globalStorage/saoudrizwan.claude-dev` | `CLINE_HOME` |
+| `cli/` | Roo Code | `…/Code/User/globalStorage/rooveterinaryinc.roo-cline` | `ROO_CODE_HOME` |
+| `cli/` | Continue | `.continue` | `CONTINUE_HOME` |
+| `vscode/` | Copilot / VS Code | `Library/Application Support/Code/User` | `VSCODE_USER_DATA` |
+| `vscode/` | Cursor | `Library/Application Support/Cursor` | `CURSOR_HOME` |
+| `vscode/` | Windsurf | `Library/Application Support/Windsurf` | `WINDSURF_HOME` |
+| `vscode/` | Trae | `Library/Application Support/Trae` | `TRAE_HOME` |
+| `cli/` | Aider | `.aider` | `AIDER_HOME` |
+| `cli/` | OpenViking | `.openviking` | `OPENVIKING_HOME` |
+| `cli/` | Zed AI | `Library/Application Support/Zed` | `ZED_HOME` |
+| `cli/` | OpenHands | `.openhands`（旧版 `.open-devin`） | `OPENHANDS_HOME` |
+| `vscode/` | Antigravity | `.gemini/antigravity` | `ANTIGRAVITY_HOME` |
+
+路径一律 `realpath` 规范化一次：`/var` → `/private/var` 这类别名不解析，侧栏显示的路径会跟 Finder 里点开的不一致，删除时也会出现「文件明明存在却删不掉」。
+
+**SQLite 索引层。** `core/vscdb.ts` 用 **Node 内建的 `node:sqlite`（`DatabaseSync`）**，不是 `better-sqlite3`：后者是原生模块，每次升 Electron 都要按新 ABI 重建；`node:sqlite` 在 Node 22.5+ 与 Electron 44（内嵌 Node 24.21）里都有，装依赖时不用管它。它覆盖 `state.vscdb` 的 10 个索引 key（`chat.ChatSessionStore.index` / `memento/interactive-session%` / `interactive.sessions` / `workbench.panel.chat%` / `agentSessions.{state,model}.cache` / `composer.composerData` / `workbench.panel.aichat…chatdata`）与 Copilot `session-store.db` 的 6 张关系表。三条约定：扫描一律 `readOnly: true`（IDE 可能正持有这个库）；改完索引立刻 `VACUUM`（SQLite 删行不缩文件）；文件不存在或表结构不对一律静默返回 —— 索引清理是清理流程的**补充**而非前置条件，索引坏了不该让文件删除也失败。
+
+**状态中枢。** `src/renderer/src/state/cleanStore.ts` 是全应用唯一的状态来源，对应 Swift 版的 `@MainActor class CleanViewModel`。三条不变量：**不缓存派生数据**（`filteredConversations` / `categoryStats` / `totalSize` 在 selector 里现算，不存在两个状态不同步的中间帧）；**派生值必须返回同一引用**，否则 `useSyncExternalStore` 认为状态一直在变，陷入无限重渲染；**搜索词 120ms 防抖**（与 Swift 版 `debounce(for: .milliseconds(120))` 一致），一次全盘扫描可能有上万条会话，每敲一个键就重算全量过滤会掉帧，但防抖值优先、无防抖值才用即时值，所以「Esc 立刻清空搜索」不会慢半拍。列宽与当前分类记在 `localStorage`；4 个设置开关记在主进程 userData 下的 `preferences.json`，每次读都重新走一遍文件而不是缓存成只读值，否则运行中改开关要重启才生效。
 
 ---
 
@@ -29,111 +64,87 @@
 
 ```text
 conversation-clean/
-├── .gitignore                                  # macOS / Xcode 专用忽略规则
-├── README.md                                   # 项目说明文档
-├── ConversationClean.xcodeproj/                # Xcode 工程与 Scheme 配置
-├── design-demos/                               # UI 设计稿（HTML，可交互）+ 方向定档
-│   ├── ui-a-precision.html                     # ✓ 锁定方向：精密密度（Linear 系）
-│   ├── ui-b-material.html                      # 备选：材质呼吸（Apple HIG 系）
-│   ├── ui-c-volumetric.html                    # 备选：体积优先（DaisyDisk 系）
-│   └── direction-approved.md                   # 三方向初稿记录 + 用户选择原话
-├── scripts/
-│   ├── run_tests.sh                            # 扫描器验证套件：编译 + 运行
-│   └── tests/                                  # 按 Agent 家族拆分的测试用例
-│       ├── TestSupport/
-│       │   ├── TestRunner.swift                # 断言收集、控制台输出、套件汇总
-│       │   ├── TestCase.swift                  # 用例上下文（自动携带测试名）
-│       │   ├── Fixtures.swift                  # 目录 / 文件 / SQLite 夹具构造助手
-│       │   └── TestRegistry.swift              # 用例注册表与 @main 入口
-│       ├── ClaudeCodeTests.swift               # 各 Agent 的 real / mock 用例
-│       ├── CodexTests.swift
-│       ├── DeletionTests.swift                 # 删除与字节统计验证
-│       ├── ClineTests.swift · RooContinueTests.swift
-│       ├── PiAgentTests.swift · PiAgentContextModeTests.swift
-│       ├── UnifiedScanTests.swift              # 多 Agent 并发统一扫描
-│       ├── VSCodeChatTests.swift · CursorTests.swift
-│       ├── WindsurfTraeTests.swift · AntigravityTests.swift
-│       ├── VSCDBIndexSyncTests.swift           # state.vscdb 索引同步
-│       └── OpenVikingTests.swift · AiderTests.swift · ZedTests.swift · OpenHandsTests.swift
-└── ConversationClean/                          # 源代码主目录
-    ├── ConversationCleanApp.swift              # App 启动入口与窗口生命周期
-    ├── ContentView.swift                       # 根视图 (NavigationSplitView)
-    ├── Models/
-    │   └── ConversationItem.swift              # 会话数据模型与枚举
-    ├── ViewModels/
-    │   └── CleanViewModel.swift                # 状态与业务逻辑 ViewModel
-    ├── Views/
-    │   ├── Theme.swift                         # 设计系统 token：色彩/间距/圆角/排版
-    │   ├── DrawnControls.swift                 # 自绘控件库：按钮/勾选框/分段器/搜索框/空态
-    │   ├── SidebarView.swift                   # 侧边栏：分类导航 + 可回收空间体检卡 + 存储路径
-    │   ├── ConversationListView.swift          # 自绘会话列表 + 搜索/排序 + 批量操作栏
-    │   ├── OverviewView.swift                  # 详情栏未选中态：占用大户 Top5 + Agent 分布
-    │   ├── DetailView.swift                    # 详情栏选中态：会话元数据与操作
-    │   ├── CleanConfirmSheet.swift             # 清理前二次确认：收益/分布/容量预测
-    │   ├── SettingsView.swift                  # 偏好设置面板（自绘开关与分组）
-    │   └── AgentIconView.swift                 # 15 款 Agent 品牌标记
-    ├── Core/                                   # 跨扫描器共享基建
-    │   ├── Formatting.swift                    # 1024 进制体积/时间/路径格式化
-    │   ├── AgentScannerProtocol.swift          # 扫描器协议 + FileSizeHelper
-    │   ├── AgentScanService.swift              # 并发调度与聚合
-    │   ├── DateParsing.swift                   # 进程级共享 ISO8601 解析
-    │   ├── SQLite/
-    │   │   └── VSCDBHelper.swift               # state.vscdb 索引读写
-    │   └── FileSystem/
-    │       └── DirectoryCleaner.swift          # 空目录清理
-    ├── Scanners/                               # 按存储形态分层的扫描器
-    │   ├── CLIAgents/                          # 以 JSONL / JSON 会话文件为主
-    │   │   ├── ClaudeCodeScanner.swift · CodexScanner.swift
-    │   │   ├── PiAgentScanner.swift            # 协议实现与预索引
-    │   │   ├── PiAgentScanner+Parsing.swift · +ContextMode.swift · +ACPSessionMap.swift
-    │   │   ├── ClineScanner.swift · RooCodeScanner.swift · ContinueScanner.swift
-    │   │   └── OpenVikingScanner.swift · AiderScanner.swift · ZedScanner.swift · OpenHandsScanner.swift
-    │   └── VSCodeFamily/                       # 共享 state.vscdb 索引形态
-    │       ├── VSCodeChatScanner.swift
-    │       ├── CursorScanner.swift             # 协议实现
-    │       ├── CursorScanner+JSONL.swift · +StateDatabase.swift · +DirectoryScan.swift
-    │       └── WindsurfScanner.swift · TraeScanner.swift · AntigravityScanner.swift
-    ├── Assets.xcassets/                        # 图标与配色资源
-    └── ConversationClean.entitlements          # 沙盒与权限声明
+├── package.json · electron.vite.config.ts · electron-builder.yml · vitest.config.ts
+├── tsconfig.json / .node.json / .web.json     # node 查主进程与 shared，web 查渲染进程与 shared
+├── build/ · design-demos/ · out/               # 图标资源 / UI 设计稿 / 构建产物（release/ 打包时才生成）
+├── docs/                                       # app-screenshot.png · porting-guide.md · migration-notes.md
+├── scripts/                                    # port-status.mjs 移植探针 + run_tests.sh（Swift 基准，原样保留）
+├── src/
+│   ├── shared/      types.ts（16 个分类 / 字形映射 / IPC 契约）· format.ts（1024 进制格式化）
+│   ├── main/
+│   │   ├── index.ts · ipc.ts                  # 窗口（hiddenInset）· 全部 ipcMain.handle
+│   │   ├── core/                              # 跨扫描器共享基建，各带 .test.ts
+│   │   │   └── scanner.ts（协议 + 原语 + 删除标准实现）· vscdb.ts（SQLite 索引层）
+│   │   │       prefs.ts（设置存储 + 快照判定）· fsutil.ts（体积 / 删除 / 空目录回收）
+│   │   │       datetime.ts（ISO 解析）· volume.ts（卷容量）· agentIcons.ts（.app 图标 → dataURL）
+│   │   └── scanners/  registry.ts（注册 / 并发扫描 / 串行删除）
+│   │       ├── cli/                           # 10 款以 JSONL / JSON 会话文件为主
+│   │       │   └── ClaudeCode · Codex · Cline · RooCode（继承 Cline）· Continue
+│   │       │       PiAgent + +Parsing / +ContextMode / +ACPSessionMap
+│   │       │       OpenViking · Aider · Zed · OpenHands .ts
+│   │       └── vscode/                        # 5 款共享 state.vscdb 索引形态
+│   │           └── VSCodeChat · Cursor（+JSONL / +StateDatabase / +DirectoryScan）
+│   │               Windsurf · Trae · Antigravity .ts
+│   ├── preload/     index.ts（window.api 白名单，11 个方法）
+│   ├── renderer/
+│   │   ├── index.html                          # 含 Content-Security-Policy
+│   │   └── src/  main.tsx · App.tsx（三栏外壳 + 全局键盘）· state/cleanStore.ts（状态中枢）
+│   │            styles/tokens.css · global.css
+│   │            components/（DrawnControls / Splitter / AgentGlyph）
+│   │            views/（Sidebar / ConversationList / Detail / Overview / Settings / CleanConfirmSheet）
+│   └── test-support/                           # 夹具工厂：文件系统 + mock state.vscdb
+└── ConversationClean/ + .xcodeproj/            # Swift 源码与工程：只读行为基准，不参与构建
 ```
+
+视图样式一律走 **CSS Modules**（`XxxView.module.css`）：多个文件并行开发时共用全局 class 名必然撞车。`ConversationClean/`（40 个 `.swift`，12,299 行）与 `scripts/tests/*.swift` **原样保留在仓库里**，作为移植的唯一行为基准与对照，不是死代码。删不删是产品决定，不是移植决定。
 
 ---
 
 ## 🚀 快速上手
 
-### 1. 使用 Xcode 打开
-
-直接双击工程文件或在终端执行：
-
 ```bash
-open ConversationClean.xcodeproj
+npm install          # Node >= 22.5（node:sqlite 起始版本）
+npm run dev          # electron-vite dev：起开发服务器并拉起 Electron
+npm run build        # 打包 main / preload / renderer 三段到 out/
+npm run start        # electron-vite preview：跑刚打好的产物
+npm run typecheck    # node + web 两套 tsconfig 都要过
+npm test             # vitest run
+npm run test:watch   # vitest 监听模式
+npm run port:status  # 移植状态探针：还有哪些扫描器 / 视图是占位
+npm run dist         # build + electron-builder --mac --publish never → release/*.dmg
+npm run dist:dir     # 同上但不封装，只出解包目录
 ```
 
-在 Xcode 中选择目标设备为 **My Mac**，按下快捷键 `Cmd + R` 即可运行。
-
-### 2. 命令行编译
-
-```bash
-xcodebuild -scheme ConversationClean -configuration Debug build
-```
-
-### 3. 运行扫描器验证套件
-
-```bash
-./scripts/run_tests.sh
-```
-
-套件会针对每个扫描器执行两类验证：
-
-- **real 用例（READ-ONLY）**：扫描本机真实存在的 Agent 数据目录，仅读取与解析，不修改任何文件。
-- **mock 用例**：在临时目录构造夹具（含 mock `state.vscdb` / SQLite 索引），验证扫描、字节统计与删除后的索引同步。
-
-全部断言通过时退出码为 `0`，否则为 `1` 并列出失败断言。
+`typecheck` 拆成 `typecheck:node`（主进程 / preload / shared）与 `typecheck:web`（渲染进程 / shared），两边都开了 `strict` + `noUnusedLocals` + `noUnusedParameters` + `verbatimModuleSyntax`（所以类型导入必须写 `import type`）。
 
 ---
 
-## 🛠️ 技术要求
+## 🧪 测试
 
-- **macOS**：14.0 (Sonoma) 及以上
-- **Xcode**：15.0+ / 16.0+
-- **Swift**：5.9+ / 6.0+
+Vitest 5，**30 个测试文件 / 548 个用例**，全部串行（`fileParallelism: false` + `pool: 'forks'`）—— 扫描器用例会读本机真实 Agent 目录，并行跑会让 I/O 抖动把断言搞红。测试文件与被测文件同名同目录：
+
+| 层 | 文件 | 用例 |
+|---|---|---|
+| 共享基建 | `core/scanner` · `core/vscdb` · `core/prefs` · `core/datetime` · `shared/format` | 63 / 33 / 26 / 21 / 30 |
+| CLI 扫描器 | Aider · ClaudeCode · Cline · Codex · Continue · OpenHands · OpenViking · PiAgent(×4) · RooCode · Zed | 16 / 17 / 17 / 15 / 15 / 17 / 14 / 5+16+20 / 15 / 23 |
+| VS Code 系 | Antigravity · Cursor · Trae · VSCodeChat · Windsurf | 18 / 20 / 16 / 15 / 15 |
+| 渲染进程 | DrawnControls · Splitter · SidebarView · ConversationListView · DetailView · OverviewView · SettingsView · CleanConfirmSheet | 16 / 8 / 10 / 23 / 8 / 8 / 10 / 18 |
+
+环境默认 `node`，UI 用例在文件顶部用 `// @vitest-environment jsdom` 逐个切换；夹具工厂在 `src/test-support/`。跑真实目录的用例有两个坑，改测试前先看：
+
+1. **临时目录必须 `realpath`。** macOS 的 `tmpdir()` 给的是 `/var/folders/...`，真身是 `/private/var/folders/...`；不规范化的话扫描器返回的路径和断言里的对不上，整条 `delete()` 链路会随机红。偏好同理要用 `CONVERSATION_CLEAN_DATA_DIR` 指到临时目录，否则跑一次测试就在用户真实 HOME 里留一个文件。
+2. **真实目录用例是只读的。** 每个扫描器都有一组「扫本机真实目录不抛错且不修改任何文件」的用例，目录不存在时用 `it.skipIf` / `it.skip` 跳过；它们会先给目录树打一份 `(路径, 体积, mtime)` 签名，扫完再比一次，签名变了就是回归。**必须**显式造出被测目录（比如 Windsurf 在注入目录下找不到 `.codeium/windsurf` 时路径会回落到真实的 `~/.codeium/windsurf`），否则会去读用户真实数据。
+
+想看收集到多少用例而不执行：`npx vitest list`。
+
+---
+
+## 🔀 移植说明
+
+这一版从 **Swift 6 + SwiftUI（12,299 行）整体移植**到 Electron 44 + React 19 + TypeScript：非测试代码 18,933 行，测试 12,181 行。完整清单见 **[`docs/migration-notes.md`](docs/migration-notes.md)** —— 逐条记了「哪里不是照抄、为什么」，以及哪些 Swift 缺陷被刻意保留；移植规范与命令见 [`docs/porting-guide.md`](docs/porting-guide.md)。最值得注意的几条：
+
+- **[刻意] 索引数组删空时删 key，Swift 写回空数组。** `cleanAgentSessionsCache` / `cleanComposerData` / `cleanAiChatData` 删到不剩元素时删掉整个 `ItemTable` key。两条路径对 IDE 行为等价，而删 key 更干净 —— `VACUUM` 之后文件真的变小。`vscdb.test.ts` 有专门一组断言钉住它。
+- **[照抄] Zed 的 `delete` 刻意绕开 `deleteItemsWithPaths`。** 走通用流程会把 `threads/threads.db` 当成关联路径删掉 —— 那是整个线程库的本体。同理 **Zed 与 OpenHands 都不回收空目录**，设置里的「回收空项目目录」对这两款完全无效（测试已把这个无效性钉住）。看着像 bug，但修 bug 是另一次改动。
+- **[刻意] 确认弹层的目标集合钉在打开那一刻。** Swift 版读的是**活的** `filteredConversations`，面板开着时切分类，用户在弹层上看着一个数、点确认删的却是另一批。TS 版用 `estimateCategory` 把分类钉死 —— 这一条是修真实缺陷，不是照抄。
+- **[已修] 移植中修掉的两个真 bug。** `preferences.json` 内容完全合法但是个字面量（`null`）时 `parsed[key]` 抛 `TypeError`，整条 `prefs:get` IPC 全挂；ISO 时间戳正则只接受 `Z?` 而不接受 `+08:00`，任何记录本地时区偏移的 Agent 会整条丢失 `updatedAt`。
+- **Swift 源码保留作基准。** `ConversationClean/`、`.xcodeproj/`、`scripts/run_tests.sh`、`scripts/tests/*.swift` 原样留着，任何「两版行为不一致」的争论都能当场打开对照文件。

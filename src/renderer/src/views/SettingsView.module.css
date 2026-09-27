@@ -1,0 +1,572 @@
+/**
+ * 设置面板。视觉基线 design-demos/ui-a-precision.html，
+ * 与主窗口同一套（四级表面梯 / 1px 发丝线 / 靛蓝强调 / 8pt 圆角）。
+ *
+ * 移植自 Swift 版 `Views/SettingsView.swift`，整页自绘：
+ * 左侧导航栏 + 右侧分组卡片，替掉系统 `Form(.grouped)` 与系统 `Toggle`。
+ * 业务侧一个字没动：4 个 `@AppStorage` 的键名、15 款 Agent 的固定顺序，
+ * 以及安装状态只认 `AgentInfo.isInstalled`。
+ *
+ * 一切颜色 / 间距 / 字号走 tokens.css，这里不出现字面量。
+ * 唯一的例外是**控件几何**（行高 40px / 卡头 34px / 开关 30×17 等）：
+ * tokens.css 只给了行高 32/28、顶栏 44、按钮 26 这几档常用值，
+ * 开关与卡头的尺寸在 Apple HIG 里也是固定值，没有做进 token 的必要。
+ */
+
+/* ---------- 外壳：左导航 + 右内容 ---------- */
+.root {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  background: var(--bg);
+}
+
+.rail {
+  flex: 0 0 152px;
+  width: 152px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 0 var(--space-m);
+  background: var(--sidebar);
+  border-right: var(--space-hair) solid var(--line);
+}
+
+.railLabel {
+  margin: 0;
+  padding: var(--space-l) var(--space-s) var(--space-s);
+  font-size: var(--text-section-head);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.04em;
+  color: var(--t3);
+}
+
+.railRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  height: var(--size-row-compact);
+  padding: 0 var(--space-m);
+  border-radius: var(--radius-control);
+  font-size: var(--text-nav-item);
+  color: var(--t1);
+  text-align: left;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+
+.railRow:hover:not(.railRowOn) {
+  background: color-mix(in srgb, var(--line) 70%, transparent);
+}
+
+.railRowIcon {
+  flex: 0 0 14px;
+  color: var(--t2);
+}
+
+/* 选中态：靛蓝渐变实心 + 白字（与主窗口侧栏同一套） */
+.railRowOn {
+  background: linear-gradient(180deg, var(--accent-2), var(--accent));
+  color: var(--surface);
+  font-weight: var(--weight-medium);
+}
+
+.railRowOn .railRowIcon {
+  color: var(--surface);
+}
+
+/* ---------- 右内容 ---------- */
+.pane {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+
+.paneHeader {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-m);
+  flex: 0 0 var(--size-bar);
+  height: var(--size-bar);
+  padding: 0 var(--space-xl);
+  border-bottom: var(--space-hair) solid var(--line);
+}
+
+.paneTitle {
+  margin: 0;
+  font-size: var(--text-card-title);
+  font-weight: var(--weight-semibold);
+  color: var(--t1);
+}
+
+.paneHint {
+  margin-left: auto;
+  font-size: var(--text-row-sub);
+  color: var(--t3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.paneBody {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-xl);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-l);
+  align-items: stretch;
+}
+
+.closeBtn {
+  flex: 0 0 auto;
+  margin-left: var(--space-m);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--size-button);
+  height: var(--size-button);
+  border-radius: var(--radius-control);
+  color: var(--t2);
+}
+
+.closeBtn:hover {
+  background: var(--sunken);
+  color: var(--t1);
+}
+
+/* ---------- 卡片：卡头（靛蓝图标 + 12pt 半粗标题）+ 发丝线 + 内容 ---------- */
+.card {
+  background: var(--surface);
+  border: var(--space-hair) solid var(--line);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  height: 34px;
+  padding: 0 var(--space-l);
+  border-bottom: var(--space-hair) solid var(--line);
+}
+
+.cardHeadIcon {
+  flex: 0 0 auto;
+  color: var(--accent);
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: var(--text-section-head-strong);
+  font-weight: var(--weight-semibold);
+  color: var(--t1);
+}
+
+.cardBody {
+  padding: var(--space-l);
+}
+
+/* ---------- 开关行：整行可点，开关自己只画不接管事件 ---------- */
+.toggleRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-l);
+  width: 100%;
+  padding: var(--space-s) var(--space-l);
+  text-align: left;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+
+.toggleRow:not(:first-child) {
+  border-top: var(--space-hair) solid var(--line);
+}
+
+.toggleRow:hover {
+  background: var(--sunken);
+}
+
+.toggleMain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xxs);
+}
+
+.toggleTitle {
+  font-size: var(--text-row-title);
+  font-weight: var(--weight-medium);
+  color: var(--t1);
+}
+
+.toggleSub {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-xxs);
+  font-size: var(--text-row-sub);
+  line-height: 1.5;
+  color: var(--t2);
+}
+
+/* 这一条是本页唯一的危险开关：关掉之后清理立即执行且不可撤销。
+   关掉时整行转危险色（副标题 + 警示三角）。 */
+.toggleSubRisk {
+  color: var(--danger);
+}
+
+.riskIcon {
+  flex: 0 0 auto;
+  color: var(--danger);
+}
+
+/* iOS 式开关。系统 Toggle 的轨道渐变 + 高光在深色下是另一种蓝，
+   和侧栏选中态摆在一起颜色对不上，这里整块重画。 */
+.switch {
+  flex: 0 0 30px;
+  position: relative;
+  width: 30px;
+  height: 17px;
+  border-radius: 9px;
+  background: var(--line);
+  border: var(--space-hair) solid var(--line);
+  transition:
+    background var(--dur-base) var(--ease-out),
+    border-color var(--dur-base) var(--ease-out);
+}
+
+.switchOn {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent) 92%, transparent),
+    var(--accent)
+  );
+  border-color: transparent;
+}
+
+.switchOnRisk {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--danger) 92%, transparent),
+    var(--danger)
+  );
+}
+
+.switchKnob {
+  position: absolute;
+  top: var(--space-xxs);
+  left: var(--space-xxs);
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--t1) 22%, transparent);
+  transition: transform var(--dur-base) var(--ease-out);
+}
+
+.switchKnobOn {
+  transform: translateX(13px);
+}
+
+/* ---------- 路径页读数条 ---------- */
+.summaryStrip {
+  display: flex;
+  gap: var(--space-l);
+}
+
+.stat {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-m) var(--space-l);
+  background: var(--surface);
+  border: var(--space-hair) solid var(--line);
+  border-radius: var(--radius-card);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xxs);
+}
+
+.statLine {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-xxs);
+}
+
+.statValue {
+  font-size: var(--text-card-title);
+  font-weight: var(--weight-semibold);
+  color: var(--t1);
+}
+
+.statUnit {
+  font-size: var(--text-row-sub);
+  font-weight: var(--weight-medium);
+  color: var(--t3);
+}
+
+.statLabel {
+  font-size: var(--text-row-sub);
+  color: var(--t2);
+}
+
+/* ---------- Agent 路径行：40pt 行高 ----------
+   名称/状态 + 路径 + 占比条 + 体积 + 「打开目录」+「清空」，
+   一屏能扫完 15 行。 */
+.agentRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-m);
+  min-height: 40px;
+  padding: var(--space-xs) var(--space-l);
+}
+
+.agentRow:not(:first-child) {
+  border-top: var(--space-hair) solid var(--line);
+}
+
+.agentMain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-hair);
+}
+
+.agentNameLine {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  min-width: 0;
+}
+
+.agentName {
+  font-size: var(--text-row-title);
+  font-weight: var(--weight-medium);
+  color: var(--t1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 未安装：整行文字退到 t3，不与已安装的 Agent 抢视线 */
+.agentNameOff {
+  color: var(--t3);
+  font-weight: var(--weight-regular);
+}
+
+.statusChip {
+  flex: 0 0 auto;
+  font-size: var(--text-tiny);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+  color: var(--success-text);
+  padding: 1.5px 5px;
+  background: var(--success-soft);
+  border-radius: var(--radius-chip);
+}
+
+.statusChipOff {
+  color: var(--t3);
+  background: var(--sunken);
+}
+
+.agentPath {
+  font-family: var(--font-mono);
+  font-size: var(--text-row-sub);
+  color: var(--t3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agentShare {
+  flex: 0 0 56px;
+  width: 56px;
+  height: 4px;
+  border-radius: var(--radius-chip-small);
+  background: var(--accent-soft);
+  overflow: hidden;
+}
+
+.agentShareFill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-chip-small);
+  background: linear-gradient(90deg, var(--accent-2), var(--accent));
+}
+
+/* 0 字节的 Agent 不画条，但列宽要留住，否则整列会跳 */
+.agentShareEmpty {
+  flex: 0 0 56px;
+  width: 56px;
+  height: 4px;
+}
+
+.agentPct {
+  flex: 0 0 32px;
+  width: 32px;
+  text-align: right;
+  font-size: var(--text-row-sub);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+  color: var(--t2);
+}
+
+.agentSize {
+  flex: 0 0 58px;
+  width: 58px;
+  text-align: right;
+  font-size: var(--text-size-num);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+  color: var(--t1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agentSizeZero {
+  color: var(--t3);
+}
+
+.iconBtn {
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-chip);
+  color: var(--t2);
+  transition: background var(--dur-fast) var(--ease-out);
+}
+
+.iconBtn:hover:not(:disabled) {
+  background: var(--sunken);
+  color: var(--t1);
+}
+
+.iconBtnDanger:hover:not(:disabled) {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.iconBtn:disabled {
+  opacity: 0.35;
+}
+
+/* 未安装的 Agent 用占位保列宽，不和上面几行错位 */
+.iconPlaceholder {
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+}
+
+/* ---------- 关于页 ---------- */
+.aboutHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-l);
+}
+
+.aboutBadge {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-card);
+  background: var(--accent-soft);
+  border: var(--space-hair) solid var(--accent-edge);
+  color: var(--accent);
+}
+
+.aboutName {
+  margin: 0;
+  font-size: var(--text-card-title);
+  font-weight: var(--weight-semibold);
+  color: var(--t1);
+}
+
+.aboutVersion {
+  margin: var(--space-xxs) 0 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-row-sub);
+  color: var(--t3);
+}
+
+.aboutText {
+  margin: var(--space-l) 0 0;
+  font-size: var(--text-row-sub);
+  line-height: 1.7;
+  color: var(--t2);
+}
+
+.facts {
+  display: flex;
+  gap: var(--space-m);
+  margin-top: var(--space-xs);
+}
+
+.fact {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-s) var(--space-m);
+  background: var(--accent-soft);
+  border: var(--space-hair) solid var(--accent-edge);
+  border-radius: var(--radius-control);
+}
+
+.factValue {
+  font-size: var(--text-card-title);
+  font-weight: var(--weight-semibold);
+  color: var(--accent);
+}
+
+.factLabel {
+  margin-top: var(--space-xxs);
+  font-size: var(--text-row-sub);
+  color: var(--t2);
+}
+
+/* ---------- 未扫描到 Agent 信息时的空态 ---------- */
+.emptyState {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-l);
+  padding: var(--space-xxl);
+}
+
+.emptyBadge {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.emptyStateTitle {
+  margin: 0;
+  font-size: var(--text-card-title);
+  font-weight: var(--weight-semibold);
+  color: var(--t1);
+}
+
+.emptyStateText {
+  margin: 0;
+  max-width: 280px;
+  text-align: center;
+  font-size: var(--text-row-sub);
+  line-height: 1.55;
+  color: var(--t2);
+}

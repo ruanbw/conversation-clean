@@ -1,0 +1,566 @@
+/* ============================================================
+   DrawnControls.module.css —— 自绘控件库
+   移植自 ConversationClean/Views/DrawnControls.swift + SettingsView 的 DrawnSwitch。
+
+   铁律：颜色 / 间距 / 字号一律 `var(--token)`，不许裸 hex / px 字号。
+   仅有的裸 px 是**几何常量**（开关 30×17、勾选 1.5px 描边这类），
+   tokens.css 里没有对应项，统一提到模块顶部的局部变量里集中管理。
+   ============================================================ */
+
+/* 组件几何常量集中声明在用到的类上（CSS 变量会继承给子元素）。
+   tokens.css 只给了圆角 / 间距 / 字号 / 行高，没给这些盒子尺寸。 */
+.btn {
+  --btn-compact-h: 22px; /* Swift: DrawnButtonStyle(compact:) 22pt */
+}
+
+/* ---------- 通用按钮 ---------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-s);
+  height: var(--size-button);
+  padding: 0 var(--space-ms);
+  border-radius: var(--radius-control);
+  border: 1px solid transparent;
+  font-size: var(--text-body-12);
+  font-weight: var(--weight-medium);
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--t2);
+  user-select: none;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.btn:disabled {
+  opacity: 0.4;
+}
+
+/* 变体：flat / dangerQuiet 无底色，靠一层低透明度覆盖模拟 hover（与 Swift 版同） */
+.flat:hover:not(:disabled),
+.dangerQuiet:hover:not(:disabled) {
+  background: var(--accent-hover);
+  color: var(--t1);
+}
+
+.flat:active:not(:disabled),
+.dangerQuiet:active:not(:disabled) {
+  background: var(--accent-active);
+}
+
+.dangerQuiet {
+  color: var(--danger);
+}
+
+.ghost {
+  color: var(--t1);
+  background: var(--surface);
+  border-color: var(--line-2);
+}
+
+.ghost:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--t1) 6%, var(--surface));
+}
+
+.ghost:active:not(:disabled) {
+  background: color-mix(in srgb, var(--t1) 12%, var(--surface));
+}
+
+.primary {
+  color: var(--surface);
+  background: linear-gradient(180deg, var(--accent-2), var(--accent));
+  border-color: color-mix(in srgb, var(--t1) 8%, transparent);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+.primary:hover:not(:disabled) {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent-2) 84%, var(--t1)),
+    color-mix(in srgb, var(--accent) 84%, var(--t1))
+  );
+}
+
+.primary:active:not(:disabled) {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent-2) 70%, var(--t1)),
+    color-mix(in srgb, var(--accent) 70%, var(--t1))
+  );
+}
+
+.danger {
+  color: var(--surface);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--danger) 86%, transparent),
+    var(--danger)
+  );
+  border-color: color-mix(in srgb, var(--t1) 8%, transparent);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--danger) 30%, transparent);
+}
+
+.danger:hover:not(:disabled) {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--danger) 92%, var(--t1)),
+    color-mix(in srgb, var(--danger) 92%, var(--t1))
+  );
+}
+
+.danger:active:not(:disabled) {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--danger) 76%, var(--t1)),
+    color-mix(in srgb, var(--danger) 76%, var(--t1))
+  );
+}
+
+.compact {
+  height: var(--btn-compact-h);
+  padding: 0 var(--space-s);
+  font-size: var(--text-row-sub);
+}
+
+.iconOnly {
+  width: var(--size-button);
+  padding: 0;
+}
+
+.compact.iconOnly {
+  width: var(--btn-compact-h);
+}
+
+/* ---------- 自绘勾选框 ---------- */
+
+.cb {
+  --cb-stroke: 1.5px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: var(--size-checkbox);
+  height: var(--size-checkbox);
+  border-radius: var(--radius-chip);
+  border: var(--cb-stroke) solid var(--line-2);
+  background: var(--surface);
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+
+.cb:hover:not(:disabled) {
+  border-color: var(--t3);
+}
+
+.cbOn {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.cbOn:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.cb:disabled {
+  opacity: 0.4;
+}
+
+/* 对勾：两条边旋转拼出来，不依赖任何图标字体 */
+.cbCheck {
+  width: 8px;
+  height: 4.5px;
+  border: 1.6px solid var(--surface);
+  border-top: 0;
+  border-right: 0;
+  transform: rotate(-45deg) translate(1px, -1px);
+}
+
+/* 半选：一条横杠，比叉号更符合「部分」的语义 */
+.cbDash {
+  width: 7px;
+  height: 1.8px;
+  background: var(--surface);
+  border-radius: 1px;
+}
+
+/* ---------- 分段控件 ---------- */
+
+.seg {
+  display: inline-flex;
+  gap: var(--space-xxs);
+  padding: var(--space-xxs);
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--t1) 4.5%, transparent);
+}
+
+.segItem {
+  padding: var(--space-s) var(--space-ms);
+  height: 20px;
+  border-radius: var(--radius-chip);
+  font-size: var(--text-section-head);
+  font-weight: var(--weight-medium);
+  line-height: 1;
+  color: var(--t2);
+  white-space: nowrap;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.segItem:hover {
+  color: var(--t1);
+}
+
+.segItemOn {
+  background: var(--surface);
+  color: var(--t1);
+  font-weight: var(--weight-semibold);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--t1) 10%, transparent);
+}
+
+/* ---------- 搜索框 ---------- */
+
+.search {
+  /* Swift: DrawnSearchField frame(height: 28) */
+  height: 28px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  padding: 0 var(--space-m);
+  border-radius: var(--radius-field);
+  background: var(--sunken);
+  border: 1px solid color-mix(in srgb, var(--line-2) 70%, transparent);
+  transition:
+    border-color var(--dur-base) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out);
+}
+
+.search:hover {
+  border-color: var(--line-2);
+}
+
+.searchFocused {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.searchIcon {
+  color: var(--t3);
+  display: grid;
+  place-items: center;
+  flex: 0 0 14px;
+}
+
+.searchInput {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-body);
+  line-height: 1;
+  color: var(--t1);
+  user-select: text;
+}
+
+.searchInput::placeholder {
+  color: var(--t3);
+}
+
+.searchClear {
+  display: grid;
+  place-items: center;
+  width: 13px;
+  height: 13px;
+  flex: 0 0 13px;
+  border-radius: 50%;
+  background: var(--t3);
+  color: var(--surface);
+}
+
+.searchClear:hover {
+  background: var(--t2);
+}
+
+/* ---------- 通知条 ---------- */
+
+.notice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  padding: var(--space-s) var(--space-m);
+  border-radius: var(--radius-card);
+  font-size: var(--text-row-sub);
+  line-height: 1.45;
+}
+
+.noticeSuccess {
+  background: var(--success-soft);
+  border: 1px solid var(--success-edge);
+  color: var(--success-text);
+}
+
+.noticeDanger {
+  background: var(--danger-soft);
+  border: 1px solid color-mix(in srgb, var(--danger) 22%, transparent);
+  color: var(--danger);
+}
+
+.noticeText {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ---------- 占比条 ---------- */
+
+.share {
+  /* Swift: ShareBar(height: 4) */
+  --bar-h: 4px;
+  position: relative;
+  flex: 0 0 auto;
+  height: var(--bar-h);
+  border-radius: 2px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--accent) 11%, transparent);
+}
+
+.shareFill {
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--accent-2), var(--accent));
+  min-width: 2px;
+}
+
+/* ---------- 空态 ---------- */
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-l);
+  flex: 1;
+  min-height: 0;
+  padding: var(--space-xxl);
+}
+
+.emptyBadge {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: color-mix(in srgb, var(--accent) 80%, transparent);
+}
+
+.emptyText {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-s);
+  max-width: 280px;
+  text-align: center;
+}
+
+.emptyTitle {
+  font-size: var(--text-card-title);
+  font-weight: var(--weight-semibold);
+  line-height: 1.2;
+  color: var(--t1);
+}
+
+.emptyMessage {
+  font-size: var(--text-row-sub);
+  line-height: 1.55;
+  color: var(--t2);
+}
+
+/* ---------- 开关 ---------- */
+
+.switch {
+  --sw-w: 30px;
+  --sw-h: 17px;
+  --sw-thumb: 13px;
+  --sw-pad: 2px;
+  position: relative;
+  width: var(--sw-w);
+  height: var(--sw-h);
+  flex: 0 0 var(--sw-w);
+  border-radius: 999px;
+  background: var(--line);
+  transition: background var(--dur-slow) var(--ease-out);
+}
+
+.switch:hover:not(:disabled) {
+  background: var(--line-2);
+}
+
+.switchOn {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent) 92%, transparent),
+    var(--accent)
+  );
+}
+
+.switchOn:hover:not(:disabled) {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent) 84%, transparent),
+    color-mix(in srgb, var(--accent) 92%, transparent)
+  );
+}
+
+.switchDangerOn {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--danger) 86%, transparent),
+    var(--danger)
+  );
+}
+
+/* 关闭态描一圈发丝线，轨道才不会在浅色背景上「消失」 */
+.switchOff {
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.switchThumb {
+  position: absolute;
+  top: var(--sw-pad);
+  left: var(--sw-pad);
+  width: var(--sw-thumb);
+  height: var(--sw-thumb);
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 1px 1px color-mix(in srgb, var(--t1) 22%, transparent);
+  transition: transform var(--dur-slow) var(--ease-out);
+}
+
+.switchThumbOn {
+  transform: translateX(calc(var(--sw-w) - var(--sw-thumb) - var(--sw-pad) * 2));
+}
+
+.switch:disabled {
+  opacity: 0.4;
+}
+
+/* ---------- 徽章 ---------- */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  padding: var(--space-xxs) var(--space-s);
+  border-radius: 999px;
+  font-size: var(--text-nav-count);
+  font-weight: var(--weight-medium);
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.badgeNeutral {
+  background: color-mix(in srgb, var(--t1) 5.5%, transparent);
+  color: var(--t3);
+}
+
+.badgeAccent {
+  background: var(--accent-hover);
+  color: var(--accent);
+}
+
+.badgeSuccess {
+  background: var(--success-soft);
+  color: var(--success-text);
+}
+
+.badgeDanger {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.badgeInverse {
+  background: color-mix(in srgb, var(--surface) 24%, transparent);
+  color: var(--surface);
+}
+
+/* ---------- 发丝线 ---------- */
+
+.hairline {
+  flex: 0 0 auto;
+  background: var(--line);
+}
+
+.hairlineTop {
+  width: 100%;
+  height: var(--space-hair);
+}
+
+.hairlineBottom {
+  width: 100%;
+  height: var(--space-hair);
+}
+
+.hairlineStart {
+  width: var(--space-hair);
+  align-self: stretch;
+}
+
+.hairlineEnd {
+  width: var(--space-hair);
+  align-self: stretch;
+}
+
+/* ---------- 两种面 ---------- */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+}
+
+.tinted {
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-edge);
+  border-radius: var(--radius-card);
+}
+
+/* ---------- 区块标题 ---------- */
+
+.section {
+  display: block;
+  width: 100%;
+  padding: var(--space-s) var(--space-s) var(--space-s);
+  text-align: left;
+}
+
+.sectionUpper {
+  margin-top: var(--space-l);
+  font-size: var(--text-section-head);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--t3);
+}
+
+.sectionStrong {
+  margin-top: var(--space-l);
+  font-size: var(--text-section-head-strong);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--t1);
+}
+
+.sectionFlush {
+  margin-top: 0;
+  padding-top: 0;
+}
+
+/* ---------- 自绘字形 ---------- */
+
+.glyph {
+  flex: 0 0 auto;
+  display: block;
+}

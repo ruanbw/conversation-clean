@@ -1,0 +1,251 @@
+.list {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  background: var(--surface);
+}
+
+/* ---------- 筛选栏 ---------- */
+
+.filter {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-m);
+  padding: var(--space-ms) var(--space-l);
+  background: var(--surface);
+}
+
+.filterRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-m);
+}
+
+.count {
+  margin-left: auto;
+  font-size: var(--text-row-sub);
+  color: var(--t3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 通知条 ---------- */
+
+.notice {
+  margin: var(--space-m) var(--space-l) 0;
+}
+
+/* ---------- 列表 ---------- */
+
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-xs) 0 var(--space-m);
+  outline: none;
+}
+
+/* 虚拟化的占位层：撑出全量高度，只渲染可视窗口内的那一段 */
+.canvas {
+  position: relative;
+  width: 100%;
+}
+
+.window {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  will-change: transform;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-m);
+  width: 100%;
+  height: var(--size-row);
+  padding: 0 var(--space-l) 0 var(--space-ms);
+  text-align: left;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+
+.row:hover {
+  background: var(--bg);
+}
+
+.rowOn {
+  background: var(--accent-wash);
+}
+
+.rowOn:hover {
+  background: var(--accent-wash);
+}
+
+/* 0 KB 的条目删了不省空间 */
+.rowZero {
+  opacity: 0.55;
+}
+
+.rowMark {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  display: grid;
+  place-items: center;
+  color: var(--t2);
+}
+
+.tcol {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.title {
+  font-size: var(--text-row-title);
+  font-weight: var(--weight-medium);
+  letter-spacing: -0.005em;
+  color: var(--t1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.titleOn {
+  font-weight: var(--weight-semibold);
+}
+
+.subtitle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--text-row-sub);
+  color: var(--t3);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.subtitleText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.subtitleDot {
+  flex: 0 0 auto;
+  opacity: 0.6;
+}
+
+/* 占比迷你条：数字用体积，形状用占比，两者不抢同一格的注意力 */
+.share {
+  width: 38px;
+  height: 5px;
+}
+
+/* 体积是这行的主数字：清理工具里「多大」比「叫什么」重要 */
+.size {
+  flex: 0 0 52px;
+  width: 52px;
+  text-align: right;
+  font-size: var(--text-size-num);
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.01em;
+  color: var(--t1);
+  font-variant-numeric: tabular-nums;
+}
+
+.sizeZero {
+  color: var(--t3);
+}
+
+/* ---------- 行右键菜单 ----------
+   系统 Menu 在 Electron 渲染进程里要自己搭一套；这里保持「菜单外观跟随系统」的
+   意图（macOS 菜单是系统材质），但几何与配色走自绘，避免引第三方 UI 库。 */
+
+.ctxBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-popover);
+}
+
+.ctxMenu {
+  position: fixed;
+  z-index: var(--z-popover);
+  min-width: 180px;
+  padding: var(--space-xs);
+  border-radius: var(--radius-control);
+  background: var(--raised);
+  border: 1px solid var(--line);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--t1) 18%, transparent);
+}
+
+.ctxItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  width: 100%;
+  height: var(--size-row-compact);
+  padding: 0 var(--space-m);
+  border-radius: var(--radius-micro);
+  font-size: var(--text-body);
+  text-align: left;
+  color: var(--t1);
+}
+
+.ctxItem:hover {
+  background: var(--accent-hover);
+}
+
+.ctxItemDanger {
+  color: var(--danger);
+}
+
+.ctxDivider {
+  height: var(--space-hair);
+  margin: var(--space-xs) var(--space-m);
+  background: var(--line);
+}
+
+/* ---------- 批量条 ---------- */
+
+.batch {
+  flex: 0 0 var(--size-bar);
+  display: flex;
+  align-items: center;
+  gap: var(--space-m);
+  height: var(--size-bar);
+  padding: 0 var(--space-l);
+  background: var(--bg);
+  border-top: var(--space-hair) solid var(--line);
+}
+
+/* 空间不够时先牺牲这段文字（优先级 -1）。
+   上一版写的是 `layoutPriority(1)`，注释说「先压这段文字」而代码说「最后才压它」
+   —— 优先级越高越晚被压缩，两者刚好相反，结果是按钮被挤扁而文字纹丝不动。 */
+.batchStat {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-size: var(--text-row-sub);
+  color: var(--t2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.batchStat b {
+  color: var(--t1);
+  font-weight: var(--weight-semibold);
+}
+
+/* 按钮组整体抬高优先级：窄栏（320px）下先压文字，按钮保持完整可点区域 */
+.batchActions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-m);
+  margin-left: auto;
+}

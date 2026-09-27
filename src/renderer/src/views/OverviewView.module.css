@@ -1,0 +1,375 @@
+/**
+ * 详情栏未选中态。视觉基线 design-demos/ui-a-precision.html 的右栏。
+ *
+ * 这一栏的语义是「现在该从谁开始删」。所以它不是一张统计报表，而是一份
+ * 按占用降序的待办清单：Top 5 大户，点一行直接选中它。
+ *
+ * 总量不放这里 —— 它是常量信息，在顶栏常驻。
+ *
+ * 修掉的两处（与 Swift 版注释一一对应）：
+ *   ① 分布配色。旧实现是 `Color.primary.opacity()` 黑灰 ramp：浅色下是一条
+ *      黑到灰的长条，深色模式下整条变白。现在全部走 `--d1`~`--d8`
+ *      （同一 hue 250° 的明度阶梯，深浅色各有降级值），堆叠条和横条列表同支色阶。
+ *   ② 层级倒置。旧实现标题 13pt medium 比体积 12pt semibold 更重 ——
+ *      在「清理 99MB 垃圾」的工具里这是反的。现在体积 13pt semibold
+ *      （`--text-size-num-strong`）压过标题 12.5pt medium。
+ */
+
+.root {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* 设计稿 `.det-scroll{padding:20px 24px}` */
+  padding: var(--space-xxl) var(--space-huge);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+/* ---------- 页头：15pt 标题 + 右侧计数 ---------- */
+.head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-m);
+  padding-bottom: var(--space-ll);
+}
+
+.headTitle {
+  margin: 0;
+  font-size: var(--text-card-title);
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.01em;
+  color: var(--t1);
+}
+
+.headCount {
+  margin-left: auto;
+  font-size: var(--text-section-head);
+  color: var(--t3);
+}
+
+/* ---------- 卡片面 ---------- */
+.card {
+  background: var(--surface);
+  border: var(--space-hair) solid var(--line);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+}
+
+.cardEmpty {
+  padding: var(--space-xl) var(--space-ll);
+}
+
+.emptyTitle {
+  margin: 0;
+  font-size: var(--text-row-title);
+  font-weight: var(--weight-medium);
+  color: var(--t2);
+}
+
+.emptyText {
+  margin: var(--space-xxs) 0 0;
+  font-size: var(--text-row-sub);
+  line-height: 1.55;
+  color: var(--t3);
+}
+
+/* ---------- 占用大户行（设计稿 `.brow`，44pt 行高）----------
+   体积那一格是全行最重的元素 —— 这是 A 版的层级修正。 */
+.bigRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-l);
+  width: 100%;
+  height: 44px;
+  padding: 0 var(--space-ll);
+  text-align: left;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+
+.bigRow:not(:last-child) {
+  border-bottom: var(--space-hair) solid var(--line);
+}
+
+.bigRow:hover {
+  background: var(--sunken);
+}
+
+.bigName {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.bigTitle {
+  font-size: var(--text-row-title);
+  font-weight: var(--weight-medium);
+  color: var(--t1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bigSub {
+  margin-top: var(--space-hair);
+  font-size: var(--text-row-sub);
+  color: var(--t3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shareTrack {
+  flex: 0 0 76px;
+  width: 76px;
+  height: 4px;
+  border-radius: var(--radius-chip-small);
+  background: var(--accent-soft);
+  overflow: hidden;
+}
+
+.shareFill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-chip-small);
+  background: linear-gradient(90deg, var(--accent-2), var(--accent));
+}
+
+.sharePct {
+  flex: 0 0 34px;
+  width: 34px;
+  text-align: right;
+  font-size: var(--text-section-head);
+  font-weight: var(--weight-medium);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+  color: var(--t3);
+}
+
+/* 体积 = 第一视觉层级，比标题更重 */
+.bigSize {
+  flex: 0 0 58px;
+  width: 58px;
+  text-align: right;
+  font-size: var(--text-size-num-strong);
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.01em;
+  color: var(--t1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bigSizeZero {
+  color: var(--t3);
+}
+
+/* 0 KB 的会话删了不省空间，压暗一档让它自动退出视线 */
+.bigRowZero {
+  opacity: 0.55;
+}
+
+/* ---------- 分布 ---------- */
+.distHead {
+  margin: var(--space-giant) 0 var(--space-ms);
+  font-size: var(--text-section-head-strong);
+  font-weight: var(--weight-semibold);
+  color: var(--t1);
+}
+
+/* 8pt 高胶囊 + 2px 底色 gap。
+   留 gap 是为了让两段同色阶相邻时仍能读出边界 —— 段挤在一起会糊成一条。 */
+.stackBar {
+  display: flex;
+  gap: var(--space-xxs);
+  height: 8px;
+  margin-bottom: var(--space-ll);
+  border-radius: var(--radius-chip);
+  background: var(--sunken);
+  overflow: hidden;
+}
+
+.stackSeg {
+  flex-basis: 0;
+  /* 唯一一处不诚实的地方：1pt 的**可见性下限**。
+     0.4% 的 Agent 在 600pt 宽的条上是 0.24pt，不画就等于它不存在
+     （横条列表里还会被误读成「没扫到」）。flex 自己会把多余像素
+     从最宽的那段扣回来，总和恰好等于可用宽度，圆角裁切处不会露出底色。 */
+  min-width: var(--space-hair);
+}
+
+.distRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-ms);
+  padding: var(--space-s) 0;
+}
+
+.distSwatch {
+  flex: 0 0 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-chip-small);
+}
+
+.distName {
+  flex: 0 0 112px;
+  width: 112px;
+  font-size: var(--text-nav-item);
+  color: var(--t2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.distBar {
+  flex: 1;
+  min-width: 0;
+  height: 5px;
+  border-radius: var(--radius-micro);
+  background: var(--sunken);
+  overflow: hidden;
+}
+
+.distBarFill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-micro);
+  min-width: 1.5px;
+}
+
+.distPct {
+  flex: 0 0 34px;
+  width: 34px;
+  text-align: right;
+  font-size: var(--text-section-head);
+  font-weight: var(--weight-medium);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+  color: var(--t2);
+}
+
+.distSize {
+  flex: 0 0 54px;
+  width: 54px;
+  text-align: right;
+  font-size: var(--text-section-head);
+  font-weight: var(--weight-medium);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+  color: var(--t3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- 清理说明（靛蓝淡底）---------- */
+.note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-m);
+  margin-top: var(--space-giant);
+  padding: var(--space-l) var(--space-ll);
+  background: var(--accent-soft);
+  border: var(--space-hair) solid var(--accent-edge);
+  border-radius: var(--radius-card);
+}
+
+.noteIcon {
+  flex: 0 0 14px;
+  margin-top: var(--space-hair);
+  color: var(--accent);
+}
+
+.noteText {
+  font-size: var(--text-section-head);
+  line-height: 1.6;
+  color: var(--t2);
+}
+
+.noteStrong {
+  font-weight: var(--weight-semibold);
+  color: var(--t1);
+}
+
+/* ---------- 未扫描：自绘空态（不用 ContentUnavailableView）---------- */
+.emptyState {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-l);
+  padding: var(--space-xxl);
+}
+
+.emptyBadge {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.emptyStateTitle {
+  margin: 0;
+  font-size: var(--text-card-title);
+  font-weight: var(--weight-semibold);
+  color: var(--t1);
+}
+
+.emptyStateText {
+  margin: 0;
+  max-width: 280px;
+  text-align: center;
+  font-size: var(--text-row-sub);
+  line-height: 1.55;
+  color: var(--t2);
+}
+
+.primaryBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--size-button);
+  padding: 0 var(--space-xl);
+  border-radius: var(--radius-control);
+  border: var(--space-hair) solid color-mix(in srgb, var(--t1) 8%, transparent);
+  background: linear-gradient(180deg, var(--accent-2), var(--accent));
+  box-shadow: 0 1px 2px var(--accent-soft);
+  font-size: var(--text-nav-item);
+  font-weight: var(--weight-medium);
+  color: var(--surface);
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.primaryBtn:hover:not(:disabled) {
+  opacity: 0.88;
+}
+
+.primaryBtn:active:not(:disabled) {
+  opacity: 1;
+  background: var(--accent);
+}
+
+.primaryBtn:disabled {
+  opacity: 0.4;
+}

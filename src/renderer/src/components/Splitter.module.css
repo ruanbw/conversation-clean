@@ -1,0 +1,41 @@
+/* ============================================================
+   Splitter.module.css
+   —— 栏间分隔条。只管分隔条自己那几条。
+
+   App 外壳（顶栏 / 三栏 / 设置遮罩）原先也放在这里，理由是分配给
+   本任务的文件清单里没有 App.module.css。已拆到 `src/renderer/src/App.module.css`：
+   CSS Modules 的类名按文件生成，外壳类写在分隔条的样式文件里虽然能跑，
+   但读代码的人会去错误的文件里找定义。
+
+   视觉基线 design-demos/ui-a-precision.html 的 `.cols` 里的分隔线。
+   ============================================================ */
+
+/* ---------- 分隔条 ---------- */
+
+.splitter {
+  flex: 0 0 auto;
+  align-self: stretch;
+  position: relative;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  transition: background var(--dur-fast) var(--ease-out);
+  z-index: var(--z-splitter);
+}
+
+.splitterActive {
+  background: var(--accent-hover);
+}
+
+/* 视觉线只有 1px：画多宽就只能拖多宽的话，那条线根本点不中 */
+.splitterLine {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: var(--space-hair);
+  background: var(--line);
+}
+
+.splitter:hover .splitterLine {
+  background: var(--accent);
+}

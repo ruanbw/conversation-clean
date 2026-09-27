@@ -1,0 +1,356 @@
+/**
+ * 详情栏（`.det` / `.det-scroll`）。视觉基线 design-demos/ui-a-precision.html。
+ *
+ * 底色用 `var(--bg)` 而不是 `var(--surface)`：三栏此前同色，截图里就是三块白板拼贴。
+ * 侧栏 sidebar / 列表 surface / 详情 bg，详情栏是三栏里最「沉」的一层。
+ *
+ * 一切颜色 / 间距 / 字号走 tokens.css，这里不出现字面量。
+ */
+
+/* ---------- 外壳 ---------- */
+.root {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* 设计稿 `.det-scroll{padding:20px 24px}` */
+  padding: var(--space-xxl) var(--space-huge) var(--space-giant);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-ll);
+  align-items: stretch;
+}
+
+/* ---------- 头部：图标 28 + 标题 15 + 右侧体积读数 21 ---------- */
+.header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-l);
+  padding-bottom: var(--space-xs);
+  border-bottom: var(--space-hair) solid var(--line);
+}
+
+.headerMain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--text-card-title);
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.01em;
+  color: var(--t1);
+  /* 最多 3 行，超出走行尾省略（Swift .lineLimit(3)） */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.metaLine {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  padding-top: var(--space-hair);
+  font-size: var(--text-row-sub);
+  color: var(--t2);
+}
+
+.metaDot {
+  color: var(--t3);
+}
+
+.metaTime {
+  color: var(--t3);
+}
+
+/* 靛蓝淡底 + 靛蓝淡边的小胶囊 */
+.chip {
+  font-size: var(--text-row-sub);
+  color: var(--accent);
+  padding: var(--space-xxs) var(--space-s);
+  background: var(--accent-soft);
+  border: var(--space-hair) solid var(--accent-edge);
+  border-radius: var(--radius-chip);
+  white-space: nowrap;
+}
+
+/* ---------- 体积读数：数值与单位分排两种字号 ---------- */
+.readout {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.readoutLine {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-xxs);
+}
+
+.readoutValue {
+  font-size: var(--text-gauge-large);
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.02em;
+  color: var(--t1);
+}
+
+.readoutUnit {
+  font-size: var(--text-gauge-large-unit);
+  font-weight: var(--weight-medium);
+  color: var(--t3);
+}
+
+.readoutLabel {
+  font-size: var(--text-row-sub);
+  color: var(--t3);
+}
+
+/* ---------- 区块 ---------- */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-s);
+}
+
+/* 内容栏的分区标题 = 设计稿 `.dt`：12pt semibold 的 t1，不做大写化 */
+.sectionTitle {
+  margin: 0;
+  font-size: var(--text-section-head-strong);
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.005em;
+  color: var(--t1);
+}
+
+/* 卡片面：白底 + 发丝边，A 版的克制做法（不用阴影） */
+.card {
+  background: var(--surface);
+  border: var(--space-hair) solid var(--line);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+}
+
+.cardBody {
+  padding: var(--space-l);
+}
+
+/* 靛蓝淡底 + 靛蓝淡边（说明块），这一栏里唯一的彩色块 */
+.tinted {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-s);
+  padding: var(--space-l);
+  background: var(--accent-soft);
+  border: var(--space-hair) solid var(--accent-edge);
+  border-radius: var(--radius-card);
+}
+
+.noteIcon {
+  flex: 0 0 14px;
+  color: var(--accent);
+  margin-top: var(--space-hair);
+}
+
+.noteText {
+  font-size: var(--text-row-sub);
+  line-height: 1.55;
+  color: var(--t2);
+}
+
+/* ---------- 元数据表：标签列钉死 58px 右对齐 + 行间发丝线 ---------- */
+.metaRow {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-m);
+  padding: var(--space-s) var(--space-l);
+}
+
+.metaRow:not(:first-child) {
+  border-top: var(--space-hair) solid var(--line);
+}
+
+.metaLabel {
+  flex: 0 0 58px;
+  width: 58px;
+  text-align: right;
+  font-size: var(--text-row-sub);
+  color: var(--t3);
+}
+
+.metaValue {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-row-title);
+  font-weight: var(--weight-medium);
+  color: var(--t1);
+  /* 长路径（尤其是「项目路径」整行的全路径）在任意字符处折行，不能只行尾省略 */
+  overflow-wrap: anywhere;
+}
+
+.metaValueEmpty {
+  color: var(--t3);
+}
+
+/* 路径 / ID 走等宽（11px = tokens 里的 section-head 档） */
+.metaMono {
+  font-family: var(--font-mono);
+  font-size: var(--text-section-head);
+  font-weight: var(--weight-regular);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 数字走 tabular-nums，与体积读数同口径 */
+.metaNum {
+  font-size: var(--text-body-12);
+  font-weight: var(--weight-medium);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
+/* ---------- 摘要 ---------- */
+.snippet {
+  font-size: var(--text-nav-item);
+  line-height: 1.6;
+  color: var(--t2);
+  user-select: text;
+}
+
+/* ---------- 关联文件 ---------- */
+.fileRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  width: 100%;
+  height: var(--size-row-compact);
+  padding: 0 var(--space-l);
+  text-align: left;
+  color: var(--t1);
+}
+
+.fileRow:not(:first-child) {
+  border-top: var(--space-hair) solid var(--line);
+}
+
+.fileRow:hover {
+  background: var(--accent-wash);
+  color: var(--accent);
+}
+
+.fileIcon {
+  flex: 0 0 12px;
+  color: var(--t3);
+}
+
+.fileRow:hover .fileIcon {
+  color: var(--accent);
+}
+
+/* 路径太长时行尾省略，完整值走 title 提示 */
+.filePath {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-section-head);
+  color: inherit;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fileHint {
+  flex: 0 0 auto;
+  color: var(--accent);
+  opacity: 0;
+}
+
+.fileRow:hover .fileHint {
+  opacity: 1;
+}
+
+/* ---------- 操作：2×2 网格 ---------- */
+.actionGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-m);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  min-width: 0;
+  height: var(--size-button);
+  padding: 0 var(--space-m);
+  border-radius: var(--radius-control);
+  border: var(--space-hair) solid transparent;
+  font-size: var(--text-row-title);
+  font-weight: var(--weight-medium);
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    opacity var(--dur-fast) var(--ease-out);
+}
+
+.btnLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ghost：白底描边，需要和背景区分的次要动作 */
+.btnGhost {
+  background: var(--surface);
+  border-color: var(--line-2);
+  color: var(--t1);
+}
+
+.btnGhost:hover:not(:disabled) {
+  background: var(--bg);
+}
+
+.btnGhost:active:not(:disabled) {
+  background: var(--sunken);
+}
+
+/* danger：实心红，不可逆动作在视觉上必须自己跳出来 */
+.btnDanger {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--danger) 86%, transparent), var(--danger));
+  border-color: color-mix(in srgb, var(--t1) 8%, transparent);
+  color: var(--surface);
+}
+
+.btnDanger:hover:not(:disabled) {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--danger) 94%, transparent),
+    var(--danger)
+  );
+}
+
+.btnDanger:active:not(:disabled) {
+  background: var(--danger);
+}
+
+/* 禁用态走 opacity，不走系统 tint（tint 渲染成粉红是上一版被点名的硬伤） */
+.btn:disabled {
+  opacity: 0.4;
+}

@@ -1,0 +1,127 @@
+/* ============================================================
+   App.module.css
+   —— 应用外壳：顶栏 + 三栏容器 + 设置遮罩。
+
+   视觉基线 design-demos/ui-a-precision.html 的 `.top` / `.cols`。
+   移植自 `ConversationClean/ContentView.swift`。
+
+   这几条原先寄居在 `components/Splitter.module.css` 里 —— 分配文件清单里
+   当时没有 `App.module.css`。CSS Modules 的类名按文件生成，把外壳类写在
+   分隔条的样式文件里虽然能跑，但读代码的人会去错误的文件里找定义，已拆回。
+   分隔条自己那三条（`.splitter*`）留在 `Splitter.module.css`。
+   ============================================================ */
+
+/* ---------- 窗口外壳 ---------- */
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+/* 顶栏 48px，hiddenTitleBar 自绘。
+   左侧 78px 让给红绿灯（3×12 + 2×8 gap + 左右各 16），红绿灯浮在我们自己的
+   背景上 —— 用系统标题栏时那块底色不可控，深色模式下永远是「贴了块补丁」。 */
+.topBar {
+  position: relative;
+  z-index: var(--z-sticky);
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  flex: 0 0 var(--size-top-bar);
+  height: var(--size-top-bar);
+  padding: 0 var(--space-l) 0 var(--size-traffic-light-inset);
+  background: var(--bg);
+  border-bottom: var(--space-hair) solid var(--line);
+}
+
+.brand {
+  font-size: var(--text-brand);
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.01em;
+  color: var(--t1);
+}
+
+.brandSub {
+  font-size: var(--text-body);
+  color: var(--t3);
+}
+
+.topDivider {
+  width: var(--space-hair);
+  height: 12px;
+  margin: 0 var(--space-xxs);
+  background: var(--line-2);
+}
+
+.topTotal {
+  font-size: var(--text-body-12);
+  font-weight: var(--weight-semibold);
+  color: var(--t1);
+}
+
+.topTotalNote {
+  font-size: var(--text-row-sub);
+  color: var(--t3);
+}
+
+.grow {
+  flex: 1;
+}
+
+/* ---------- 三栏 ---------- */
+
+.cols {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.col {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.colSidebar {
+  flex: 0 0 auto;
+  background: var(--sidebar);
+  border-right: var(--space-hair) solid var(--line);
+}
+
+/* 列表是三栏里最亮的内容面 */
+.colList {
+  flex: 0 0 auto;
+  background: var(--surface);
+}
+
+/* 详情栏是三栏里最「沉」的一层：把最亮的内容面让给列表 */
+.colDetail {
+  flex: 1 1 auto;
+  min-width: 0;
+  background: var(--bg);
+}
+
+/* ---------- 覆盖层（设置面板） ----------
+   SettingsView 自己只画面板，遮罩与显隐由 App 编排。 */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-sheet);
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--t1) 30%, transparent);
+}
+
+.settingsPanel {
+  width: 640px;
+  height: 460px;
+  overflow: hidden;
+  border-radius: var(--radius-card);
+  border: var(--space-hair) solid var(--line);
+  box-shadow: 0 24px 70px color-mix(in srgb, var(--t1) 34%, transparent);
+}

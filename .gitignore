@@ -44,3 +44,14 @@ Icon
 
 # Git worktrees (SDD isolated workspace)
 .worktrees/
+
+# Node / Electron (TS 重构)
+node_modules/
+out/
+release/
+dist/
+*.tsbuildinfo
+.vite/
+
+# 端口期的临时产物
+out-dbg/

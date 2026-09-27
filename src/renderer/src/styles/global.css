@@ -1,0 +1,132 @@
+/**
+ * 全局重置与基础排版。
+ *
+ * 只做三件事：清掉浏览器默认样式、把 body 铺满窗口、定义几个到处都要用的原子类。
+ * **任何组件都不许在这里之外写颜色 / 字号字面量** —— 那些值全在 `tokens.css`。
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-ui);
+  font-size: var(--text-body);
+  line-height: 1.45;
+  color: var(--t1);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  /* 桌面应用不是网页：不要文本选中，不要拖拽选中，输入框之外也不要出现 I-beam。 */
+  user-select: none;
+  cursor: default;
+  overflow: hidden;
+}
+
+/* 输入类元素恢复可选中 */
+input,
+textarea,
+[contenteditable],
+.selectable {
+  user-select: text;
+}
+
+/* 滚动条：macOS 的 overlay 滚动条默认太宽，列表里一列就吃掉 15px。
+   这里收窄成 8px，hover 才显形，滚动时才占位。 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+*:hover::-webkit-scrollbar-thumb {
+  background: var(--line-2);
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--t3);
+  background-clip: content-box;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: default;
+}
+
+button:disabled {
+  cursor: default;
+}
+
+input {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  outline: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* 数字列：等宽数字，否则右对齐时会跳 */
+.num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 截断到一行 */
+.ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 截断到两行 */
+.clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.app-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--t3);
+  font-size: var(--text-note);
+}

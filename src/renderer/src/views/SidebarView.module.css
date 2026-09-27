@@ -1,0 +1,275 @@
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  background: var(--sidebar);
+}
+
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 var(--space-m) var(--space-xl);
+}
+
+/* ---------- 分类导航行 ----------
+   选中态：靛蓝渐变实心 + 白字（设计稿 A 的做法）。
+   计数用等宽数字，右侧对齐才不会因位数变化跳动。 */
+
+.navRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-m);
+  width: 100%;
+  height: var(--size-row-compact);
+  padding: 0 var(--space-m);
+  border-radius: var(--radius-control);
+  text-align: left;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+
+.navRow:hover {
+  background: color-mix(in srgb, var(--t1) 4.5%, transparent);
+}
+
+.navRowOn {
+  background: linear-gradient(180deg, var(--accent-2), var(--accent));
+  color: var(--surface);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.navRowOn:hover {
+  background: linear-gradient(180deg, var(--accent-2), var(--accent));
+}
+
+/* 未安装的 Agent 置灰：不是禁用，只是「本机没找到」，点了仍可查看说明 */
+.navRowDim {
+  opacity: 0.45;
+}
+
+.navIcon {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  display: grid;
+  place-items: center;
+  color: inherit;
+}
+
+.navLabel {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-nav-item);
+  font-weight: var(--weight-regular);
+  color: var(--t1);
+}
+
+.navLabelOn {
+  font-weight: var(--weight-medium);
+  color: var(--surface);
+}
+
+.navRowDim .navLabel {
+  color: var(--t3);
+}
+
+.navCount {
+  flex: 0 0 auto;
+  font-size: var(--text-nav-count);
+  font-weight: var(--weight-medium);
+  color: var(--t3);
+  background: color-mix(in srgb, var(--t1) 6%, transparent);
+  padding: var(--space-xxs) var(--space-s);
+  border-radius: 999px;
+  min-width: 20px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.navCountOn {
+  color: var(--surface);
+  background: color-mix(in srgb, var(--surface) 24%, transparent);
+}
+
+/* 体积：数字归体积，形状归占比。行内只给一个等宽读数，条留给详情栏。 */
+.navSize {
+  flex: 0 0 auto;
+  font-size: var(--text-row-sub);
+  color: var(--t3);
+  font-variant-numeric: tabular-nums;
+}
+
+.navSizeOn {
+  color: color-mix(in srgb, var(--surface) 85%, transparent);
+}
+
+/* ---------- 工具行 ----------
+   20px 图标位：checked 非 null 时画手绘勾选框，否则留空位保持文字左对齐。 */
+
+.toolRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  width: 100%;
+  height: var(--size-row-compact);
+  padding: 0 var(--space-m);
+  border-radius: var(--radius-control);
+  text-align: left;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+
+.toolRow:hover {
+  background: color-mix(in srgb, var(--t1) 4.5%, transparent);
+}
+
+.toolIcon {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  display: grid;
+  place-items: center;
+  color: var(--t3);
+}
+
+.toolIconAccent {
+  color: var(--accent);
+}
+
+.toolLabel {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-nav-item);
+  color: var(--t1);
+}
+
+/* ---------- 体检卡 ----------
+   侧栏那块空白最好的用途不是装饰，是一个能直接回答「我现在能省多少」的读数。
+   大号 22px 数字 —— 母题是体积的重量感，数字就该是全侧栏最重的元素。 */
+
+.gauge {
+  margin-top: var(--space-m);
+  padding: var(--space-l);
+}
+
+.gaugeLabel {
+  font-size: var(--text-section-head);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--t3);
+}
+
+.gaugeValueRow {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-xs);
+  margin-top: var(--space-s);
+}
+
+.gaugeValue {
+  font-size: var(--text-gauge);
+  font-weight: var(--weight-semibold);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--t1);
+  font-variant-numeric: tabular-nums;
+}
+
+.gaugeUnit {
+  font-size: var(--text-gauge-unit);
+  font-weight: var(--weight-medium);
+  color: var(--t2);
+}
+
+.gaugeBar {
+  margin-top: var(--space-m);
+}
+
+.gaugeMeta {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-xs);
+  margin-top: var(--space-s);
+  font-size: var(--text-row-sub);
+  color: var(--t2);
+}
+
+/* 允许换行而不截断：Swift 那边是 `lineLimit(1)`，但 208px 的侧栏里
+   「占 全部 Agent 合计 100%」会被砍成「占 全部 Agent 合计 10…」——
+   截断掉的正好是百分比，读者会读成 10%。宁可卡片高一行，也不说假话。 */
+.gaugeMetaCaption {
+  flex: 1 1 auto;
+  min-width: 0;
+  line-height: 1.4;
+}
+
+.gaugeMetaCount {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  font-size: var(--text-nav-count);
+  font-weight: var(--weight-semibold);
+  color: var(--danger);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 两条随设置开关变化的说明文字之一（回收空目录） */
+.gaugeNote {
+  margin-top: var(--space-s);
+  font-size: var(--text-row-sub);
+  line-height: 1.5;
+  color: var(--t3);
+}
+
+/* ---------- 存储路径卡 ---------- */
+
+.pathCard {
+  margin-top: var(--space-m);
+  padding: var(--space-l);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pathTitle {
+  font-size: var(--text-section-head);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.pathValue {
+  font-family: var(--font-mono);
+  font-size: var(--text-note);
+  line-height: 1.4;
+  color: var(--t2);
+  word-break: break-all;
+  user-select: text;
+  cursor: text;
+}
+
+.pathValueClamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* 两条随设置开关变化的说明文字之一（快照策略） */
+.pathNote {
+  font-size: var(--text-row-sub);
+  line-height: 1.5;
+  color: var(--t3);
+}
+
+.pathButton {
+  margin-top: var(--space-xxs);
+}

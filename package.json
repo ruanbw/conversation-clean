@@ -1,0 +1,45 @@
+{
+  "name": "conversation-clean",
+  "version": "2.0.0",
+  "description": "扫描并清理本机各类 AI 编码 Agent / IDE 遗留的会话数据",
+  "private": true,
+  "type": "module",
+  "main": "./out/main/index.js",
+  "author": "ConversationClean",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "dev": "electron-vite dev",
+    "start": "electron-vite preview",
+    "build": "electron-vite build",
+    "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
+    "typecheck:web": "tsc --noEmit -p tsconfig.web.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "port:status": "node scripts/port-status.mjs",
+    "dist": "npm run build && electron-builder --mac --publish never",
+    "dist:dir": "npm run build && electron-builder --dir --publish never"
+  },
+  "dependencies": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@testing-library/dom": "^10.4.0",
+    "@testing-library/react": "^16.3.0",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.2.0",
+    "electron": "^44.4.5",
+    "electron-builder": "^26.0.12",
+    "electron-vite": "^5.0.0",
+    "jsdom": "^26.0.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.6",
+    "vitest": "^5.0.2"
+  }
+}
