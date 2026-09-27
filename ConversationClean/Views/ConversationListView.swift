@@ -36,6 +36,10 @@ struct ConversationListView: View {
     @AppStorage("listSortMode") private var sortRaw: String = ListSortMode.size.rawValue
     @AppStorage("searchText") private var searchRaw: String = ""
 
+    /// 搜索框焦点。绑定到 `searchIsFocused` 而不是直接用 ⌘F 改 AppStorage：
+    /// 焦点是视图状态，持久化它只会让下次开窗口凭空抢走键盘。
+    @FocusState private var searchIsFocused: Bool
+
     private var sort: ListSortMode { ListSortMode(rawValue: sortRaw) ?? .date }
     private var isBusy: Bool { viewModel.isScanning || viewModel.isCleaning }
     private var rows: [ConversationItem] { sorted }
@@ -58,6 +62,22 @@ struct ConversationListView: View {
             batchBar
         }
         .background(Color(nsColor: .windowBackgroundColor))
+        .onChange(of: viewModel.searchFocusRequest) { _, _ in
+            searchIsFocused = true
+        }
+        // Esc 分两级退：先清搜索词（无词可清时不动它），再清勾选。
+        // 列表行选中由 `List(selection:)` 自己处理 Esc，这里不抢。
+        .onKeyPress(.escape) {
+            if !searchRaw.trimmed.isEmpty {
+                searchBinding.wrappedValue = ""
+                return .handled
+            }
+            if !viewModel.selectedItems.isEmpty {
+                viewModel.selectAll(false)
+                return .handled
+            }
+            return .ignored
+        }
     }
 
     // MARK: - 列表列顶部筛选栏
@@ -69,7 +89,8 @@ struct ConversationListView: View {
                     .foregroundStyle(.secondary)
                 TextField("搜索标题、摘要、项目路径或会话 ID", text: searchBinding)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 13))
+                    .font(.body)
+                    .focused($searchIsFocused)
                 if !searchRaw.isEmpty {
                     Button { searchBinding.wrappedValue = "" } label: {
                         Image(systemName: "xmark.circle.fill")
@@ -95,13 +116,13 @@ struct ConversationListView: View {
                 }
                 .pickerStyle(.menu)
                 .labelsHidden()
-                .font(.system(size: 11))
+                .font(.subheadline)
                 .frame(width: 110)
 
                 Spacer()
 
                 Text("共 \(rows.count) 项")
-                    .font(.system(size: 11))
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
 
                 Button {
@@ -227,33 +248,45 @@ struct ConversationListView: View {
 
     private var batchBar: some View {
         let disabled = viewModel.selectedItems.isEmpty || isBusy
-        return HStack(spacing: 10) {
+        return HStack(spacing: 8) {
             (Text("已选中 ")
                 + Text("\(viewModel.selectedItems.count)").bold()
                 + Text(" 项 · ")
                 + Text(Fmt.bytes(viewModel.selectedSize)).bold())
                 .font(.callout)
                 .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                // 空间不够时先压这段文字。丢掉它，丢的是按钮的可点区域。
+                .layoutPriority(1)
 
             Button(allSelected ? "取消全选" : "全选当前") { viewModel.selectAll(!allSelected) }
                 .controlSize(.small)
                 .disabled(rows.isEmpty)
+                .fixedSize()
 
-            Spacer(minLength: 8)
+            Spacer(minLength: 4)
 
-            Button { viewModel.selectAll(false) } label: { Label("取消选择", systemImage: "xmark") }
-                .controlSize(.small).disabled(disabled)
-
+            // 列表列最窄只有 340pt，这一排塞不下四个带文字的按钮。
+            // 次要动作改纯图标（tooltip 兜底），主操作保留文字。
+            //
+            // 「取消选择」整个去掉：Esc 已经能清（见本文件 onKeyPress），
+            // 而它在「全选 / 部分选中」两种情况下与「全选当前 / 取消全选」完全重复。
             Button {
                 for item in viewModel.selectedItems { viewModel.revealInFinder(item: item) }
-            } label: { Label("在 Finder 中显示", systemImage: "folder") }
-                .controlSize(.small).disabled(disabled)
+            } label: {
+                Image(systemName: "folder")
+            }
+            .controlSize(.small).disabled(disabled)
+            .help("在 Finder 中显示选中的会话")
 
             Button { viewModel.requestCleanSelected() } label: {
                 Label(cleanSelectedTitle, systemImage: "trash")
             }
             .buttonStyle(.borderedProminent).tint(.red)
             .controlSize(.small).disabled(disabled)
+            .fixedSize()
+            .help("删除选中的会话及其索引行")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -304,7 +337,7 @@ private struct ConversationRow: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.title)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.body.weight(.medium))
                     .lineLimit(1)
                 // 副标题给「这条属于哪、什么时候的」，而不是重复标题。
                 // 标题常常就是首条 user prompt 的原文，再显示一遍只会让每行
@@ -320,20 +353,20 @@ private struct ConversationRow: View {
                         Text(branch).foregroundStyle(.secondary)
                     }
                 }
-                .font(.system(size: 10.5))
+                .font(.caption)
                 .lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
             // 体积是这行的主数字：清理工具里「多大」比「叫什么」重要
             Text(item.formattedSize)
-                .font(.system(size: 12.5, weight: .semibold, design: .monospaced))
+                .font(.callout.weight(.semibold).monospacedDigit())
                 .foregroundStyle(item.sizeInBytes > 0 ? Color.primary : Color.secondary)
                 .frame(width: 68, alignment: .trailing)
                 .lineLimit(1)
 
             Text("#\(item.shortSessionId)")
-                .font(.system(size: 9.5, design: .monospaced))
+                .font(.caption2.monospaced())
                 .foregroundStyle(.tertiary)
                 .frame(width: 62, alignment: .trailing)
                 .lineLimit(1)

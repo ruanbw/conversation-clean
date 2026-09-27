@@ -35,6 +35,13 @@ class CleanViewModel: ObservableObject {
         }
     }
 
+    /// ⌘F 的「请把搜索框拉到焦点」请求。
+    ///
+    /// 用自增计数而不是 `Bool` 开关：焦点状态归 `ConversationListView` 的
+    /// `@FocusState` 管，Bool 只能表达「当前是否聚焦」，没法表达「刚才被要求聚焦」——
+    /// 用户在搜索框里时按 ⌘F，Bool 已经是 true，视图收不到变化，光标也不会重新全选。
+    @Published var searchFocusRequest: Int = 0
+
     @Published private(set) var filteredConversations: [ConversationItem] = []
     @Published private(set) var categoryStats: [ConversationCategory: CategoryStats] = [:]
     @Published private(set) var totalSize: Int64 = 0
