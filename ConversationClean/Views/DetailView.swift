@@ -81,10 +81,9 @@ struct DetailView: View {
         HStack(alignment: .top, spacing: 16) {
             ZStack {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(item.category.tint.opacity(0.15))
+                    .fill(Color.secondary.opacity(0.13))
                 Image(systemName: item.category.iconName)
                     .font(.system(size: 30, weight: .regular))
-                    .foregroundStyle(item.category.tint)
             }
             .frame(width: 72, height: 72)
 
@@ -99,8 +98,8 @@ struct DetailView: View {
                         .font(.system(size: 11, weight: .medium))
                         .padding(.horizontal, 7)
                         .padding(.vertical, 2)
-                        .background(Capsule().fill(item.category.tint.opacity(0.15)))
-                        .foregroundStyle(item.category.tint)
+                        .background(Capsule().fill(Color.secondary.opacity(0.15)))
+                        .foregroundStyle(.secondary)
                     Text(item.formattedSize)
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundStyle(.secondary)

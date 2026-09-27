@@ -179,7 +179,7 @@ private struct CategoryRow: View {
             HStack(spacing: 8) {
                 Image(systemName: category.iconName)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(isSelected ? .white : category.tint)
+                    .foregroundStyle(isSelected ? .white : Color.accentColor)
                     .frame(width: 20)
 
                 Text(category.rawValue)

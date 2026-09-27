@@ -3,34 +3,12 @@ import Combine
 
 // MARK: - 分类色
 //
-// 取自 DefaultAppManager 的 categoryColor 思路：15 款 Agent 给 15 个可区分的语义色。
-// 这里把名字解析成 Color，避免在枚举里存 SwiftUI 类型（模型层不该依赖 SwiftUI）。
+// 刻意**不**给 15 款 Agent 各配一色：一列排下来就是花的，读不出信息。
+// DefaultAppManager 的「导航模式」一组图标也全是同一个 accentColor，
+// 只有「格式分类」那 10 个语义类才上色。这里取同样克制的做法 ——
+// 徽章统一中性底 + 前景字，只靠首字母区分。
 
-extension ConversationCategory {
-    var tint: Color {
-        Color(tintName)
-    }
-}
 
-private extension Color {
-    init(_ name: String) {
-        switch name {
-        case "orange": self = .orange
-        case "teal":   self = .teal
-        case "purple": self = .purple
-        case "green":  self = .green
-        case "mint":   self = .mint
-        case "indigo": self = .indigo
-        case "cyan":   self = .cyan
-        case "blue":   self = .blue
-        case "pink":   self = .pink
-        case "brown":  self = .brown
-        default:       self = .gray
-        }
-    }
-}
-
-// MARK: - 排序方式
 private enum ListSortMode: String, CaseIterable, Hashable, Identifiable {
     case date, size, msgs
 
@@ -325,10 +303,10 @@ private struct ConversationRow: View {
             // 彩色徽章：Agent 名首字母
             ZStack {
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(item.category.tint.opacity(0.15))
+                    .fill(Color.secondary.opacity(0.13))
                 Text(String(item.category.rawValue.prefix(1)))
                     .font(.system(size: 12, weight: .bold, design: .rounded))
-                    .foregroundStyle(item.category.tint)
+                    .foregroundStyle(.primary)
             }
             .frame(width: 34, height: 26)
 
