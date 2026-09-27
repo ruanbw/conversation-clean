@@ -2,7 +2,7 @@
 
 基于 Swift 6 + SwiftUI 构建的 macOS 原生应用，用于扫描并清理本机各类 AI 编码 Agent / IDE 遗留的会话数据。
 
-<img src="docs/app-screenshot.png" alt="ConversationClean 主界面：左侧为 Agent 分类与缓存统计，中间为会话列表，右侧为选中会话的详情" width="900">
+<img src="docs/app-screenshot.png" alt="ConversationClean 主界面：左侧为 Agent 分类与工具，中间为可搜索、可排序的会话列表，右侧为选中会话的元数据" width="900">
 
 <sub>真实运行截图，会话标题 / 项目路径 / 会话 ID 等内容已做马赛克处理。</sub>
 
@@ -12,7 +12,10 @@
 
 - **15 款 Agent 全覆盖**：统一 `AgentScanner` 协议接入 CLI Agent（Claude Code、Codex、Pi Agent、Cline、Roo Code、Continue.dev、OpenViking、Aider、Zed AI、OpenHands）与 VS Code 系 IDE（VS Code Chat、Cursor、Windsurf、Trae、Antigravity）。
 - **双层索引原子清理**：对同时维护「会话文件 + SQLite 索引」的 Agent（VS Code 系 `state.vscdb`、Pi Agent context-mode），删除会话时同步清理索引，避免幽灵会话残留。
-- **现代 macOS 设计规范**：`NavigationSplitView` 双栏布局、统一工具栏、原生 SF Symbols 图标体系。
+- **macOS 原生观感**：隐藏标题栏 + 手搓三栏（`ContentView`），红黄绿浮在自有背景上，深浅色自动跟随；系统 `Form` / `Toggle` / `List` 承载设置与列表，不再自绘控件。
+- **可拖拽三栏**：两条分隔条可拖动并记忆列宽（`@AppStorage`），上限随窗口宽度动态收窄，缩窗口不会把三栏挤变形。
+- **键盘可达**：⌘R 扫描、⌘Delete 清理、⌘F 聚焦搜索、Esc 逐级清空（先清搜索词，再清勾选）。
+- **语义字体**：正文全部走 `.body` / `.callout` / `.caption` 等语义字体，系统字号设置下会一起缩放；仅 SF Symbol 图标保留按框计算的固定字号。
 - **清晰的 MVVM 架构**：`Models/` 数据模型、`ViewModels/` 状态管理、`Views/` 界面组件。
 - **并发扫描**：`AgentScanService` 通过 `withTaskGroup` 并发调度全部扫描器。
 - **标准 Xcode 工程**：自带完整的 `ConversationClean.xcodeproj` 与共享构建 Scheme。
