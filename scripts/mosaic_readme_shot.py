@@ -16,59 +16,59 @@ import tempfile
 VIEW_W, VIEW_H = 1280, 820  # 缩略基准（= 窗口 point 尺寸，1:1 好核对）
 BLOCK = 11                 # 马赛克块边长（最终像素）
 
-# 三条分隔条在 VIEW_W 坐标系里的预期 x。用来在打码前校验截图栏宽，
+# 三条分隔条在 VIEW_W 坐标系里的预期边界。用来在打码前校验截图栏宽，
 # 不一致就直接报错停下。
 #
-# 🔴 这里踩过坑：三栏宽度存在 @AppStorage（sidebarWidth / listWidth）里，
-# 是**用户上次拖分隔条的结果**，不是代码默认值。实测过一次残留的
-# listWidth=577.46，于是中栏 578pt / 右栏 455pt，比默认宽出一大截 ——
-# 按默认值算出来的打码框全部错位，右侧栏「按 Agent 分布」的 Agent 名称
-# 被糊掉，而它恰恰是这张图要展示的主体信息。
-# 所以：拍截图前必须先 `defaults delete <bundle> sidebarWidth listWidth`。
-EXPECTED_COLS = {"sidebar": (0, 230), "list": (241, 641), "detail": (647, 1280)}
+# [坑] 这里踩过坑，而且 **Electron 移植后又踩了一次**：
+# 列宽存在 localStorage（sidebarWidth / listWidth）里，是**用户上次拖分隔条的结果**，
+# 不是代码默认值。Swift 版实测过一次残留的 listWidth=577.46，于是中栏比默认宽出一大截
+# —— 按默认值算出来的打码框全部错位，右侧栏「按 Agent 分布」的 Agent 名称被糊掉，
+# 而它恰恰是这张图要展示的主体信息。
+#
+# Swift 版：   侧栏 230 / 中栏 241..641 / 右栏 647..1280
+# Electron 版：cleanStore.ts 的 DEFAULT_COLUMN_WIDTHS = { sidebar: 208, list: 460 }
+#              → 实测中栏白区在 219..678（208 + 11pt 分隔条）
+# **两套默认值不一样**，所以坐标必须重测，绝不能平移。
+#
+# 拍截图前要确保用的是默认值：删掉 Electron userData 里的 Local Storage
+# （~/Library/Application Support/ConversationClean/）。
+EXPECTED_COLS = {"sidebar": (0, 219), "list": (219, 678), "detail": (678, 1280)}
 
-# (说明, x0, y0, x1, y1) —— 缩略坐标
+# (说明, x0, y0, x1, y1) —— view 坐标（1280x820 基准）
 #
-# 只打码真正敏感的三类：会话标题（即首条 user prompt 原文）、项目路径。
-# 刻意**保留**：Agent 名称、字节数、占比、相对时间 —— 这些正是这张图要展示的信息，
-# 全糊掉就看不出「哪款 Agent 占得多」。所以「按 Agent 分布」整块不动，
-# 下面的统计表仍然列出每款 Agent 的名称与字节数。
+# 只打码真正敏感的两类：会话标题（即首条 user prompt 原文）、项目路径。
+# 刻意**保留**：Agent 名称、字节数、占比、相对时间 —— 这些正是这张图要展示的信息。
 #
-# 坐标全部从新布局的控件宽度与实测绘图得出，不是目测：
-#   中栏 241..641pt，行 padding .leading 10 / .horizontal 16 → 内容 251..625pt；
-#     右侧固定列 ShareBar 38 + gap 8 + 体积 52 = 98pt，占到 527..625
-#     → .tcol 右边界 519pt。取 258..522（两边各留 3pt），
-#     千万别往右扩到 540 —— 那会连占比条一起糊掉，占比正是要展示的信息。
-#     y：列表行从 154pt 开始（实测第一行文字 y 154..164），行高 32pt，末行到 ~800pt。
-#   侧栏存储路径：实测「~/.pi」文字在 y 383..392pt。上下两行分别是
-#     「存储路径」小标题（y≈371）和「清理时同步删除…」策略说明（y 402..410），
-#     后者不是敏感信息，所以只糊 374..400 这一行。
-#   右栏 652..1280pt，det-scroll padding 24 + 卡片 padding 14 → 内容 690..1242pt；
-#     固定列 占比条 76 + gap 12 + 百分比 34 + gap 12 + 大小 58 = 204pt
-#     → .nm 右边界 1038pt。取 688..1040。
-#     y：卡片首行文字 y 154..165，5 行止于 y≈491（实测最后一段 475..491），
-#     取 148..505。再往下 y 515 起是「按 Agent 分布」的 4 行 Agent 名称 ——
-#     那是这张图要展示的主体信息，**必须留在外面**。
+# 坐标全部由程序实测得出，不是目测：把打码后的图按 view 坐标逐行扫描墨迹，
+# 找出每条文字带的上下沿（见 commit message 里记的扫描方法）。目测在这里栽过：
+# 第一版把中栏 y0 定在 189，而实测第一行文字从 187 就开始 —— 顶部漏了 2pt，
+# 放大后「本地 Agent 会话清理」的字头清晰可读。**差 2pt 就是数据泄漏。**
+#
+# 中栏（x 272..566，y 182..780）：
+#   · 左界 272：白区从 219 起，行内 checkbox 占 219..272。
+#   · 右界 566：行内右侧固定列（占比条 38 + gap 8 + 体积 52）从 566 起。
+#     千万别往右扩到 600 —— 那会把占比条糊掉，而占比正是要展示的信息。
+#   · 上界 182：实测首行文字顶在 187，留 5pt 余量。
+#   · 下界 780：批量条（已选 N 项）在 ~790，往下就不是列表了。
+#     上界要留这么宽是因为**行数不定** —— 10 条会话时文字会一直铺到 780。
+#   · 行与行之间只有空白，占多高都不会误伤别的信息。
+#
+# 右栏为什么**逐行**打码而不是一个大框：
+#   「按 Agent 分布」这一节的位置**取决于上面有几行** ——
+#   Top3 时标题在 y≈260，Top4 被推到 ≈304，Top5 推到 ≈348。
+#   所以「盖住全部 5 行」与「不糊掉分布区」对任何固定矩形都是互斥的。
+#   （脚本注释里记过一次翻车：坐标错位把分布区的 Agent 名称糊掉了。）
+#   改成按 Top5 的固定行距（实测 44pt）逐行打标题，5 行全盖、分布区永不受影响，
+#   且不依赖这次截了几个会话。副标题（Agent 名 + 相对时间）保留 —— 不是敏感信息。
 REGIONS = [
-    # 中栏 241..641pt，行 padding .leading 10 / .horizontal 16 → 内容 251..624pt；
-    #   右侧固定列 ShareBar 38 + gap 8 + 体积 52 = 98pt 占到 526..624
-    #   → .tcol 右边界 518pt。取 255..521。千万别往右扩到 540：
-    #   那会连占比条一起糊掉，而占比正是这张图要展示的信息。
-    #   y：第一行文字 154..164pt，行高 32pt，末行到 ~800pt。
-    ("列表：会话标题 + 项目路径", 255, 148, 521, 805),
-    # 会话 ID 列在本次改造中已删除（它占 62pt 却用 tertiary 色几乎不可见），
-    # 所以不再需要为它保留打码区。
-    # 侧栏：实测「~/.pi」文字在 y 383..392pt。上下分别是「存储路径」小标题
-    #   （y≈371）和「清理时同步删除…」策略说明（y 402..410），
-    #   后者不是敏感信息，所以只糊 374..400 这一行。
-    ("侧栏：当前分类存储路径", 12, 374, 228, 400),
-    # 右栏 647..1280pt，det-scroll padding 24 + 卡片 padding 14 → 内容 671..1255 → 卡内 685..1241pt；
-    #   固定列 76 + 12 + 34 + 12 + 58 = 204pt → .nm 右边界 1037pt。取 683..1041。
-    #   y：卡首行文字 154..165pt，5 行止于 ~491pt，取 148..505。
-    #   再往下 y 515 起是「按 Agent 分布」的 4 行 Agent 名称 ——
-    #   那是这张图要展示的主体信息，**必须留在外面**。
-    ("详情栏：占用大户 5 行标题 + 副标题", 683, 148, 1041, 505),
+    ("中栏：会话标题 + 项目路径", 272, 182, 566, 780),
+    ("右栏：占用大户 第1行标题", 728, 112, 1037, 128),
+    ("右栏：占用大户 第2行标题", 728, 156, 1037, 172),
+    ("右栏：占用大户 第3行标题", 728, 200, 1037, 216),
+    ("右栏：占用大户 第4行标题", 728, 244, 1037, 260),
+    ("右栏：占用大户 第5行标题", 728, 288, 1037, 304),
 ]
+
 
 
 def check_column_widths(src: pathlib.Path, W: int, H: int) -> None:
@@ -89,7 +89,11 @@ def check_column_widths(src: pathlib.Path, W: int, H: int) -> None:
              "-format", "%[pixel:p{0,0}]", "info:"],
             capture_output=True, text=True, check=True).stdout.strip()
         nums = out[out.index("(") + 1:out.index(")")].split(",")
-        return tuple(int(round(float(v))) for v in nums[:3])
+        vals = [int(round(float(v))) for v in nums[:3]]
+        # 万一又被判成灰度（`gray(255)` 只有 1 个分量），补齐成 RGB 再比。
+        if len(vals) == 1:
+            vals = vals * 3
+        return tuple(vals)
 
     # 从 x=300pt 一路向右，找连续白区（#FFFFFF）的终点
     white_end = None
@@ -99,23 +103,37 @@ def check_column_widths(src: pathlib.Path, W: int, H: int) -> None:
             white_end = x_pt
         elif white_end is not None and x_pt - white_end > 12:
             break
-    expected = EXPECTED_COLS["list"][1]          # 641
+    expected = EXPECTED_COLS["list"][1]          # 678
     if white_end is None or abs(white_end - expected) > 4:
         raise SystemExit(
             f"栏宽与预期不符，拒绝打码：\n"
             f"  中栏右边界实测在 x≈{white_end}pt，预期 {expected}pt"
             f"（偏差 {None if white_end is None else white_end - expected:+d}pt）\n\n"
-            f"原因：sidebarWidth / listWidth 存在 @AppStorage 里，"
+            f"原因：sidebarWidth / listWidth 存在 localStorage 里，"
             f"是上次拖分隔条的结果，不是代码默认值。\n"
-            f"拍截图前先执行：\n"
-            f"  defaults delete com.ruanbw.ConversationClean sidebarWidth\n"
-            f"  defaults delete com.ruanbw.ConversationClean listWidth")
+            f"拍截图前先删掉 Electron userData 下的 Local Storage：\n"
+            f"  rm -rf ~/Library/Application\\ Support/ConversationClean/Local\\ Storage")
     print(f"column widths OK: 中栏右边界 x={white_end}pt "
-          f"（= 侧栏 230 + 中栏 400 + 两条分隔条 11pt）")
+          f"（= 侧栏 208 + 分隔条 11 + 中栏 460 - 1 舍入）")
 
 
 def main() -> None:
-    src, dst = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+    raw, dst = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+    # 先归一到 sRGB 再干活。
+    # macOS `screencapture` 出来的 PNG 带 ICC profile，ImageMagick 7 会照着它
+    # 把图当成灰度，于是 `%[pixel:p{0,0}]` 吐 `gray(255)` 而不是 `srgb(255,255,255)`，
+    # 下面的解析直接 unpack 失败。PIL 读同一张图是正常 RGB —— 是 IM 的解释问题，
+    # 不是图坏了。所以在入口统一指定色彩空间，不依赖调用方记得加参数。
+    tmpdir0 = pathlib.Path(tempfile.mkdtemp(prefix="ccnorm-"))
+    src = tmpdir0 / "normalized.png"
+    # `-define png:color-type=2` 强制按真 RGB 写出。`-colorspace sRGB` / `-strip`
+    # 都不够：IM 7 会照着 macOS screencapture 内嵌的灰度 ICC profile 把整张图
+    # 判成 grayscale，于是 `%[pixel:p{0,0}]` 吐 `gray(255)` 而不是
+    # `srgb(255,255,255)`，下面的解析 unpack 失败。PIL 读同一张图是正常 RGB，
+    # 所以是 IM 的解释问题、不是图坏了 —— 绕开它的 profile 解释即可。
+    subprocess.run(
+        ["magick", str(raw), "-colorspace", "sRGB", "-define", "png:color-type=2", str(src)],
+        check=True)
     W, H = (int(v) for v in subprocess.run(
         ["magick", "identify", "-format", "%w %h", str(src)],
         capture_output=True, text=True, check=True).stdout.split())
@@ -144,6 +162,7 @@ def main() -> None:
     args.append(str(dst))
     subprocess.run(args, check=True)
     shutil.rmtree(tmpdir, ignore_errors=True)
+    shutil.rmtree(tmpdir0, ignore_errors=True)
     print(f"-> {dst}")
 
 

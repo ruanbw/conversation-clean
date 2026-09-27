@@ -55,3 +55,7 @@ dist/
 
 # 端口期的临时产物
 out-dbg/
+
+# Python 字节码
+__pycache__/
+*.pyc
