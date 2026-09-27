@@ -38,3 +38,6 @@ Icon
 
 # Pi agent 后台任务输出
 .pi/tasks/
+
+# Git worktrees (SDD isolated workspace)
+.worktrees/
