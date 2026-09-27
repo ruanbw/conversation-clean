@@ -20,12 +20,9 @@ import SwiftUI
 struct CleanConfirmSheet: View {
     @EnvironmentObject var viewModel: CleanViewModel
 
-    /// 弹层可用高度（视口高 - 上下留白），由 `ModalScrim` 传入。
-    /// 原型 `.sheet-b{max-height:min(58vh,520px)}` 用 vh 表达，SwiftUI 没有 vh 单位。
-    let availableHeight: CGFloat
-
-    /// 滚动区的上限：`.sheet-b` 的 `min(58vh, 520px)`。
-    private var bodyMaxHeight: CGFloat { min(availableHeight * 0.58, 520) }
+    /// 滚动区的上限。原型的 `min(58vh, 520px)` 用 vh 表达，
+    /// `.sheet` 场景下 SwiftUI 没有 vh —— 固定取 520。
+    private let bodyMaxHeight: CGFloat = 520
 
     // MARK: - 常量（对应原型 IDX_PER / MAIN_MAX）
 
@@ -160,21 +157,6 @@ struct CleanConfirmSheet: View {
             footer
         }
         .frame(width: Self.panelWidth)
-        // 弹层由 `ModalScrim` 承载，不用 `.sheet`：
-        // 之前是 sheet 会自动按内容开窗，这里的 fixed width + 自身高度不再需要，
-        // 但垂直方向仍不能溢出视口 —— 头部/hero/页脚是固定高，滚动区是弹性，
-        // 整体超过视口时先压滚动区，再让内容整体上移。
-        .frame(maxHeight: availableHeight)
-        .background(
-            RoundedRectangle(cornerRadius: CC.R.lg, style: .continuous).fill(CC.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: CC.R.lg, style: .continuous)
-                .strokeBorder(CC.border, lineWidth: 1)
-        )
-        // 先裁圆角再投影，否则圆角外的背景矩形会把阴影方角化
-        .clipShape(RoundedRectangle(cornerRadius: CC.R.lg, style: .continuous))
-        .shadow(color: CC.fg.opacity(0.18), radius: 24, y: 12)
     }
 
     // MARK: - ① 头部（.sheet-h）
@@ -182,16 +164,16 @@ struct CleanConfirmSheet: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 13) {
             ZStack {
-                Circle().fill(CC.dangerSoft)
+                Circle().fill(Color.red.opacity(0.12))
                 Image(systemName: "exclamationmark.triangle")
                     .font(.system(size: 20))
-                    .foregroundStyle(CC.danger)
+                    .foregroundStyle(.red)
             }
             .frame(width: 38, height: 38)
 
             Text("确认清除会话？")
-                .font(CC.F.display)
-                .foregroundStyle(CC.fg)
+                .font(.title2)
+                .foregroundStyle(.primary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.init(top: 20, leading: 22, bottom: 0, trailing: 22))
@@ -205,9 +187,9 @@ struct CleanConfirmSheet: View {
     private var hero: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("预计释放")
-                .font(CC.F.monoSm)
+                .font(.system(size: 10, design: .monospaced))
                 .tracking(1.1)
-                .foregroundStyle(CC.muted)
+                .foregroundStyle(.secondary)
 
             heroFigure
                 .padding(.top, 6)
@@ -225,23 +207,23 @@ struct CleanConfirmSheet: View {
         HStack(alignment: .firstTextBaseline, spacing: 4) {
             if count == 0 {
                 Text("—")
-                    .font(CC.F.num(34))
+                    .font(.system(size: 34, weight: .semibold, design: .monospaced))
                     .tracking(-1.36)
-                    .foregroundStyle(CC.fg)
+                    .foregroundStyle(.primary)
             } else if split.unit.isEmpty {
                 // 没有可拆的单位（如 "0 B"）时整串用大号排，避免留一个空单位占位
                 Text(split.value)
-                    .font(CC.F.num(34))
+                    .font(.system(size: 34, weight: .semibold, design: .monospaced))
                     .tracking(-1.36)
-                    .foregroundStyle(CC.fg)
+                    .foregroundStyle(.primary)
             } else {
                 Text(split.value)
-                    .font(CC.F.num(34))
+                    .font(.system(size: 34, weight: .semibold, design: .monospaced))
                     .tracking(-1.36)          // .est-hero .v 的 letter-spacing: -.04em
-                    .foregroundStyle(CC.fg)
+                    .foregroundStyle(.primary)
                 Text(split.unit)
-                    .font(CC.F.num(16, .medium))
-                    .foregroundStyle(CC.muted)
+                    .font(.system(size: 16, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -251,7 +233,7 @@ struct CleanConfirmSheet: View {
         if count == 0 {
             Text("当前没有可清理的会话。")
                 .font(.system(size: 11.5))
-                .foregroundStyle(CC.muted)
+                .foregroundStyle(.secondary)
                 .lineSpacing(3.4)             // 原型 line-height: 1.5
                 .fixedSize(horizontal: false, vertical: true)
         } else {
@@ -262,7 +244,7 @@ struct CleanConfirmSheet: View {
              + Text("\(shares.count)").figureEmphasis(size: 11.5)
              + Text(" 个 Agent。此操作不可撤销。"))
                 .font(.system(size: 11.5))
-                .foregroundStyle(CC.muted)
+                .foregroundStyle(.secondary)
                 .lineSpacing(3.4)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -288,7 +270,7 @@ struct CleanConfirmSheet: View {
                             ? String(format: "%.1f%%", Double(totalBytes) / Double(allBytes) * 100)
                             : "0%").figureEmphasis(size: 10.5))
                         .font(.system(size: 10.5))
-                        .foregroundStyle(CC.muted)
+                        .foregroundStyle(.secondary)
                 }
 
                 // 卷容量读不到时整行不画：宁可少一条收益，也不用假分母编出一个占比
@@ -305,7 +287,7 @@ struct CleanConfirmSheet: View {
                          + Text(String(format: "%.3f%%", Double(totalBytes) / Double(vol.capacity) * 100))
                             .figureEmphasis(size: 10.5))
                             .font(.system(size: 10.5))
-                            .foregroundStyle(CC.muted)
+                            .foregroundStyle(.secondary)
                     }
                 }
             }
@@ -368,13 +350,12 @@ struct CleanConfirmSheet: View {
              + Text(String(format: "%.3f%%", gainPct)).figureEmphasis(size: 11.5)
              + Text("。"))
                 .font(.system(size: 11.5))
-                .foregroundStyle(CC.muted)
+                .foregroundStyle(.secondary)
                 .lineSpacing(4.6)                 // 原型 line-height: 1.6
                 .fixedSize(horizontal: false, vertical: true)
         }
-        // 原型 .cap-d{margin-top:11px; padding-top:10px; border-top:1px}
         .padding(.top, 10)
-        .ccHairline(.top)
+        Divider()
         .padding(.top, 11)
     }
 
@@ -383,11 +364,11 @@ struct CleanConfirmSheet: View {
         HStack(alignment: .top, spacing: 7) {
             Image(systemName: "info.circle")
                 .font(.system(size: 12))
-                .foregroundStyle(CC.muted)
+                .foregroundStyle(.secondary)
                 .padding(.top, 2)
             noteText
                 .font(.system(size: 10.5))
-                .foregroundStyle(CC.muted)
+                .foregroundStyle(.secondary)
                 .lineSpacing(4.2)                 // 原型 line-height: 1.6
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -442,16 +423,16 @@ struct CleanConfirmSheet: View {
         HStack(alignment: .top, spacing: 7) {
             Image(systemName: "info.circle")
                 .font(.system(size: 13))
-                .foregroundStyle(CC.muted)
+                .foregroundStyle(.secondary)
                 .padding(.top, 2)
             tipText
                 .font(.system(size: 11.5))
-                .foregroundStyle(CC.muted)
+                .foregroundStyle(.secondary)
                 .lineSpacing(3.4)                 // 原型 line-height: 1.5
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.init(top: 9, leading: 11, bottom: 9, trailing: 11))
-        .background(RoundedRectangle(cornerRadius: CC.R.sm, style: .continuous).fill(CC.fillSoft))
+        .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color(nsColor: .controlBackgroundColor)))
         // 原型 .tip{margin-top:11px} + .sheet-b{padding-bottom:18px}
         .padding(.init(top: 11, leading: 22, bottom: 18, trailing: 22))
     }
@@ -474,23 +455,20 @@ struct CleanConfirmSheet: View {
     private var footer: some View {
         HStack(spacing: 9) {
             Spacer(minLength: 0)
-            CCButton(title: "取消", kind: .ghost, help: "放弃本次清理") {
-                viewModel.cancelClean()
+            Button("取消") { viewModel.cancelClean() }
+                .keyboardShortcut(.cancelAction)
+
+            Button(action: { Task { await viewModel.executeClean() } }) {
+                Text(viewModel.isCleaning ? "正在清除…" : "确认清除 · \(Fmt.bytes(totalBytes))")
             }
-            CCButton(
-                title: viewModel.isCleaning ? "正在清除…" : "确认清除 · \(Fmt.bytes(totalBytes))",
-                kind: .danger,
-                enabled: count > 0 && !viewModel.isCleaning,
-                help: count > 0 ? "删除这 \(count) 个会话文件及其索引行" : "没有可清理的会话"
-            ) {
-                // 面板由 `showCleanConfirmAlert` 驱动显隐，`executeClean` 内部自行收起。
-                // 之前这里是 `dismiss()`（`.sheet` 的环境动作），换成遮罩后没有 dismiss 可用。
-                Task { await viewModel.executeClean() }
-            }
+            .buttonStyle(.borderedProminent)
+            .tint(.red)
+            .keyboardShortcut(.defaultAction)
+            .disabled(count == 0 || viewModel.isCleaning)
+            .help(count > 0 ? "删除这 \(count) 个会话文件及其索引行" : "没有可清理的会话")
         }
         .padding(.init(top: 13, leading: 22, bottom: 13, trailing: 22))
-        .background(CC.bg.opacity(0.45))
-        .ccHairline(.top)
+        .background(.bar)
     }
 
     // MARK: - 小组件
@@ -509,14 +487,14 @@ struct CleanConfirmSheet: View {
         }
         .padding(.init(top: 16, leading: 22, bottom: 0, trailing: 22))
         .padding(.top, 18)
-        .ccHairline(.top)
+        .overlay(alignment: .top) { Divider() }
     }
 
     private func sectionLabel(_ text: String) -> some View {
         Text(text)
-            .font(CC.F.monoSm)
+            .font(.system(size: 10, design: .monospaced))
             .tracking(1.1)                     // .sh{letter-spacing:.11em}
-            .foregroundStyle(CC.muted)
+            .foregroundStyle(.secondary)
     }
 
     /// `.sh` 完整形态：mono 小标 + 弱化色路径 + 右侧胶囊。
@@ -525,13 +503,17 @@ struct CleanConfirmSheet: View {
             sectionLabel(title)
             if let path {
                 Text(path)
-                    .font(CC.F.monoSm)          // .sh .p{letter-spacing:0}
-                    .foregroundStyle(CC.fg.opacity(0.72))
+                    .font(.system(size: 10, design: .monospaced))          // .sh .p{letter-spacing:0}
+                    .foregroundStyle(.primary.opacity(0.72))
                     .lineLimit(1)
             }
             Spacer(minLength: 4)
             if let badge {
-                CCBadge(text: badge, tone: .neutral)
+                Text(badge)
+                    .font(.system(size: 10, design: .monospaced))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(.quaternary))
             }
         }
     }
@@ -571,7 +553,7 @@ extension Text {
     /// 原型 `.sheet-b b` / `.est-note b`：等宽、半粗、表格数字。
     /// 用在说明句里的数字上，让「读了几个 / 有多大」能被逐行扫读。
     fileprivate func figureEmphasis(size: CGFloat) -> Text {
-        font(CC.F.num(size)).foregroundColor(CC.fg)
+        font(.system(size: size, weight: .semibold, design: .monospaced)).foregroundColor(.primary)
     }
 }
 
@@ -592,12 +574,12 @@ private struct EstBarRow<Cap: View>: View {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Text(label)
                     .font(.system(size: 11.5))
-                    .foregroundStyle(CC.muted)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
                 Spacer(minLength: 8)
                 Text(Fmt.bytes(val))
-                    .font(CC.F.num(11.5))
-                    .foregroundStyle(CC.fg)
+                    .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
             }
 
@@ -611,16 +593,16 @@ private struct EstBarRow<Cap: View>: View {
     private var bar: some View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 2, style: .continuous).fill(CC.surface)
+                RoundedRectangle(cornerRadius: 2, style: .continuous).fill(Color(nsColor: .controlBackgroundColor))
                 RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .fill(CC.fg)
+                    .fill(.primary)
                     .frame(width: fillWidth(in: geo.size.width))
             }
         }
         .frame(height: 9)
         .overlay(
             RoundedRectangle(cornerRadius: 2, style: .continuous)
-                .strokeBorder(CC.border, lineWidth: 1)
+                .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1)
         )
         .accessibilityHidden(true)
     }
@@ -648,7 +630,7 @@ private struct CapRow: View {
         HStack(spacing: 9) {
             Text(label)
                 .font(.system(size: 11, weight: isAfter ? .semibold : .regular))
-                .foregroundStyle(isAfter ? CC.fg : CC.muted)
+                .foregroundStyle(isAfter ? .primary : .secondary)
                 .lineLimit(1)
                 .frame(width: 36, alignment: .leading)
 
@@ -656,11 +638,11 @@ private struct CapRow: View {
                 let inner = max(0, geo.size.width - 2)   // 让开 1px 描边
                 HStack(spacing: 0) {
                     Rectangle()
-                        .fill(CC.fg.opacity(isAfter ? 0.21 : 0.27))
+                        .fill(.primary.opacity(isAfter ? 0.21 : 0.27))
                         .frame(width: inner * CGFloat(min(1, max(0, usedRatio))), height: 15)
                     if let gainPercent {
                         Rectangle()
-                            .fill(CC.fg)
+                            .fill(.primary)
                             // 原型 min-width:1.5px + Math.max(gPct, 0.16)
                             .frame(width: max(1.5, inner * CGFloat(max(gainPercent, 0.16) / 100)), height: 15)
                     }
@@ -669,18 +651,18 @@ private struct CapRow: View {
             }
             .frame(height: 15)
             .background(
-                RoundedRectangle(cornerRadius: 3, style: .continuous).fill(CC.surface)
+                RoundedRectangle(cornerRadius: 3, style: .continuous).fill(Color(nsColor: .controlBackgroundColor))
             )
             .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 3, style: .continuous)
-                    .strokeBorder(CC.border, lineWidth: 1)
+                    .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1)
             )
             .accessibilityHidden(true)
 
             // 原型 .cap .rv{b{fg 600}}：百分号数字加重，「 已用」保持 muted 常规字重
             (Text(String(format: "%.3f%%", readout * 100)).figureEmphasis(size: 10.5)
-             + Text(" 已用").font(CC.F.num(10.5, .regular)).foregroundColor(CC.muted))
+             + Text(" 已用").font(.system(size: 10.5, design: .monospaced)).foregroundColor(.secondary))
                 .lineLimit(1)
                 .frame(width: 96, alignment: .trailing)
         }
@@ -706,26 +688,30 @@ private struct CompositionRow: View {
             HStack(spacing: 6) {
                 Text(name)
                     .font(.system(size: 11.5))
-                    .foregroundStyle(isEstimated ? CC.muted : CC.fg)
+                    .foregroundStyle(isEstimated ? .secondary : .primary)
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .frame(maxWidth: 190, alignment: .leading)   // .cr .cn{max-width:190px}
                 if let tag {
-                    CCBadge(text: tag, tone: .neutral)
+                    Text(tag)
+                        .font(.caption2)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(Capsule().fill(.quaternary))
                 }
             }
 
             bar
 
             Text(Fmt.bytes(bytes))
-                .font(CC.F.num(10.5, .regular))
-                .foregroundStyle(CC.muted)
+                .font(.system(size: 10.5, design: .monospaced))
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .frame(width: 58, alignment: .trailing)
 
             Text(String(format: "%.1f%%", percent))
-                .font(CC.F.num(10.5, .regular))
-                .foregroundStyle(CC.muted)
+                .font(.system(size: 10.5, design: .monospaced))
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .frame(width: 42, alignment: .trailing)
         }
@@ -735,13 +721,13 @@ private struct CompositionRow: View {
     private var bar: some View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 2, style: .continuous).fill(CC.fillSoft)
+                RoundedRectangle(cornerRadius: 2, style: .continuous).fill(Color(nsColor: .controlBackgroundColor))
                 if isEstimated {
                     HatchedFill()
                         .frame(width: max(1.5, geo.size.width * fraction), height: 8)
                 } else {
                     RoundedRectangle(cornerRadius: 2, style: .continuous)
-                        .fill(CC.fg)
+                        .fill(.primary)
                         .frame(width: max(1.5, geo.size.width * fraction))
                 }
             }
@@ -768,7 +754,7 @@ private struct HatchedFill: View {
                 stripe.addLine(to: CGPoint(x: x + size.height + 2, y: 0))
                 stripe.addLine(to: CGPoint(x: x + 2, y: size.height))
                 stripe.closeSubpath()
-                ctx.fill(stripe, with: .color(CC.fg))
+                ctx.fill(stripe, with: .color(.primary))
                 x += 4
             }
         }
@@ -779,22 +765,21 @@ private struct HatchedFill: View {
 // MARK: - .lvl 量级徽标
 
 /// 原型 `.lvl`：mono 9.5 胶囊，warn / ok 两态。
-/// `CCBadge` 的 tone 只有 neutral / accent / danger / warn，缺 ok 态（原型是绿系），
-/// 而 warn / ok 的底色透明度也不同（15% / 14%），所以这里自绘一个只服务量级徽标的小胶囊，
-/// 不去动共享组件的 tone 枚举。
+/// 量级徽标需要 ok / warn 两态：
+/// 底色透明度也不同（15% / 14%），所以这里自绘一个只服务量级徽标的小胶囊。
 private struct LevelBadge: View {
     let text: String
     let isOK: Bool
 
     var body: some View {
         Text(text)
-            .font(CC.F.monoSm)
+            .font(.system(size: 10, design: .monospaced))
             .tracking(0.2)                        // .lvl{letter-spacing:.02em}
-            .foregroundStyle(isOK ? CC.ok : CC.warn)
+            .foregroundStyle(isOK ? Color.green : Color.orange)
             .padding(.horizontal, 7)
             .padding(.vertical, 1.5)
             .background(
-                Capsule().fill((isOK ? CC.ok : CC.warn).opacity(isOK ? 0.14 : 0.15))
+                Capsule().fill((isOK ? Color.green : Color.orange).opacity(isOK ? 0.14 : 0.15))
             )
             .fixedSize()
             .accessibilityHidden(true)

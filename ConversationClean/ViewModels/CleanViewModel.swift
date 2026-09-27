@@ -10,10 +10,6 @@ enum CleanTarget {
 struct CategoryStats: Equatable {
     var count: Int = 0
     var sizeInBytes: Int64 = 0
-
-    var formattedSize: String {
-        ByteCountFormatter.string(fromByteCount: sizeInBytes, countStyle: .file)
-    }
 }
 
 @MainActor
@@ -74,19 +70,22 @@ class CleanViewModel: ObservableObject {
     /// 和「扫完确实没有会话」——关掉「启动时自动扫描」时列表永远停在空态。
     @Published private(set) var hasScanned: Bool = false
 
-    /// 搜索框的焦点请求（⌘F）。
+    /// 当前在详情栏展开的会话。由列表的 `List(selection:)` 写入、详情栏读取。
     ///
-    /// 原型把这条挂在 `document` 上：
-    /// `if((e.metaKey||e.ctrlKey) && e.key.toLowerCase()==="f"){ e.preventDefault();
-    ///   $("#q").focus(); $("#q").select(); }`
-    /// 原生这边用 `@FocusState` 驱动，所以需要把焦点态提到能被菜单命令改写的高度。
-    /// 放在 ViewModel 而不是 ContentView 的 `@State`：`⌘F` 定义在 App 的
-    /// `.commands` 里，那儿拿不到 ContentView 的状态。
-    @Published var searchFieldFocused: Bool = false
+    /// 它取代了原先跨模块的 `.ccFocusConversation` 通知 —— 那份通知存在的唯一理由
+    /// 是「列表与检视器各持一份焦点状态」，两边刷新节奏还会打架（DetailView 曾经要
+    /// 在 `conversations` 变化时手工把 `focused` 换成最新快照）。selection 驱动后
+    /// 焦点只有一份，脏了就直接从 `conversations` 现取。
+    @Published var selectedConversationID: UUID? = nil
 
-    /// 「设置」弹层是否打开（原型 `#setScrim` 的显隐）。
-    /// 同样要跨 `.commands` 与视图共享，理由同 `searchFieldFocused`。
-    @Published var settingsPresented: Bool = false
+    /// `selectedConversationID` 对应的会话快照。
+    ///
+    /// 始终从 `conversations` 现取而不是缓存一份快照：会话被清理后自动变 nil，
+    /// 不需要视图侧再写同步代码。
+    var selectedConversation: ConversationItem? {
+        guard let id = selectedConversationID else { return nil }
+        return conversations.first { $0.id == id }
+    }
 
     private let scanService = AgentScanService.shared
     private let searchSubject = PassthroughSubject<String, Never>()

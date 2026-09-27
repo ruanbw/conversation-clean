@@ -8,10 +8,6 @@ struct AgentInfo: Identifiable {
     var totalBytes: Int64 = 0
 
     var id: String { category.rawValue }
-
-    var formattedSize: String {
-        ByteCountFormatter.string(fromByteCount: totalBytes, countStyle: .file)
-    }
 }
 
 final class AgentScanService {
