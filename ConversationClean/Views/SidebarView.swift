@@ -177,10 +177,7 @@ private struct CategoryRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 8) {
-                Image(systemName: category.iconName)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(isSelected ? .white : Color.accentColor)
-                    .frame(width: 20)
+                AgentIconView(category: category, size: 18)
 
                 Text(category.rawValue)
                     .font(.system(size: 13, weight: isSelected ? .semibold : .regular))

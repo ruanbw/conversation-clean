@@ -42,6 +42,7 @@
 		CC0100342D00000100000001 /* CursorScanner+StateDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200342D00000100000001 /* CursorScanner+StateDatabase.swift */; };
 		CC0100352D00000100000001 /* CursorScanner+DirectoryScan.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200352D00000100000001 /* CursorScanner+DirectoryScan.swift */; };
 		CC0100362D00000100000001 /* Formatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200362D00000100000001 /* Formatting.swift */; };
+		CC01D1062D00000100000001 /* AgentIconView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC02D1062D00000100000001 /* AgentIconView.swift */; };
 		CC01D1052D00000100000001 /* OverviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC02D1052D00000100000001 /* OverviewView.swift */; };
 		CC01D1032D00000100000001 /* ConversationListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC02D1032D00000100000001 /* ConversationListView.swift */; };
 		CC01D1042D00000100000001 /* CleanConfirmSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC02D1042D00000100000001 /* CleanConfirmSheet.swift */; };
@@ -85,6 +86,7 @@
 		CC0200342D00000100000001 /* CursorScanner+StateDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CursorScanner+StateDatabase.swift"; sourceTree = "<group>"; };
 		CC0200352D00000100000001 /* CursorScanner+DirectoryScan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CursorScanner+DirectoryScan.swift"; sourceTree = "<group>"; };
 		CC0200362D00000100000001 /* Formatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Formatting.swift; sourceTree = "<group>"; };
+		CC02D1062D00000100000001 /* AgentIconView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentIconView.swift; sourceTree = "<group>"; };
 		CC02D1052D00000100000001 /* OverviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewView.swift; sourceTree = "<group>"; };
 		CC02D1032D00000100000001 /* ConversationListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationListView.swift; sourceTree = "<group>"; };
 		CC02D1042D00000100000001 /* CleanConfirmSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanConfirmSheet.swift; sourceTree = "<group>"; };
@@ -147,6 +149,7 @@
 				CC02D1032D00000100000001 /* ConversationListView.swift */,
 				CC02D1042D00000100000001 /* CleanConfirmSheet.swift */,
 				CC02D1052D00000100000001 /* OverviewView.swift */,
+				CC02D1062D00000100000001 /* AgentIconView.swift */,
 				CC0200052D00000100000001 /* SidebarView.swift */,
 				CC0200062D00000100000001 /* DetailView.swift */,
 				CC0200072D00000100000001 /* SettingsView.swift */,
@@ -305,6 +308,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				CC01D1052D00000100000001 /* OverviewView.swift in Sources */,
+				CC01D1062D00000100000001 /* AgentIconView.swift in Sources */,
 				CC01D1032D00000100000001 /* ConversationListView.swift in Sources */,
 				CC01D1042D00000100000001 /* CleanConfirmSheet.swift in Sources */,
 				CC0100012D00000100000001 /* ConversationCleanApp.swift in Sources */,

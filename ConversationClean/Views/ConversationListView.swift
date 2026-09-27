@@ -300,6 +300,8 @@ private struct ConversationRow: View {
                 .help(item.isSelected ? "取消选择此会话" : "选择此会话")
                 .disabled(isBusy)
 
+            AgentIconView(category: item.category, size: 22)
+
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.title)
                     .font(.system(size: 13, weight: .medium))
@@ -308,14 +310,15 @@ private struct ConversationRow: View {
                 // 标题常常就是首条 user prompt 的原文，再显示一遍只会让每行
                 // 看起来都是重复噪音；而删除决策需要的是位置与时间。
                 HStack(spacing: 5) {
-                    Text(item.category.rawValue)
-                        .foregroundStyle(.secondary)
                     if !path.isEmpty {
-                        Text("·").foregroundStyle(.tertiary)
                         Text(path).foregroundStyle(.secondary)
+                        Text("·").foregroundStyle(.tertiary)
                     }
-                    Text("·").foregroundStyle(.tertiary)
                     Text(Fmt.relative(item.updatedAt)).foregroundStyle(.secondary)
+                    if let branch = item.gitBranch, !branch.isEmpty {
+                        Text("·").foregroundStyle(.tertiary)
+                        Text(branch).foregroundStyle(.secondary)
+                    }
                 }
                 .font(.system(size: 10.5))
                 .lineLimit(1)

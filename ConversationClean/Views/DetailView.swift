@@ -79,13 +79,7 @@ struct DetailView: View {
 
     private func header(_ item: ConversationItem) -> some View {
         HStack(alignment: .top, spacing: 16) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.secondary.opacity(0.13))
-                Image(systemName: item.category.iconName)
-                    .font(.system(size: 30, weight: .regular))
-            }
-            .frame(width: 72, height: 72)
+            AgentIconView(category: item.category, size: 64)
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(item.title)

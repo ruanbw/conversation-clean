@@ -20,6 +20,40 @@ enum ConversationCategory: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    /// 该 Agent 可能对应的 app bundle 名，按优先级排列。
+    ///
+    /// 15 款**全部**有映射 —— 装没装是运行时的事，不该写进模型里。
+    /// 解析时取第一个存在的，取不到回退 SF Symbol。
+    ///
+    /// 三类情况：
+    /// · 独立 GUI 应用（Cursor / Zed / Windsurf / Trae / Antigravity…）：
+    ///   产品自己的 .app
+    /// · VS Code 扩展（Cline / Roo Code / Continue）：它们就跑在 VS Code 里，
+    ///   显示 VS Code 的图标在语义上是对的，比一个说不清是什么的符号强
+    /// · 纯 CLI（Codex / Aider / Pi Agent / OpenViking / OpenHands）：
+    ///   这些**没有**独立 GUI，优先匹配同厂商的桌面应用
+    ///   （Claude Code → Claude，Codex → ChatGPT），都没有就只剩 SF Symbol
+    var appBundleNames: [String] {
+        switch self {
+        case .all:           return []
+        case .claudeCode:    return ["Claude Code.app", "Claude.app"]
+        case .codex:         return ["Codex.app", "ChatGPT.app"]
+        case .piAgent:       return ["Pi Agent.app", "Pi.app"]
+        case .cline:         return ["Cline.app", "Visual Studio Code.app"]
+        case .rooCode:       return ["Roo Code.app", "RooCode.app", "Visual Studio Code.app"]
+        case .continueDev:   return ["Continue.app", "Visual Studio Code.app"]
+        case .copilotChat:   return ["Visual Studio Code.app"]
+        case .cursor:        return ["Cursor.app"]
+        case .windsurf:      return ["Windsurf.app"]
+        case .trae:          return ["Trae.app"]
+        case .aider:         return ["Aider.app"]
+        case .openViking:    return ["OpenViking.app"]
+        case .zed:           return ["Zed.app"]
+        case .openHands:     return ["OpenHands.app"]
+        case .antigravity:   return ["Antigravity.app"]
+        }
+    }
+
     /// 原型 `<defs>` 里 24 个图标的**唯一对应物**。
     ///
     /// 铁律：一律线性。原型的每个 glyph 都是

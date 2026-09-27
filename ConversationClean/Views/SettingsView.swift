@@ -180,10 +180,7 @@ private struct AgentPathRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: agent.category.iconName)
-                .font(.system(size: 15))
-                .foregroundStyle(.secondary)
-                .frame(width: 18)
+            AgentIconView(category: agent.category, size: 20)
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
