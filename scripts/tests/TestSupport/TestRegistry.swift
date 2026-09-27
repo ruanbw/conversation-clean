@@ -18,6 +18,9 @@ struct TestEntry {
 struct Main {
     static func main() async {
         let suite: [TestEntry] = [
+            // 格式化
+            TestEntry("Formatting", testFormatting),
+
             // Claude Code
             TestEntry("RealClaudeReadOnly", testRealClaudeCodeScannerReadOnly),
             TestEntry("MockClaudeScan", testMockClaudeCodeScanner),
@@ -62,7 +65,7 @@ struct Main {
             TestEntry("MockAntigravityScan", testMockAntigravityScanner),
 
             // state.vscdb 索引同步
-            TestEntry("MockVSCDBIndexSync", testMockVSCDBIndexSync)
+            TestEntry("MockVSCDBIndexSync", testMockVSCDBIndexSync),
         ]
 
         let exitCode = await TestRunner.run(suite)

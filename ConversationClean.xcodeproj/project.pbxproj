@@ -41,6 +41,7 @@
 		CC0100332D00000100000001 /* CursorScanner+JSONL.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200332D00000100000001 /* CursorScanner+JSONL.swift */; };
 		CC0100342D00000100000001 /* CursorScanner+StateDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200342D00000100000001 /* CursorScanner+StateDatabase.swift */; };
 		CC0100352D00000100000001 /* CursorScanner+DirectoryScan.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200352D00000100000001 /* CursorScanner+DirectoryScan.swift */; };
+		CC0100362D00000100000001 /* Formatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200362D00000100000001 /* Formatting.swift */; };
 		CC01D1012D00000100000001 /* CCTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC02D1012D00000100000001 /* CCTheme.swift */; };
 		CC01D1022D00000100000001 /* CCComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC02D1022D00000100000001 /* CCComponents.swift */; };
 		CC01D1032D00000100000001 /* ConversationListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC02D1032D00000100000001 /* ConversationListView.swift */; };
@@ -84,6 +85,7 @@
 		CC0200332D00000100000001 /* CursorScanner+JSONL.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CursorScanner+JSONL.swift"; sourceTree = "<group>"; };
 		CC0200342D00000100000001 /* CursorScanner+StateDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CursorScanner+StateDatabase.swift"; sourceTree = "<group>"; };
 		CC0200352D00000100000001 /* CursorScanner+DirectoryScan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CursorScanner+DirectoryScan.swift"; sourceTree = "<group>"; };
+		CC0200362D00000100000001 /* Formatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Formatting.swift; sourceTree = "<group>"; };
 		CC02D1012D00000100000001 /* CCTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CCTheme.swift; sourceTree = "<group>"; };
 		CC02D1022D00000100000001 /* CCComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CCComponents.swift; sourceTree = "<group>"; };
 		CC02D1032D00000100000001 /* ConversationListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationListView.swift; sourceTree = "<group>"; };
@@ -170,6 +172,7 @@
 				CC0200102D00000100000001 /* AgentScannerProtocol.swift */,
 				CC0200132D00000100000001 /* AgentScanService.swift */,
 				CC0200282D00000100000001 /* DateParsing.swift */,
+				CC0200362D00000100000001 /* Formatting.swift */,
 				CC0400102D00000100000001 /* SQLite */,
 				CC0400112D00000100000001 /* FileSystem */,
 			);
@@ -350,6 +353,7 @@
 				CC0100332D00000100000001 /* CursorScanner+JSONL.swift in Sources */,
 				CC0100342D00000100000001 /* CursorScanner+StateDatabase.swift in Sources */,
 				CC0100352D00000100000001 /* CursorScanner+DirectoryScan.swift in Sources */,
+				CC0100362D00000100000001 /* Formatting.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
