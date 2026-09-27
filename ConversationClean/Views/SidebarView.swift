@@ -19,34 +19,68 @@ struct SidebarView: View {
     @AppStorage("hideEmptyCategories") private var hideEmpty = false
 
     var body: some View {
-        List {
-            Section {
-                ForEach(visibleCategories) { cat in
-                    categoryRow(cat)
-                }
-            } header: {
-                Text("Agent 分类").font(.system(size: 11, weight: .semibold))
-            }
+        VStack(spacing: 0) {
+            // 顶部 38pt 让给红绿灯：hiddenTitleBar 之后内容铺到 y=0，
+            // 这段留白正好托住系统那三个圆点（照 DefaultAppManager 的 SidebarView）
+            Spacer().frame(height: 38)
 
-            Section {
-                Toggle("仅显示有数据", isOn: $hideEmpty)
-                    .toggleStyle(.checkbox)
-                Button {
-                    NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-                } label: {
-                    Label("设置…", systemImage: "gear")
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    sectionHeader("Agent 分类")
+                    ForEach(visibleCategories) { cat in
+                        categoryRow(cat)
+                    }
+                    sectionHeader("工具")
+                    toolRow("仅显示有数据", hideEmpty) { withAnimation(.easeOut(duration: 0.14)) { hideEmpty.toggle() } }
+                    toolRow("设置…", nil) {
+                        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                    }
+                    sectionHeader("当前分类存储路径")
+                    pathFooter
                 }
-            } header: {
-                Text("工具").font(.system(size: 11, weight: .semibold))
-            }
-
-            Section {
-                pathFooter
-            } header: {
-                Text("当前分类存储路径").font(.system(size: 11, weight: .semibold))
+                .padding(.horizontal, 8)
+                .padding(.bottom, 16)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .listStyle(.sidebar)
+        .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 6)
+            .padding(.top, 14)
+            .padding(.bottom, 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// 工具行：标题左侧一个 20pt 图标位。`checked` 非 nil 时画勾选框。
+    private func toolRow(_ title: String, _ checked: Bool?,
+                         action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Group {
+                    if let checked {
+                        Image(systemName: checked ? "checkmark.square.fill" : "square")
+                            .font(.system(size: 12))
+                            .foregroundStyle(checked ? Color.accentColor : Color.secondary)
+                    } else {
+                        Color.clear
+                    }
+                }
+                .frame(width: 20)
+                Text(title)
+                    .font(.system(size: 13))
+                    .foregroundStyle(.primary)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - 分类

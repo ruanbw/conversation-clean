@@ -19,6 +19,11 @@ struct ConversationCleanApp: App {
                     await viewModel.scanOnLaunchIfEnabled()
                 }
         }
+        // 隐藏系统标题栏：红绿灯底下那块要由我们自己画背景。
+        // 用系统标题栏时那块颜色不可控 —— 深色模式下侧栏与标题栏两种灰，
+        // 视觉上永远像贴了块补丁。隐藏后由 ContentView 的 topBar 承载，
+        // 红黄绿仍浮在我们自己的背景上。
+        .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1280, height: 820)
         .defaultPosition(.center)
         .windowResizability(.contentMinSize)
