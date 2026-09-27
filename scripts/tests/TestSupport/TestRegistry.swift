@@ -18,6 +18,9 @@ struct TestEntry {
 struct Main {
     static func main() async {
         let suite: [TestEntry] = [
+            // 格式化
+            TestEntry("Formatting", testFormatting),
+
             // Claude Code
             TestEntry("RealClaudeReadOnly", testRealClaudeCodeScannerReadOnly),
             TestEntry("MockClaudeScan", testMockClaudeCodeScanner),

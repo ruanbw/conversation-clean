@@ -26,7 +26,7 @@ func testRealOpenVikingScannerReadOnly() async {
         t.assert(allHaveSessionId, "All items have non-empty sessionId")
 
         var isSorted = true
-        for i in 0..<(items.count - 1) {
+        for i in 0..<max(items.count - 1, 0) {
             if items[i].updatedAt < items[i + 1].updatedAt {
                 isSorted = false
                 break
