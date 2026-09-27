@@ -3,14 +3,12 @@ import AppKit
 
 // MARK: - Sidebar
 //
-// 纯导航：Agent 分类 + 工具区 + 当前分类的存储路径 footer。
-// 统计概览与存储分布不在这里 —— 它们是信息不是导航，已搬进详情栏（OverviewView）。
+// 版式照 DefaultAppManager 的 SidebarView：彩色图标 + 选中项蓝色实心填充白字
+// + 右侧灰色计数胶囊。统计信息不在这里，已搬进详情栏（OverviewView）。
 //
 // 两道过滤不能丢：① 本机未安装的 Agent 不出现；② 「仅显示有数据」打开时
 // 再滤掉 0 会话的分类。`.all` 恒在首位且不受第二个开关影响。
 
-/// 15 款 Agent 的固定视觉顺序。`ConversationCategory.allCases` 把 Antigravity 放在最后，
-/// 而设计顺序是 Trae → Antigravity → Aider，这里显式声明一次。
 private let sidebarAgentOrder: [ConversationCategory] = [
     .claudeCode, .codex, .piAgent, .cline, .rooCode, .continueDev, .copilotChat,
     .cursor, .windsurf, .trae, .antigravity, .aider, .openViking, .zed, .openHands,
@@ -22,13 +20,15 @@ struct SidebarView: View {
 
     var body: some View {
         List {
-            Section("Agent 分类") {
+            Section {
                 ForEach(visibleCategories) { cat in
                     categoryRow(cat)
                 }
+            } header: {
+                Text("Agent 分类").font(.system(size: 11, weight: .semibold))
             }
 
-            Section("工具") {
+            Section {
                 Toggle("仅显示有数据", isOn: $hideEmpty)
                     .toggleStyle(.checkbox)
                 Button {
@@ -36,10 +36,14 @@ struct SidebarView: View {
                 } label: {
                     Label("设置…", systemImage: "gear")
                 }
+            } header: {
+                Text("工具").font(.system(size: 11, weight: .semibold))
             }
 
             Section {
                 pathFooter
+            } header: {
+                Text("当前分类存储路径").font(.system(size: 11, weight: .semibold))
             }
         }
         .listStyle(.sidebar)
@@ -47,7 +51,6 @@ struct SidebarView: View {
 
     // MARK: - 分类
 
-    /// 参与渲染的分类：`.all` 恒在首位，两道过滤只作用于具体 Agent。
     private var visibleCategories: [ConversationCategory] {
         let installed = sidebarAgentOrder.filter(isInstalled)
         let agents = hideEmpty
@@ -56,7 +59,6 @@ struct SidebarView: View {
         return [.all] + agents
     }
 
-    /// 安装状态一律读扫描结果，不靠硬编码名单。
     private func isInstalled(_ cat: ConversationCategory) -> Bool {
         viewModel.agentInfos.first { $0.category == cat }?.isInstalled == true
     }
@@ -73,7 +75,6 @@ struct SidebarView: View {
 
     // MARK: - 路径 footer
 
-    /// 路径区展示的 Agent：`.all` 时落到占用最大的那款，给一个真实路径而不是占位符。
     private var pathAgent: AgentInfo? {
         if viewModel.selectedCategory == .all {
             return viewModel.agentInfos.max { $0.totalBytes < $1.totalBytes }
@@ -81,17 +82,11 @@ struct SidebarView: View {
         return viewModel.agentInfos.first { $0.category == viewModel.selectedCategory }
     }
 
-    private var currentStoragePath: String {
-        pathAgent?.storagePath ?? ""
-    }
+    private var currentStoragePath: String { pathAgent?.storagePath ?? "" }
 
     private var pathFooter: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("当前分类存储路径")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            Text(currentStoragePath.isEmpty ? "—" : Fmt.abbreviateHome(currentStoragePath))
+            Text(Fmt.abbreviateHome(currentStoragePath).isEmpty ? "—" : Fmt.abbreviateHome(currentStoragePath))
                 .font(.system(size: 10.5, design: .monospaced))
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
@@ -104,11 +99,8 @@ struct SidebarView: View {
                 .foregroundStyle(.tertiary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Button {
-                revealCurrentPath()
-            } label: {
-                Label("在 Finder 中打开", systemImage: "arrow.up.forward.square")
-                    .font(.callout)
+            Button { revealCurrentPath() } label: {
+                Label("在 Finder 中打开", systemImage: "arrow.up.forward.square").font(.callout)
             }
             .controlSize(.small)
             .disabled(currentStoragePath.isEmpty)
@@ -138,6 +130,9 @@ struct SidebarView: View {
 }
 
 // MARK: - 分类行
+//
+// DefaultAppManager 的 sidebarRow：选中时整行填 accentColor、文字转白，
+// 右侧计数在选中态是白字胶囊、未选中是灰字。逐项照抄。
 
 private struct CategoryRow: View {
     let category: ConversationCategory
@@ -145,26 +140,37 @@ private struct CategoryRow: View {
     let isSelected: Bool
     let action: () -> Void
 
-    /// 有会话显示数字，没有显示「空闲」——本机未装的 Agent 已被过滤掉，不进列表。
-    private var trailing: String { count > 0 ? "\(count)" : "空闲" }
-
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 7) {
+            HStack(spacing: 8) {
                 Image(systemName: category.iconName)
-                    .font(.system(size: 12))
-                    .foregroundStyle(isSelected ? Color.white : Color.accentColor)
-                    .frame(width: 16)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(isSelected ? .white : category.tint)
+                    .frame(width: 20)
 
                 Text(category.rawValue)
+                    .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+                    .foregroundStyle(isSelected ? .white : .primary)
                     .lineLimit(1)
 
                 Spacer(minLength: 4)
 
-                Text(trailing)
-                    .font(.system(size: 10.5, design: .monospaced))
-                    .foregroundStyle(isSelected ? Color.white.opacity(0.85) : Color.secondary)
+                if count > 0 {
+                    Text("\(count)")
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .foregroundStyle(isSelected ? Color.white.opacity(0.9) : .secondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 1.5)
+                        .background(isSelected ? Color.white.opacity(0.25) : Color.secondary.opacity(0.12))
+                        .clipShape(Capsule())
+                }
             }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(isSelected ? Color.accentColor : .clear)
+            )
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

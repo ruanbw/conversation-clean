@@ -1,9 +1,36 @@
 import SwiftUI
 import Combine
 
-// MARK: - 排序方式
+// MARK: - 分类色
 //
-// `filteredConversations` 本身无序，排序完全在列表模块本地完成，不污染数据层。
+// 取自 DefaultAppManager 的 categoryColor 思路：15 款 Agent 给 15 个可区分的语义色。
+// 这里把名字解析成 Color，避免在枚举里存 SwiftUI 类型（模型层不该依赖 SwiftUI）。
+
+extension ConversationCategory {
+    var tint: Color {
+        Color(tintName)
+    }
+}
+
+private extension Color {
+    init(_ name: String) {
+        switch name {
+        case "orange": self = .orange
+        case "teal":   self = .teal
+        case "purple": self = .purple
+        case "green":  self = .green
+        case "mint":   self = .mint
+        case "indigo": self = .indigo
+        case "cyan":   self = .cyan
+        case "blue":   self = .blue
+        case "pink":   self = .pink
+        case "brown":  self = .brown
+        default:       self = .gray
+        }
+    }
+}
+
+// MARK: - 排序方式
 private enum ListSortMode: String, CaseIterable, Hashable, Identifiable {
     case date, size, msgs
 
@@ -20,24 +47,30 @@ private enum ListSortMode: String, CaseIterable, Hashable, Identifiable {
 
 // MARK: - 会话列表
 //
-// 选中由 `List(selection:)` 直接驱动 `viewModel.selectedConversationID`，
-// 详情栏据此切换。批量勾选走 `ConversationItem.isSelected`，与列表选中是两件
-// 独立的事：前者管「待清理的一批」，后者管「右侧正在看的那一条」。
+// 版式照 DefaultAppManager 的 ExtensionListView：
+//   列表列顶部 = 搜索框 + 筛选器 + 「共 N 项」+ 刷新
+//   行       = 彩色徽章 + 标题 + 等宽灰字副标题 + 右侧数值
+//   详情列   = 会话元数据（见 DetailView）
 
 struct ConversationListView: View {
     @EnvironmentObject var viewModel: CleanViewModel
 
-    /// 排序方式，持久化。非法值（UserDefaults 里是旧版本留下的）回落默认。
     @AppStorage("listSortMode") private var sortRaw: String = ListSortMode.date.rawValue
+    @AppStorage("searchText") private var searchRaw: String = ""
 
     private var sort: ListSortMode { ListSortMode(rawValue: sortRaw) ?? .date }
-
     private var isBusy: Bool { viewModel.isScanning || viewModel.isCleaning }
     private var rows: [ConversationItem] { sorted }
     private var allSelected: Bool { !rows.isEmpty && rows.allSatisfy { $0.isSelected } }
 
+    private var searchBinding: Binding<String> {
+        Binding(get: { searchRaw }, set: { searchRaw = $0; viewModel.searchText = $0 })
+    }
+
     var body: some View {
         VStack(spacing: 0) {
+            filterBar
+            Divider()
             banner
             if rows.isEmpty {
                 emptyState
@@ -47,20 +80,65 @@ struct ConversationListView: View {
             batchBar
         }
         .background(Color(nsColor: .windowBackgroundColor))
-        .searchable(text: $viewModel.searchText, placement: .toolbar,
-                    prompt: "搜索标题、摘要、项目路径或会话 ID")
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Picker("排序", selection: sortBinding) {
+    }
+
+    // MARK: - 列表列顶部筛选栏
+
+    private var filterBar: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                TextField("搜索标题、摘要、项目路径或会话 ID", text: searchBinding)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 13))
+                if !searchRaw.isEmpty {
+                    Button { searchBinding.wrappedValue = "" } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(Color(nsColor: .controlBackgroundColor))
+            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+            )
+
+            HStack(spacing: 8) {
+                Picker("", selection: sortBinding) {
                     ForEach(ListSortMode.allCases) { mode in
                         Text(mode.label).tag(mode)
                     }
                 }
                 .pickerStyle(.menu)
                 .labelsHidden()
-                .help("排序方式")
+                .font(.system(size: 11))
+                .frame(width: 110)
+
+                Spacer()
+
+                Text("共 \(rows.count) 项")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+
+                Button {
+                    Task { await viewModel.scanConversations() }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 11))
+                }
+                .buttonStyle(.plain)
+                .disabled(isBusy)
+                .help("重新扫描")
             }
         }
+        .padding(10)
+        .background(Color(nsColor: .windowBackgroundColor))
     }
 
     private var sortBinding: Binding<ListSortMode> {
@@ -110,35 +188,30 @@ struct ConversationListView: View {
     @ViewBuilder
     private var banner: some View {
         if viewModel.showCleanSuccessAlert {
-            notice(
-                icon: "checkmark.circle.fill",
-                text: "清理完成 · 删除 \(viewModel.lastCleanedCount) 个会话，释放 "
-                    + Fmt.bytes(viewModel.lastCleanedBytes)
-                    + " 磁盘空间，剩余 \(viewModel.conversations.count) 个会话。"
-            ) { viewModel.showCleanSuccessAlert = false }
+            notice(icon: "checkmark.circle.fill",
+                   text: "清理完成 · 删除 \(viewModel.lastCleanedCount) 个会话，释放 "
+                       + Fmt.bytes(viewModel.lastCleanedBytes)
+                       + " 磁盘空间，剩余 \(viewModel.conversations.count) 个会话。",
+                   tint: .green) { viewModel.showCleanSuccessAlert = false }
         } else if viewModel.showScanSuccessAlert {
-            notice(
-                icon: "checkmark.circle.fill",
-                text: "扫描完成 · 命中 \(viewModel.scanSuccessCount) 个会话，合计 "
-                    + Fmt.bytes(viewModel.scanSuccessBytes) + "。"
-            ) { viewModel.showScanSuccessAlert = false }
+            notice(icon: "checkmark.circle.fill",
+                   text: "扫描完成 · 命中 \(viewModel.scanSuccessCount) 个会话，合计 "
+                       + Fmt.bytes(viewModel.scanSuccessBytes) + "。",
+                   tint: .green) { viewModel.showScanSuccessAlert = false }
         }
     }
 
-    private func notice(
-        icon: String,
-        text: String,
-        dismiss: @escaping () -> Void
-    ) -> some View {
+    private func notice(icon: String, text: String, tint: Color,
+                        dismiss: @escaping () -> Void) -> some View {
         HStack(spacing: 8) {
-            Image(systemName: icon).foregroundStyle(.green)
+            Image(systemName: icon).foregroundStyle(tint)
             Text(text).font(.callout)
             Spacer(minLength: 8)
             Button("知道了", action: dismiss).controlSize(.small)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-        .background(Color.green.opacity(0.12))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .background(tint.opacity(0.12))
     }
 
     // MARK: - 空态
@@ -146,23 +219,21 @@ struct ConversationListView: View {
     @ViewBuilder
     private var emptyState: some View {
         if viewModel.isScanning {
-            ContentUnavailableView(
-                "正在扫描本机会话…",
-                systemImage: "arrow.triangle.2.circlepath",
-                description: Text("正在查找本机各 Agent 的会话缓存，请稍候。")
-            )
+            ContentUnavailableView("正在扫描本机会话…", systemImage: "arrow.triangle.2.circlepath",
+                                   description: Text("正在查找本机各 Agent 的会话缓存，请稍候。"))
         } else if !viewModel.hasScanned {
-            // 「启动时自动扫描」关掉时的落点：列表从未被填充过，
-            // 文案要告诉用户是还没扫，而不是扫完空空如也。
             ContentUnavailableView {
                 Label("还没有扫描过会话", systemImage: "magnifyingglass")
             } description: {
                 Text("已关闭「启动时自动扫描」。点下方按钮手动扫描本机各 Agent 的会话缓存。")
             } actions: {
-                rescanButton
+                Button { Task { await viewModel.scanConversations() } } label: {
+                    Label("重新扫描", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.borderedProminent)
             }
         } else if hasQuery {
-            ContentUnavailableView.search(text: viewModel.searchText.trimmed)
+            ContentUnavailableView.search(text: searchRaw.trimmed)
         } else {
             ContentUnavailableView(
                 "暂无 \(viewModel.selectedCategory.rawValue) 会话记录",
@@ -172,20 +243,9 @@ struct ConversationListView: View {
         }
     }
 
-    private var hasQuery: Bool {
-        !viewModel.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
+    private var hasQuery: Bool { !searchRaw.trimmed.isEmpty }
 
-    private var rescanButton: some View {
-        Button {
-            Task { await viewModel.scanConversations() }
-        } label: {
-            Label("重新扫描", systemImage: "arrow.clockwise")
-        }
-        .buttonStyle(.borderedProminent)
-    }
-
-    // MARK: - 批量条（常驻，0 选中时只是禁用灰态）
+    // MARK: - 批量条
 
     private var batchBar: some View {
         let disabled = viewModel.selectedItems.isEmpty || isBusy
@@ -197,47 +257,31 @@ struct ConversationListView: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
 
-            Button(allSelected ? "取消全选" : "全选当前") {
-                viewModel.selectAll(!allSelected)
-            }
-            .controlSize(.small)
-            .disabled(rows.isEmpty)
+            Button(allSelected ? "取消全选" : "全选当前") { viewModel.selectAll(!allSelected) }
+                .controlSize(.small)
+                .disabled(rows.isEmpty)
 
             Spacer(minLength: 8)
 
-            Button {
-                viewModel.selectAll(false)
-            } label: {
-                Label("取消选择", systemImage: "xmark")
-            }
-            .controlSize(.small)
-            .disabled(disabled)
+            Button { viewModel.selectAll(false) } label: { Label("取消选择", systemImage: "xmark") }
+                .controlSize(.small).disabled(disabled)
 
             Button {
-                // NSWorkspace 一次只能定位一个文件，逐个调用由系统堆叠为连续定位
                 for item in viewModel.selectedItems { viewModel.revealInFinder(item: item) }
-            } label: {
-                Label("在 Finder 中显示", systemImage: "folder")
-            }
-            .controlSize(.small)
-            .disabled(disabled)
+            } label: { Label("在 Finder 中显示", systemImage: "folder") }
+                .controlSize(.small).disabled(disabled)
 
-            Button {
-                viewModel.requestCleanSelected()
-            } label: {
+            Button { viewModel.requestCleanSelected() } label: {
                 Label(cleanSelectedTitle, systemImage: "trash")
             }
-            .buttonStyle(.borderedProminent)
-            .tint(.red)
-            .controlSize(.small)
-            .disabled(disabled)
+            .buttonStyle(.borderedProminent).tint(.red)
+            .controlSize(.small).disabled(disabled)
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(.bar)
     }
 
-    /// 文案带条数，用户能一眼确认要删几个。
     private var cleanSelectedTitle: String {
         let n = viewModel.selectedItems.count
         return n > 0 ? "清理选中项（\(n)）" : "清理选中项"
@@ -246,8 +290,8 @@ struct ConversationListView: View {
 
 // MARK: - 会话行
 //
-// 标题 / 摘要 / 元信息三层。体积固定在右侧且必须完整可见 ——
-// 不加 fixedSize 时它会和标题抢压缩额度，被截成「2...」。
+// 照 DefaultAppManager 的 ExtensionRowView：左侧彩色徽章 + 标题 + 等宽灰字副标题
+// + 右侧数值。摘要与标题重复时不重复渲染 —— 之前每行都把同一句话显示两遍。
 
 private struct ConversationRow: View {
     @EnvironmentObject var viewModel: CleanViewModel
@@ -262,75 +306,57 @@ private struct ConversationRow: View {
         )
     }
 
+    /// 标题与摘要常常是同一句话（scanner 用首个 user prompt 同时当标题和摘要），
+    /// 原样渲染两遍会让每行看起来都是重复噪音。
+    private var subtitle: String {
+        let s = item.snippet.trimmingCharacters(in: .whitespacesAndNewlines)
+        if s.isEmpty || s == item.title { return Fmt.pathTail(item.displayProjectPath) }
+        return s
+    }
+
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
+        HStack(alignment: .center, spacing: 10) {
             Toggle("选择 \(item.title)", isOn: selection)
                 .labelsHidden()
                 .toggleStyle(.checkbox)
                 .help(item.isSelected ? "取消选择此会话" : "选择此会话")
                 .disabled(isBusy)
 
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(item.category.rawValue)
-                        .font(.caption2)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 1)
-                        .background(Capsule().fill(.quaternary))
-                    Text(item.title)
-                        .font(.headline)
-                        .lineLimit(1)
-                    Spacer(minLength: 8)
-                    Text(item.formattedSize)
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .fixedSize()
-                }
+            // 彩色徽章：Agent 名首字母
+            ZStack {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(item.category.tint.opacity(0.15))
+                Text(String(item.category.rawValue.prefix(1)))
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .foregroundStyle(item.category.tint)
+            }
+            .frame(width: 34, height: 26)
 
-                Text(item.snippet)
-                    .font(.callout)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.title)
+                    .font(.system(size: 13, weight: .medium))
+                    .lineLimit(1)
+                Text(subtitle)
+                    .font(.system(size: 10, design: .monospaced))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-                metaLine
-                    .font(.caption)
+            // 右侧：会话 ID + 体积，数字等宽便于竖向比较
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(item.formattedSize)
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .lineLimit(1)
+                Text("#\(item.shortSessionId)")
+                    .font(.system(size: 9.5, design: .monospaced))
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
+            .frame(width: 72, alignment: .trailing)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 3)
         .accessibilityElement(children: .contain)
-    }
-
-    private var metaLine: some View {
-        HStack(spacing: 5) {
-            // 只显示末两级：前缀截断砍掉的恰恰是末段，而末段才是区分同名项目的东西
-            Text(Fmt.pathTail(item.displayProjectPath))
-                .font(.system(size: 10.5, design: .monospaced))
-                .help("项目路径：\(item.displayProjectPath)")
-
-            if let branch = item.gitBranch, !branch.isEmpty {
-                sep
-                Text(branch).lineLimit(1).help("Git 分支：\(branch)")
-            }
-
-            sep
-            Text("\(item.messageCount) 轮")
-
-            sep
-            Text(Fmt.relative(item.updatedAt))
-
-            Spacer(minLength: 8)
-
-            Text("#\(item.shortSessionId)")
-                .font(.system(size: 10.5, design: .monospaced))
-                .help("会话 ID：\(item.sessionId)")
-        }
-        .lineLimit(1)
-    }
-
-    private var sep: some View {
-        Text("·").foregroundStyle(.tertiary)
     }
 }
 

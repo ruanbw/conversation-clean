@@ -20,6 +20,29 @@ enum ConversationCategory: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    /// 侧栏与列表徽章的分类色。取自 DefaultAppManager 的 categoryColor 思路：
+    /// 15 款 Agent 给 15 个可区分的语义色，一眼能分清是哪款。
+    var tintName: String {
+        switch self {
+        case .all:             return "gray"
+        case .claudeCode:      return "orange"
+        case .codex:           return "teal"
+        case .piAgent:         return "purple"
+        case .cline:           return "green"
+        case .rooCode:         return "mint"
+        case .continueDev:     return "indigo"
+        case .copilotChat:     return "cyan"
+        case .cursor:          return "blue"
+        case .windsurf:        return "teal"
+        case .trae:            return "pink"
+        case .aider:           return "brown"
+        case .openViking:      return "indigo"
+        case .zed:             return "blue"
+        case .openHands:       return "pink"
+        case .antigravity:     return "purple"
+        }
+    }
+
     /// 原型 `<defs>` 里 24 个图标的**唯一对应物**。
     ///
     /// 铁律：一律线性。原型的每个 glyph 都是

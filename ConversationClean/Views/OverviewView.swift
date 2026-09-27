@@ -136,11 +136,16 @@ struct OverviewView: View {
 
     private var bar: some View {
         GeometryReader { geo in
-            HStack(spacing: 1) {
+            HStack(spacing: 0) {
                 ForEach(distSegments) { seg in
-                    Rectangle()
-                        .fill(Color.primary.opacity(seg.opacity))
-                        .frame(width: max(2, geo.size.width * (Double(seg.bytes) / Double(total))))
+                    let share = Double(seg.bytes) / Double(total)
+                    // 不足 1px 的段不画：原型里有 min-width:2px 下限，
+                    // 一段占比 0.0004 时铺 2px 会把整条堆叠条盖满，看起来像「占一半」
+                    if share * geo.size.width >= 1 {
+                        Rectangle()
+                            .fill(Color.primary.opacity(seg.opacity))
+                            .frame(width: share * geo.size.width)
+                    }
                 }
             }
         }
@@ -177,7 +182,10 @@ struct OverviewView: View {
 
     private func percent(_ seg: Segment) -> String {
         guard total > 0 else { return "0%" }
-        return "\(Int((Double(seg.bytes) / Double(total) * 100).rounded()))%"
+        let pct = Double(seg.bytes) / Double(total) * 100
+        // 0.4% 四舍五入成 0% 会读成「这个 Agent 占 0 字节」，与右侧的 3.4 KB 自相矛盾
+        if pct > 0, pct < 0.5 { return "<1%" }
+        return "\(Int(pct.rounded()))%"
     }
 
     // MARK: - 未扫描

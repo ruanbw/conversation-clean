@@ -73,33 +73,42 @@ struct DetailView: View {
     }
 
     // MARK: - 头部
+    //
+    // 照 DefaultAppManager 的 ExtensionDetailView：超大彩色徽章 + 大标题 +
+    // 分类胶囊。原来是 18pt 小图标 + 15pt 标题，详情列这么宽根本用不满。
 
     private func header(_ item: ConversationItem) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .top, spacing: 8) {
+        HStack(alignment: .top, spacing: 16) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(item.category.tint.opacity(0.15))
                 Image(systemName: item.category.iconName)
-                    .font(.system(size: 18))
-                    .foregroundStyle(.secondary)
-                    .padding(.top, 2)
+                    .font(.system(size: 30, weight: .regular))
+                    .foregroundStyle(item.category.tint)
+            }
+            .frame(width: 72, height: 72)
+
+            VStack(alignment: .leading, spacing: 6) {
                 Text(item.title)
-                    .font(.title3)
-                    .fontWeight(.semibold)
+                    .font(.system(size: 22, weight: .bold))
                     .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
-            }
 
-            HStack(spacing: 8) {
-                Text(item.category.rawValue)
-                    .font(.caption)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Capsule().fill(.quaternary))
-                // 注意是体积不是时间：列表行才用相对时间，详情头部只给体积
-                Text(item.formattedSize)
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                Spacer(minLength: 0)
+                HStack(spacing: 8) {
+                    Text(item.category.rawValue)
+                        .font(.system(size: 11, weight: .medium))
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(item.category.tint.opacity(0.15)))
+                        .foregroundStyle(item.category.tint)
+                    Text(item.formattedSize)
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 0)
+                }
+                .padding(.top, 2)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
