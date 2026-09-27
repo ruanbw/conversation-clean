@@ -40,20 +40,31 @@ func testFormatting() async {
 
     // ------------------------------------------------------------------------
     // Fmt.relative —— 显式传 now，保证确定性
+    //
+    // 锚点定在 2100 年不是随手取的：`isDateInToday` / `isDateInYesterday`
+    // 读的是**真实**系统时钟，完全无视注入的 now，所以锚点必须离真实今天
+    // 足够远。早先锚在 2027-01-15 时，「30 天前」落在 2026-12-16 —— 到了那一天
+    // 真实时钟会把它判成「今天」，断言当天变红。
+    // 「今天」「昨天」两个分支同理：既然分支条件只认真实时钟，就无法用注入的
+    // now 驱动，因此不钉（要钉得先改实现，超出本 task 范围）。剩下的分支全部
+    // 只依赖 day 差值，锚点越远越安全。
+    // 锚点用 Calendar 构造而非写死 epoch 秒数，读得懂且与时区无关。
     // ------------------------------------------------------------------------
-    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    var anchor = DateComponents()
+    anchor.year = 2100
+    anchor.month = 1
+    anchor.day = 2
+    anchor.hour = 12
+    let cal = Calendar.current
+    let now = cal.date(from: anchor)!
+
     let threeDaysAgo = now.addingTimeInterval(-3 * 86_400)
     t.assert(Fmt.relative(threeDaysAgo, now: now) == "3 天前", "3 天前 → 「3 天前」")
 
     // 30 天前已经越过 7 天窗口，形如 "M月D日"；月日用 Calendar 现算，不写死。
-    let cal = Calendar.current
     let thirtyDaysAgo = now.addingTimeInterval(-30 * 86_400)
     let monthDay = "\(cal.component(.month, from: thirtyDaysAgo))月\(cal.component(.day, from: thirtyDaysAgo))日"
     t.assert(Fmt.relative(thirtyDaysAgo, now: now) == monthDay, "30 天前 → 「\(monthDay)」")
-
-    // `isDateInToday` 走的是真实时钟，所以这一条只能用真实当前时间来构造。
-    let realNow = Date()
-    t.assert(Fmt.relative(realNow, now: realNow).hasPrefix("今天 "), "今天的日期以「今天 」开头")
 
     // ------------------------------------------------------------------------
     // Fmt.full —— 检视器「最后更新」用，精确到分

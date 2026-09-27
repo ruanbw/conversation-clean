@@ -65,7 +65,7 @@ struct Main {
             TestEntry("MockAntigravityScan", testMockAntigravityScanner),
 
             // state.vscdb 索引同步
-            TestEntry("MockVSCDBIndexSync", testMockVSCDBIndexSync),
+            TestEntry("MockVSCDBIndexSync", testMockVSCDBIndexSync)
         ]
 
         let exitCode = await TestRunner.run(suite)
