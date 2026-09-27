@@ -130,11 +130,20 @@ t.assert(Fmt.abbreviateHome("/opt/x") == "/opt/x", "非 home 前缀原样返回"
 // home 前缀：用 FileManager.default.homeDirectoryForCurrentUser.path 现场构造期望值，
 // 不要把某个用户名写死在测试里
 
-// Fmt.relative —— 显式传 now，保证确定性
-let now = Date(timeIntervalSince1970: 1_800_000_000)
+// Fmt.relative —— 锚点必须远在未来（2100），不能用「接近当下」的日期。
+//
+// 原因：Fmt.relative 内部调 cal.isDateInToday / isDateInYesterday，
+// 这两个读的是**真实系统时钟**，注入的 now 参数只参与天数差计算。
+// 若 now 取 2027-01-15 这类「近期」锚点，30 天前那一档会落在 2026-12-16 ——
+// 到了那天函数返回「今天 HH:mm」，断言当天变红。一个按日历日定时引爆的
+// 特征测试违背了它自己的目的。锚点推到 2100 后，真实时钟永远不等于锚点，
+// 两个「今天/昨天」分支不可能被满足，天数差算术也随之确定到 2100 年。
+let now = <用 Calendar 构造 2100 年的日期，勿写死时区相关常量>
 let threeDaysAgo = now.addingTimeInterval(-3 * 86_400)
 // 期望 "3 天前"；另测一个 30 天前的日期 → 形如 "M月D日"（用 Calendar 算期望值，不写死月日）
-// 今天的日期 → 以 "今天 " 开头
+//
+// 不要断言「今天 ...」前缀：该分支读真实时钟，注入 now 无法到达它。
+// 想要那条分支有覆盖，只能改实现去注入日历，属于另一个 task 的事。
 ```
 
 - [ ] **Step 2: 注册测试用例——放在 suite 第一项**
