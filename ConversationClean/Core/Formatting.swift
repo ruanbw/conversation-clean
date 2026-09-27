@@ -22,6 +22,24 @@ enum Fmt {
         return "\(text) \(units[index])"
     }
 
+    /// `bytes` 的拆版：返回 (数值, 单位)，供需要混排两种字号的地方用。
+    ///
+    /// 侧栏「可回收空间」体检卡要 22pt 的 `52.3` 配 12pt 的 `MB`，
+    /// 拼成单个字符串就只能用一种字号，大号读数的视觉重量就没了。
+    /// 与 `bytes` 同口径（1024 进制），不另起一套换算。
+    static func splitValue(_ n: Int64) -> (String, String) {
+        guard n != 0 else { return ("0", "KB") }
+        let units = ["KB", "MB", "GB", "TB"]
+        var value = Double(max(n, 0))
+        var index = -1
+        repeat {
+            value /= 1024
+            index += 1
+        } while value >= 1024 && index < units.count - 1
+        let text = value < 10 ? String(format: "%.1f", value) : String(Int(value.rounded()))
+        return (text, units[index])
+    }
+
     /// 原型 `fmtFull`：`2026-09-26 19:54`。
     /// 检视器的「最后更新」用它（要精确到分），列表行第 3 行的「今天 19:26」用 `relative`。
     static func full(_ date: Date) -> String {

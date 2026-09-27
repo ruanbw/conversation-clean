@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 // MARK: - 清理确认弹层
 //
@@ -16,6 +17,17 @@ import SwiftUI
 //
 // 版面约束：hero 留在滚动区之外（原型注释：headline 不该被滚掉），
 // 滚动区装三个带顶线的 .est-sec，提示块与页脚固定在下方。
+//
+// 配色这一版的处理（全部走 Theme 动态色，深浅色等价）：
+//   · 收益条 / 卷容量条：原来是 `Color.primary` 黑灰填充，深色模式下变成白条、
+//     且看着像禁用态。现在是靛蓝渐变（accentHi→accent），「本次释放」那一刀用
+//     语义绿 success —— 绿色在这里是「拿回多少」的唯一记号。
+//   · 空间构成色块：原来是 `Color.primary.opacity()` 灰阶，与 OverviewView 里
+//     修掉的是同一个病（深色变白条、相邻段分不出）。换成 Theme.distColor
+//     靛蓝色阶（同一 hue 250° 的明度阶梯），并补上设计稿里的
+//     「堆叠总览条 + 横条列表」两件套 —— 只有横条没有堆叠条时，
+//     读者要在心里自己做加法才知道谁大谁小。
+//   · 全部 `Divider()` 换成 Theme.line 发丝线：系统 Divider 在深色下是另一层灰。
 
 struct CleanConfirmSheet: View {
     @EnvironmentObject var viewModel: CleanViewModel
@@ -135,6 +147,26 @@ struct CleanConfirmSheet: View {
             : "索引行与快照 · \(layers.count) 层"
     }
 
+    /// 空间构成的完整分段表。堆叠总览条与横条列表读同一份 —— 两处各算一次
+    /// 迟早会漂，漂了就变成「条上说的」和「块上画的」不是一回事。
+    ///
+    /// `colorIndex` 顺位分配：相邻段在 Theme.distColor 上必差一阶明度，
+    /// 深浅色下都分得开（色阶只有 8 级，段数上限 7，超了自然夹到末阶）。
+    private var segments: [CompSegment] {
+        var out: [CompSegment] = mainRows.enumerated().map { index, row in
+            CompSegment(name: row.name, bytes: row.bytes, colorIndex: index)
+        }
+        if restCount > 0 {
+            out.append(CompSegment(name: "其余 \(restCount) 个会话",
+                                   bytes: restBytes, colorIndex: out.count))
+        }
+        if idxBytes > 0 {
+            out.append(CompSegment(name: indexRowTitle, bytes: idxBytes,
+                                   colorIndex: out.count, tag: "估算", isEstimated: true))
+        }
+        return out
+    }
+
     // MARK: - 骨架
 
     var body: some View {
@@ -157,48 +189,57 @@ struct CleanConfirmSheet: View {
             footer
         }
         .frame(width: Self.panelWidth)
+        .background(Theme.bg)
     }
 
     // MARK: - ① 头部（.sheet-h）
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 13) {
+        HStack(spacing: Theme.Space.l) {
             ZStack {
-                Circle().fill(Color.red.opacity(0.12))
+                Circle().fill(Theme.dangerSoft)
                 Image(systemName: "exclamationmark.triangle")
-                    .font(.system(size: 20))
-                    .foregroundStyle(.red)
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(Theme.danger)
             }
-            .frame(width: 38, height: 38)
+            .frame(width: 34, height: 34)
 
             Text("确认清除会话？")
-                .font(.title2)
-                .foregroundStyle(.primary)
+                .font(Theme.Typo.cardTitle)
+                .foregroundStyle(Theme.t1)
+
+            Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.init(top: 20, leading: 22, bottom: 0, trailing: 22))
+        .padding(.init(top: 16, leading: 22, bottom: 0, trailing: 22))
     }
 
     // MARK: - ② 预计释放（.sheet-hero / .est-hero）
     //
     // 留在滚动区之外：原型把 headline 放在 #estHero 里而不是 #shBody 里，
     // 目的就是清理目标再多也不该把「预计释放」这行滚没。
+    //
+    // 版式按设计稿的 `.big` 卡片：白底 + 1px 发丝边 + 8pt 圆角。
+    // 数字用 Theme.Typo.num(26)（tabular-nums，**不是** monospaced 设计字体）：
+    // 原型那条 `.system(.largeTitle, design: .monospaced)` 34pt 半粗，
+    // 等宽字形又宽又重，视觉重量压过了它下面真正的信息（会话数 / Agent 数）。
 
     private var hero: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("预计释放")
-                .font(.system(.caption, design: .monospaced))
-                .tracking(1.1)
-                .foregroundStyle(.secondary)
+                .font(Theme.Typo.sectionHead)
+                .tracking(0.4)
+                .foregroundStyle(Theme.t3)
 
             heroFigure
                 .padding(.top, 6)
 
             heroCaption
-                .padding(.top, 8)
+                .padding(.top, Theme.Space.m)
         }
+        .padding(Theme.Space.ll)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.init(top: 14, leading: 22, bottom: 0, trailing: 22))
+        .cardSurface()
+        .padding(.init(top: Theme.Space.l, leading: 22, bottom: 0, trailing: 22))
     }
 
     @ViewBuilder
@@ -207,23 +248,21 @@ struct CleanConfirmSheet: View {
         HStack(alignment: .firstTextBaseline, spacing: 4) {
             if count == 0 {
                 Text("—")
-                    .font(.system(.largeTitle, design: .monospaced).weight(.semibold))
-                    .tracking(-1.04)
-                    .foregroundStyle(.primary)
+                    .font(Theme.Typo.num(26, .semibold))
+                    .foregroundStyle(Theme.t3)
             } else if split.unit.isEmpty {
                 // 没有可拆的单位（如 "0 B"）时整串用大号排，避免留一个空单位占位
                 Text(split.value)
-                    .font(.system(.largeTitle, design: .monospaced).weight(.semibold))
-                    .tracking(-1.04)
-                    .foregroundStyle(.primary)
+                    .font(Theme.Typo.num(26, .semibold))
+                    .foregroundStyle(Theme.t1)
             } else {
                 Text(split.value)
-                    .font(.system(.largeTitle, design: .monospaced).weight(.semibold))
-                    .tracking(-1.04)          // .est-hero .v 的 letter-spacing: -.04em
-                    .foregroundStyle(.primary)
+                    .font(Theme.Typo.num(26, .semibold))     // .est-hero .v 的 letter-spacing: -.04em
+                    .tracking(-0.8)
+                    .foregroundStyle(Theme.t1)
                 Text(split.unit)
-                    .font(.system(.title3, design: .monospaced).weight(.medium))
-                    .foregroundStyle(.secondary)
+                    .font(Theme.Typo.num(13, .medium))
+                    .foregroundStyle(Theme.t2)
             }
         }
     }
@@ -232,9 +271,9 @@ struct CleanConfirmSheet: View {
     private var heroCaption: some View {
         if count == 0 {
             Text("当前没有可清理的会话。")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .lineSpacing(3.4)             // 原型 line-height: 1.5
+                .font(Theme.Typo.rowSub)
+                .foregroundStyle(Theme.t2)
+                .lineSpacing(3.2)             // 原型 line-height: 1.5
                 .fixedSize(horizontal: false, vertical: true)
         } else {
             (Text("将删除")
@@ -243,9 +282,9 @@ struct CleanConfirmSheet: View {
              + Text(" 个会话文件，覆盖 ")
              + Text("\(shares.count)").figureEmphasis(.callout)
              + Text(" 个 Agent。此操作不可撤销。"))
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .lineSpacing(3.4)
+                .font(Theme.Typo.rowSub)
+                .foregroundStyle(Theme.t2)
+                .lineSpacing(3.2)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -256,7 +295,7 @@ struct CleanConfirmSheet: View {
         estSection {
             sectionLabel("收益位置")
         } content: {
-            VStack(spacing: 13) {
+            VStack(spacing: Theme.Space.l) {
                 EstBarRow(
                     label: "占全部可清理空间",
                     val: totalBytes,
@@ -269,8 +308,8 @@ struct CleanConfirmSheet: View {
                      + Text(allBytes > 0
                             ? String(format: "%.1f%%", Double(totalBytes) / Double(allBytes) * 100)
                             : "0%").figureEmphasis(.caption))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(Theme.Typo.rowSub)
+                        .foregroundStyle(Theme.t3)
                 }
 
                 // 卷容量读不到时整行不画：宁可少一条收益，也不用假分母编出一个占比
@@ -286,8 +325,8 @@ struct CleanConfirmSheet: View {
                          + Text(" · 本次占 ")
                          + Text(String(format: "%.3f%%", Double(totalBytes) / Double(vol.capacity) * 100))
                             .figureEmphasis(.caption))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .font(Theme.Typo.rowSub)
+                            .foregroundStyle(Theme.t3)
                     }
                 }
             }
@@ -347,40 +386,49 @@ struct CleanConfirmSheet: View {
         // 分隔线被静默丢弃（编译器会报 "result of call to 'padding' is unused"）。
         // 「卷占用」与下面「释放说明」之间因此少了一根线。用 VStack 把两者收进同一个返回值。
         return VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: Theme.Space.m) {
                 LevelBadge(text: level.0, isOK: level.1)
                 (Text("可用空间 ")
                  + Text("\(Self.fmtVol(freeBefore)) → \(Self.fmtVol(freeAfter))").figureEmphasis(.callout)
                  + Text("（+\(freeJump)%），相当于卷容量的 ")
                  + Text(String(format: "%.3f%%", gainPct)).figureEmphasis(.callout)
                  + Text("。"))
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .lineSpacing(4.6)                 // 原型 line-height: 1.6
+                    .font(Theme.Typo.rowSub)
+                    .foregroundStyle(Theme.t2)
+                    .lineSpacing(4.0)                 // 原型 line-height: 1.6
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.top, 10)
+            .padding(.top, Theme.Space.ms)
 
-            Divider()
+            Rectangle()
+                .fill(Theme.line)
+                .frame(height: 1)
                 .padding(.top, 11)
         }
     }
 
     /// 原型 `.est-note`：释放量为什么可能低于预估；若本次之外还有会话，一并交代。
+    /// 底色用 `Theme.sunken` 而不是强调色 —— 这一块是免责说明，靛蓝会被读成
+    /// 「重点提示」；真正需要被看见的提示是页脚那块 `tip`（靛蓝淡底）。
     private var note: some View {
-        HStack(alignment: .top, spacing: 7) {
+        HStack(alignment: .top, spacing: Theme.Space.s) {
             Image(systemName: "info.circle")
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
+                .font(Theme.Typo.sectionHead)
+                .foregroundStyle(Theme.t3)
                 .padding(.top, 2)
             noteText
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineSpacing(4.2)                 // 原型 line-height: 1.6
+                .font(Theme.Typo.rowSub)
+                .foregroundStyle(Theme.t3)
+                .lineSpacing(3.6)                 // 原型 line-height: 1.6
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.top, 10)
+        .padding(Theme.Space.ms)
+        .background {
+            RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous)
+                .fill(Theme.sunken)
+        }
+        .padding(.top, Theme.Space.ms)
     }
 
     private var noteText: Text {
@@ -398,48 +446,61 @@ struct CleanConfirmSheet: View {
         return text
     }
 
-    // MARK: - ⑥ 空间构成（.est-sec + .cr）
+    // MARK: - ⑥ 空间构成（.est-sec + .stack + .cr）
 
     private var compositionSection: some View {
         estSection {
             sectionLabel("空间构成")
         } content: {
-            VStack(spacing: 8) {
-                ForEach(mainRows) { row in
-                    CompositionRow(name: row.name, bytes: row.bytes, basis: totalBytes)
+            VStack(alignment: .leading, spacing: 0) {
+                // 设计稿 `.stack`：8pt 堆叠总览条。先看整体谁大，再看下面逐段的量 ——
+                // 只有横条没有它，读者得在心里自己做加法。
+                if totalBytes > 0 {
+                    CompositionStack(segments: segments, basis: totalBytes)
+                    Text(stackCaption)
+                        .font(Theme.Typo.rowSub)
+                        .foregroundStyle(Theme.t3)
+                        .padding(.top, Theme.Space.s)
+                        .padding(.bottom, Theme.Space.s)
                 }
-                if restCount > 0 {
-                    CompositionRow(name: "其余 \(restCount) 个会话", bytes: restBytes, basis: totalBytes)
-                }
-                if idxBytes > 0 {
-                    CompositionRow(
-                        name: indexRowTitle,
-                        bytes: idxBytes,
-                        basis: totalBytes,
-                        tag: "估算",
-                        isEstimated: true
-                    )
+
+                VStack(spacing: 0) {
+                    ForEach(Array(segments.enumerated()), id: \.offset) { _, seg in
+                        CompositionRow(segment: seg, basis: totalBytes)
+                    }
                 }
             }
         }
     }
 
+    /// 堆叠条下面那行注脚：把「谁最大」直接写成文字，省掉读者在段与段之间换算。
+    private var stackCaption: String {
+        guard let top = segments.max(by: { $0.bytes < $1.bytes }), top.bytes > 0 else {
+            return "本次没有可清理的空间。"
+        }
+        let pct = totalBytes > 0
+            ? Double(top.bytes) / Double(totalBytes) * 100
+            : 0
+        return "\(top.name) 占 \(String(format: "%.1f%%", pct)) · 共 \(segments.count) 段"
+    }
+
     // MARK: - ⑦ 提示块（.sheet-b .tip）
 
+    /// 设计稿 `.note`：靛蓝 5% 底 + 靛蓝 12% 边 + 靛蓝图标。
     private var tip: some View {
-        HStack(alignment: .top, spacing: 7) {
+        HStack(alignment: .top, spacing: Theme.Space.s) {
             Image(systemName: "info.circle")
-                .font(.system(size: 13))
-                .foregroundStyle(.secondary)
+                .font(Theme.Typo.body12)
+                .foregroundStyle(Theme.accent)
                 .padding(.top, 2)
             tipText
-                .font(.callout)
-                .foregroundStyle(.secondary)
+                .font(Theme.Typo.rowSub)
+                .foregroundStyle(Theme.t2)
                 .lineSpacing(3.4)                 // 原型 line-height: 1.5
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.init(top: 9, leading: 11, bottom: 9, trailing: 11))
-        .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color(nsColor: .controlBackgroundColor)))
+        .tintedSurface()
         // 原型 .tip{margin-top:11px} + .sheet-b{padding-bottom:18px}
         .padding(.init(top: 11, leading: 22, bottom: 18, trailing: 22))
     }
@@ -460,22 +521,27 @@ struct CleanConfirmSheet: View {
     // MARK: - ⑧ 页脚（.sheet-f）
 
     private var footer: some View {
-        HStack(spacing: 9) {
+        HStack(spacing: Theme.Space.m) {
             Spacer(minLength: 0)
             Button("取消") { viewModel.cancelClean() }
+                .buttonStyle(DrawnButtonStyle(variant: .ghost))
                 .keyboardShortcut(.cancelAction)
 
             Button(action: { Task { await viewModel.executeClean() } }) {
                 Text(viewModel.isCleaning ? "正在清除…" : "确认清除 · \(Fmt.bytes(totalBytes))")
+                    .font(Theme.Typo.navItem.weight(.medium))
             }
-            .buttonStyle(.borderedProminent)
-            .tint(.red)
+            .buttonStyle(DrawnButtonStyle(
+                variant: .danger,
+                horizontalPadding: Theme.Space.xl,
+                enabled: count > 0 && !viewModel.isCleaning))
             .keyboardShortcut(.defaultAction)
             .disabled(count == 0 || viewModel.isCleaning)
             .help(count > 0 ? "删除这 \(count) 个会话文件及其索引行" : "没有可清理的会话")
         }
-        .padding(.init(top: 13, leading: 22, bottom: 13, trailing: 22))
-        .background(.bar)
+        .padding(.init(top: Theme.Space.l, leading: 22, bottom: Theme.Space.l, trailing: 22))
+        .background(Theme.bg)
+        .hairline(.top, color: Theme.line)
     }
 
     // MARK: - 小组件
@@ -488,39 +554,45 @@ struct CleanConfirmSheet: View {
         VStack(alignment: .leading, spacing: 0) {
             header()
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.bottom, 12)          // .sh{margin-bottom:12px}
+                .padding(.bottom, Theme.Space.l)          // .sh{margin-bottom:12px}
             content()
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.init(top: 16, leading: 22, bottom: 0, trailing: 22))
         .padding(.top, 18)
-        .overlay(alignment: .top) { Divider() }
+        // 顶线走 Theme.line，不用 Divider：系统 Divider 的默认色在深色下是另一层灰，
+        // 与 Theme.surface 卡片的边界对不上。
+        .hairline(.top, color: Theme.line)
     }
 
     private func sectionLabel(_ text: String) -> some View {
         Text(text)
-            .font(.system(.caption, design: .monospaced))
-            .tracking(1.1)                     // .sh{letter-spacing:.11em}
-            .foregroundStyle(.secondary)
+            .font(Theme.Typo.sectionHead.weight(.medium))
+            .tracking(0.4)                     // .sh{letter-spacing:.11em}
+            .foregroundStyle(Theme.t3)
     }
 
-    /// `.sh` 完整形态：mono 小标 + 弱化色路径 + 右侧胶囊。
+    /// `.sh` 完整形态：小标 + 弱化色路径 + 右侧胶囊。
     private func sectionHeader(_ title: String, path: String?, badge: String?) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
+        HStack(alignment: .firstTextBaseline, spacing: Theme.Space.m) {
             sectionLabel(title)
             if let path {
                 Text(path)
-                    .font(.system(.caption, design: .monospaced))          // .sh .p{letter-spacing:0}
-                    .foregroundStyle(.primary.opacity(0.72))
+                    .font(Theme.Typo.mono(10.5))          // .sh .p{letter-spacing:0}
+                    .foregroundStyle(Theme.t2)
                     .lineLimit(1)
             }
-            Spacer(minLength: 4)
+            Spacer(minLength: Theme.Space.xs)
             if let badge {
                 Text(badge)
-                    .font(.system(.caption, design: .monospaced))
+                    .font(Theme.Typo.mono(10))
+                    .foregroundStyle(Theme.t2)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(Capsule().fill(.quaternary))
+                    .background {
+                        RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
+                            .fill(Theme.sunken)
+                    }
             }
         }
     }
@@ -554,13 +626,28 @@ private struct AgentShare: Identifiable {
     var id: String { category.rawValue }
 }
 
+/// 空间构成的一段（Agent / 其余合并 / 索引行）。堆叠条与横条列表共用。
+private struct CompSegment: Identifiable {
+    let name: String
+    let bytes: Int64
+    /// Theme.distColor 的阶位，顺位分配保证相邻段必然差一阶明度
+    let colorIndex: Int
+    var tag: String? = nil
+    var isEstimated: Bool = false
+
+    var color: Color { Theme.distColor(colorIndex) }
+    var id: String { name + (tag ?? "") }
+}
+
 // MARK: - Text 拼装辅助
 
 extension Text {
-    /// 原型 `.sheet-b b` / `.est-note b`：等宽、半粗、表格数字。
+    /// 原型 `.sheet-b b` / `.est-note b`：半粗、**表格数字**。
     /// 用在说明句里的数字上，让「读了几个 / 有多大」能被逐行扫读。
+    /// 用 tabular-nums 而不是全等宽设计字体：后者在这个尺寸下字形太宽，
+    /// 一句话里塞两三个数字会把句子撑散。
     fileprivate func figureEmphasis(_ base: Font) -> Text {
-        font(base.monospaced().weight(.semibold)).foregroundColor(.primary)
+        font(base.monospacedDigit().weight(.semibold)).foregroundColor(Theme.t1)
     }
 }
 
@@ -568,6 +655,9 @@ extension Text {
 
 /// 原型 `.eb`：左上标签 + 右上数值，中间隔一条 9pt 描边条，底下跟一行说明。
 /// 条宽 `val/basis*100`，数值 > 0 时至少 0.5%（原型 `Math.max(w, 0.5)`）。
+///
+/// 配色：靛蓝渐变填充 + 靛蓝 11% 轨道。原来是 `Color.primary` 黑灰 —— 深色模式
+/// 下变白条，浅色模式下像禁用态，两种模式都不是「这是一条有多满」的读法。
 private struct EstBarRow<Cap: View>: View {
     let label: String
     let val: Int64
@@ -578,15 +668,15 @@ private struct EstBarRow<Cap: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: Theme.Space.l) {
                 Text(label)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+                    .font(Theme.Typo.navItem)
+                    .foregroundStyle(Theme.t2)
                     .lineLimit(1)
-                Spacer(minLength: 8)
+                Spacer(minLength: Theme.Space.m)
                 Text(Fmt.bytes(val))
-                    .font(.system(.callout, design: .monospaced).weight(.semibold))
-                    .foregroundStyle(.primary)
+                    .font(Theme.Typo.num(12.5, .semibold))
+                    .foregroundStyle(Theme.t1)
                     .lineLimit(1)
             }
 
@@ -600,32 +690,31 @@ private struct EstBarRow<Cap: View>: View {
     private var bar: some View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 2, style: .continuous).fill(Color(nsColor: .controlBackgroundColor))
-                RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .fill(.primary)
+                RoundedRectangle(cornerRadius: Theme.Radius.chipSmall, style: .continuous)
+                    .fill(Theme.accent.opacity(0.11))
+                RoundedRectangle(cornerRadius: Theme.Radius.chipSmall, style: .continuous)
+                    .fill(LinearGradient(colors: [Theme.accentHi, Theme.accent],
+                                         startPoint: .leading, endPoint: .trailing))
                     .frame(width: fillWidth(in: geo.size.width))
             }
         }
         .frame(height: 9)
-        .overlay(
-            RoundedRectangle(cornerRadius: 2, style: .continuous)
-                .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1)
-        )
         .accessibilityHidden(true)
     }
 
     private func fillWidth(in width: CGFloat) -> CGFloat {
         guard val > 0 else { return 0 }
-        // 1px 描边画在内侧，填充只能落在剩下的内宽里
-        let inner = max(0, width - 2)
-        return max(1.5, inner * CGFloat(max(percent, 0.5) / 100))
+        return max(1.5, width * CGFloat(max(percent, 0.5) / 100))
     }
 }
 
 // MARK: - .cap 卷容量双条
 
 /// 原型 `.cap`：36pt 标签 + 真比例条 + 右对齐读数。
-/// `gainPercent` 只有「清理后」那条有值，画成一小段深色，表示本次释放的那一刀。
+/// `gainPercent` 只有「清理后」那条有值，画成一小段**语义绿** —— 这一刀
+/// 就是「能拿回多少」，全弹唯一该用语义色标出来的地方。
+/// 原来是 `Color.primary` / `Color.primary.opacity(0.27)` 两级灰：
+/// 深色下变白条，浅色下像两条被禁用的控件。
 private struct CapRow: View {
     let label: String
     let usedRatio: Double
@@ -634,113 +723,165 @@ private struct CapRow: View {
     var isAfter: Bool = false
 
     var body: some View {
-        HStack(spacing: 9) {
+        HStack(spacing: Theme.Space.m) {
             Text(label)
-                .font(.subheadline.weight(isAfter ? .semibold : .regular))
-                .foregroundStyle(isAfter ? .primary : .secondary)
+                .font(Theme.Typo.rowTitle)
+                .foregroundStyle(isAfter ? Theme.t1 : Theme.t2)
                 .lineLimit(1)
                 .frame(width: 36, alignment: .leading)
 
             GeometryReader { geo in
-                let inner = max(0, geo.size.width - 2)   // 让开 1px 描边
                 HStack(spacing: 0) {
-                    Rectangle()
-                        .fill(.primary.opacity(isAfter ? 0.21 : 0.27))
-                        .frame(width: inner * CGFloat(min(1, max(0, usedRatio))), height: 15)
+                    LinearGradient(colors: [Theme.accentHi, Theme.accent],
+                                   startPoint: .leading, endPoint: .trailing)
+                        .frame(width: geo.size.width * CGFloat(min(1, max(0, usedRatio))), height: 14)
                     if let gainPercent {
                         Rectangle()
-                            .fill(.primary)
+                            .fill(Theme.success)
                             // 原型 min-width:1.5px + Math.max(gPct, 0.16)
-                            .frame(width: max(1.5, inner * CGFloat(max(gainPercent, 0.16) / 100)), height: 15)
+                            .frame(width: max(1.5, geo.size.width * CGFloat(max(gainPercent, 0.16) / 100)),
+                                   height: 14)
                     }
                 }
-                .frame(width: geo.size.width, height: 15, alignment: .leading)
+                .frame(width: geo.size.width, height: 14, alignment: .leading)
             }
-            .frame(height: 15)
-            .background(
-                RoundedRectangle(cornerRadius: 3, style: .continuous).fill(Color(nsColor: .controlBackgroundColor))
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 3, style: .continuous)
-                    .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1)
-            )
+            .frame(height: 14)
+            .background {
+                RoundedRectangle(cornerRadius: Theme.Radius.micro, style: .continuous).fill(Theme.sunken)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.micro, style: .continuous))
             .accessibilityHidden(true)
 
             // 原型 .cap .rv{b{fg 600}}：百分号数字加重，「 已用」保持 muted 常规字重
             (Text(String(format: "%.3f%%", readout * 100)).figureEmphasis(.caption)
-             + Text(" 已用").font(.system(.caption, design: .monospaced)).foregroundColor(.secondary))
+             + Text(" 已用").font(Theme.Typo.mono(10)).foregroundColor(Theme.t3))
                 .lineLimit(1)
                 .frame(width: 96, alignment: .trailing)
         }
     }
 }
 
+// MARK: - .stack 空间构成堆叠总览条
+
+/// 设计稿 `.stack`：8pt 高、4pt 圆角、段间 2pt 缝。
+/// 段色取 `Theme.distColor`（靛蓝明度阶梯）—— 同一 hue，所以堆起来是一族颜色
+/// 而不是彩虹；相邻段必差一阶明度，深浅色下都分得开。
+private struct CompositionStack: View {
+    let segments: [CompSegment]
+    let basis: Int64
+
+    var body: some View {
+        GeometryReader { geo in
+            HStack(spacing: 2) {
+                ForEach(segments) { seg in
+                    if width(of: seg, in: geo.size.width) >= 1 {
+                        RoundedRectangle(cornerRadius: Theme.Radius.fine, style: .continuous)
+                            .fill(seg.color)
+                            .frame(width: width(of: seg, in: geo.size.width))
+                            // 估算段打斜纹：斜纹是「这段不是实测」的唯一记号
+                            .overlay {
+                                if seg.isEstimated {
+                                    HatchedFill(color: Theme.bg)
+                                }
+                            }
+                    }
+                }
+            }
+            .frame(width: geo.size.width, height: geo.size.height, alignment: .leading)
+        }
+        .frame(height: 8)
+        .clipShape(Capsule())
+        .background(Capsule().fill(Theme.sunken))
+        .accessibilityHidden(true)
+    }
+
+    private func width(of seg: CompSegment, in total: CGFloat) -> CGFloat {
+        guard seg.bytes > 0, basis > 0 else { return 0 }
+        return total * CGFloat(Double(seg.bytes) / Double(basis))
+    }
+}
+
 // MARK: - .cr 构成行
 
-/// 原型 `.cr`：名称(+ tag) + 8pt 细条 + 字节 + 百分比。
-/// `isEstimated` 时条用 135° 斜纹 —— 斜纹是「这段不是实测」的唯一记号。
+/// 原型 `.cr`，按设计稿 `.distrow` 排：8pt 色块 + 名字(+ tag) + 5pt 细条 +
+/// 百分比 + 大小。条用该段自己的 `Theme.distColor`，与堆叠条同色 —— 两处对得上，
+/// 读者才能在条与块之间来回跳。
 private struct CompositionRow: View {
-    let name: String
-    let bytes: Int64
+    let segment: CompSegment
     let basis: Int64
-    var tag: String? = nil
-    var isEstimated: Bool = false
 
-    private var percent: Double { basis > 0 ? Double(bytes) / Double(basis) * 100 : 0 }
+    private var percent: Double { basis > 0 ? Double(segment.bytes) / Double(basis) * 100 : 0 }
     private var fraction: Double { min(1, max(0, percent / 100)) }
 
     var body: some View {
-        HStack(spacing: 9) {
-            HStack(spacing: 6) {
-                Text(name)
-                    .font(.callout)
-                    .foregroundStyle(isEstimated ? .secondary : .primary)
+        HStack(spacing: Theme.Space.s) {
+            // 8pt 色块：与堆叠条同色，深色下不会变成白块
+            RoundedRectangle(cornerRadius: Theme.Radius.chipSmall, style: .continuous)
+                .fill(segment.color)
+                .frame(width: 8, height: 8)
+
+            HStack(spacing: Theme.Space.s) {
+                Text(segment.name)
+                    .font(Theme.Typo.navItem)
+                    .foregroundStyle(segment.isEstimated ? Theme.t2 : Theme.t1)
                     .lineLimit(1)
                     .truncationMode(.tail)
-                    .frame(maxWidth: 190, alignment: .leading)   // .cr .cn{max-width:190px}
-                if let tag {
+                    .frame(maxWidth: 168, alignment: .leading)   // .cr .cn{max-width:190px}
+                if let tag = segment.tag {
                     Text(tag)
-                        .font(.caption2)
+                        .font(Theme.Typo.mono(9))
+                        .foregroundStyle(Theme.t3)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 1)
-                        .background(Capsule().fill(.quaternary))
+                        .background {
+                            RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
+                                .fill(Theme.sunken)
+                        }
                 }
             }
 
             bar
 
-            Text(Fmt.bytes(bytes))
-                .font(.system(.caption, design: .monospaced))
-                .foregroundStyle(.secondary)
+            Text(percentText)
+                .font(Theme.Typo.num(11, .medium))
+                .foregroundStyle(Theme.t2)
                 .lineLimit(1)
-                .frame(width: 58, alignment: .trailing)
+                .frame(width: 38, alignment: .trailing)
 
-            Text(String(format: "%.1f%%", percent))
-                .font(.system(.caption, design: .monospaced))
-                .foregroundStyle(.secondary)
+            Text(Fmt.bytes(segment.bytes))
+                .font(Theme.Typo.num(11, .medium))
+                .foregroundStyle(Theme.t3)
                 .lineLimit(1)
-                .frame(width: 42, alignment: .trailing)
+                .frame(width: 56, alignment: .trailing)
         }
+        .frame(height: 22)
         .accessibilityElement(children: .combine)
+    }
+
+    /// 0.4% 四舍五入成 0% 会读成「占 0 字节」，与右边的体积自相矛盾。
+    private var percentText: String {
+        if percent > 0, percent < 0.5 { return "<1%" }
+        return String(format: "%.1f%%", percent)
     }
 
     private var bar: some View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 2, style: .continuous).fill(Color(nsColor: .controlBackgroundColor))
-                if isEstimated {
-                    HatchedFill()
-                        .frame(width: max(1.5, geo.size.width * fraction), height: 8)
+                Capsule().fill(Theme.accent.opacity(0.11))
+                if segment.isEstimated {
+                    HatchedFill(color: segment.color)
+                        .clipShape(Capsule())
+                        .frame(width: max(1.5, geo.size.width * fraction), height: 5)
                 } else {
-                    RoundedRectangle(cornerRadius: 2, style: .continuous)
-                        .fill(.primary)
+                    Capsule()
+                        .fill(LinearGradient(colors: [Theme.accentHi, Theme.accent],
+                                             startPoint: .leading, endPoint: .trailing))
                         .frame(width: max(1.5, geo.size.width * fraction))
                 }
             }
+            .frame(height: 5)
         }
-        .frame(height: 8)
-        .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
+        .frame(height: 5)
         .accessibilityHidden(true)
     }
 }
@@ -748,9 +889,13 @@ private struct CompositionRow: View {
 // MARK: - 斜纹填充
 
 /// 原型 `.cr.est .cb i` 的 `repeating-linear-gradient(135deg, fg 0 2px, transparent 2px 4px)`
-/// —— 135°、2pt 实 2pt 空、整体 55% 不透明度。Canvas 画的斜纹只在 8pt 高的条里出现，
+/// —— 135°、2pt 实 2pt 空。Canvas 画的斜纹只在 5-8pt 高的条里出现，
 /// 不值得为它引一个渐变资源。
+/// 颜色由调用方给：估算段用它自己的 distColor（条上）或面板底色（堆叠条上），
+/// 两种用法都靠斜纹本身透出下层来表现「空」。
 private struct HatchedFill: View {
+    let color: Color
+
     var body: some View {
         Canvas { ctx, size in
             var x = -size.height
@@ -761,33 +906,36 @@ private struct HatchedFill: View {
                 stripe.addLine(to: CGPoint(x: x + size.height + 2, y: 0))
                 stripe.addLine(to: CGPoint(x: x + 2, y: size.height))
                 stripe.closeSubpath()
-                ctx.fill(stripe, with: .color(.primary))
+                ctx.fill(stripe, with: .color(color))
                 x += 4
             }
         }
-        .opacity(0.55)
     }
 }
 
 // MARK: - .lvl 量级徽标
 
-/// 原型 `.lvl`：mono 9.5 胶囊，warn / ok 两态。
-/// 量级徽标需要 ok / warn 两态：
-/// 底色透明度也不同（15% / 14%），所以这里自绘一个只服务量级徽标的小胶囊。
+/// 原型 `.lvl`：小胶囊，ok / warn 两态。
+/// 绿走 Theme.success，橙走系统语义橙 `NSColor.systemOrange`（动态色，
+/// 深色下自动降级，不硬编码字面量）。原来直接用 `Color.green` / `Color.orange`。
 private struct LevelBadge: View {
     let text: String
     let isOK: Bool
 
+    private static let warn = Color(nsColor: .systemOrange)
+
+    private var tint: Color { isOK ? Theme.success : Self.warn }
+
     var body: some View {
         Text(text)
-            .font(.system(.caption, design: .monospaced))
-            .tracking(0.2)                        // .lvl{letter-spacing:.02em}
-            .foregroundStyle(isOK ? Color.green : Color.orange)
+            .font(Theme.Typo.mono(9.5, .medium))    // .lvl{letter-spacing:.02em}
+            .tracking(0.2)
+            .foregroundStyle(tint)
             .padding(.horizontal, 7)
             .padding(.vertical, 1.5)
-            .background(
-                Capsule().fill((isOK ? Color.green : Color.orange).opacity(isOK ? 0.14 : 0.15))
-            )
+            .background {
+                Capsule().fill(tint.opacity(isOK ? 0.14 : 0.15))
+            }
             .fixedSize()
             .accessibilityHidden(true)
     }

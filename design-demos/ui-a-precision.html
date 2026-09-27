@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>ConversationClean · 方向 A · 精密密度</title>
+<style>
+/* ============================================================
+   方向 A · 精密密度（Linear 系）
+   母题：体积的重量感 —— 体积是唯一的第一视觉层级
+   规范：8pt baseline grid / 发丝线 1px / 圆角 6-8pt
+   密度：行高 32pt，正文 13pt（macOS 真实值，非 iOS）
+   ============================================================ */
+:root{
+  --bg:#FAFAFB;
+  --sidebar:#F6F6F8;
+  --surface:#FFFFFF;
+  --raised:#FFFFFF;
+  --line:#E9E9ED;
+  --line-2:#DCDEE3;
+  --t1:#17171A;
+  --t2:#6B6E76;
+  --t3:#9A9DA5;
+  --accent:#5B5BD6;
+  --accent-2:#7C7CF0;
+  --accent-wash:#F4F4FE;
+  --danger:#E5484D;
+  --success:#30A46C;
+  /* 分布色阶：同一 hue 的 lightness 阶梯 —— 可区分但不成彩虹 */
+  --d1:#3F3FBF; --d2:#5252CE; --d3:#6A6ADD; --d4:#8383E4; --d5:#9B9BEA; --d6:#B4B4EF;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  font:13px/1.45 -apple-system,"SF Pro Text","Helvetica Neue",sans-serif;
+  color:var(--t1);
+  background:#8E8E93;
+  display:flex;align-items:center;justify-content:center;
+  min-height:100vh;padding:40px;
+  -webkit-font-smoothing:antialiased;
+}
+.win{
+  width:1280px;height:820px;background:var(--bg);
+  border-radius:10px;overflow:hidden;
+  box-shadow:0 24px 70px rgba(0,0,0,.34),0 2px 8px rgba(0,0,0,.18);
+  display:flex;flex-direction:column;position:relative;
+  font-variant-numeric:tabular-nums;
+}
+
+/* ---------- 顶栏 44pt，hiddenTitleBar 自绘 ---------- */
+.top{
+  height:44px;flex:0 0 44px;display:flex;align-items:center;
+  padding:0 12px 0 78px;gap:8px;
+  background:var(--bg);border-bottom:1px solid var(--line);
+  position:relative;z-index:5;
+}
+.lights{display:flex;gap:8px;position:absolute;left:16px;top:50%;transform:translateY(-50%)}
+.lights i{width:12px;height:12px;border-radius:50%;display:block}
+.lights i:nth-child(1){background:#FF5F57}
+.lights i:nth-child(2){background:#FEBC2E}
+.lights i:nth-child(3){background:#28C840}
+.brand{font-size:13px;font-weight:600;letter-spacing:-.01em}
+.brand .sub{color:var(--t3);font-weight:400}
+.tot{
+  font-size:12px;font-weight:600;color:var(--t1);
+  padding-left:8px;margin-left:2px;border-left:1px solid var(--line-2);
+}
+.tot .n{color:var(--t3);font-weight:400}
+.grow{flex:1}
+
+/* 自绘按钮：6pt 圆角 + 自有 hover/press */
+.btn{
+  height:26px;padding:0 10px;border-radius:6px;border:1px solid transparent;
+  display:inline-flex;align-items:center;gap:5px;
+  font:500 12px/1 -apple-system,sans-serif;color:var(--t2);
+  cursor:pointer;user-select:none;transition:background .12s,color .12s;
+}
+.btn:hover{background:rgba(0,0,0,.05);color:var(--t1)}
+.btn:active{background:rgba(0,0,0,.08)}
+.btn.primary{color:#fff;background:linear-gradient(180deg,var(--accent-2),var(--accent));border-color:rgba(0,0,0,.08);box-shadow:0 1px 2px rgba(91,91,214,.28)}
+.btn.primary:hover{background:linear-gradient(180deg,#8B8BF3,#6A6ADD)}
+.btn.icon{width:26px;padding:0;justify-content:center}
+.btn.danger{color:#fff;background:linear-gradient(180deg,#F0655A,var(--danger));box-shadow:0 1px 2px rgba(229,72,77,.3)}
+.btn.ghost{border-color:var(--line-2);background:var(--surface)}
+.btn.off{opacity:.4;pointer-events:none}
+
+/* ---------- 三栏 ---------- */
+.cols{flex:1;display:flex;min-height:0}
+
+/* ---- 侧栏 230pt ---- */
+.side{
+  width:230px;flex:0 0 230px;background:var(--sidebar);
+  border-right:1px solid var(--line);
+  display:flex;flex-direction:column;min-height:0;
+}
+.side-scroll{flex:1;overflow-y:auto;padding:10px 8px 12px}
+.sect{
+  font:600 11px/1 -apple-system,sans-serif;color:var(--t3);
+  padding:12px 6px 6px;letter-spacing:.02em;
+}
+.nav{
+  height:28px;border-radius:6px;display:flex;align-items:center;gap:8px;
+  padding:0 8px;cursor:pointer;color:var(--t1);font-size:13px;
+  transition:background .1s;
+}
+.nav:hover{background:rgba(0,0,0,.045)}
+.nav .cnt{
+  margin-left:auto;font:500 11px/1 -apple-system,sans-serif;
+  color:var(--t3);background:rgba(0,0,0,.06);
+  padding:2px 6px;border-radius:9px;min-width:20px;text-align:center;
+}
+/* 选中态：靛蓝渐变实心 + 白字 */
+.nav.on{
+  background:linear-gradient(180deg,var(--accent-2),var(--accent));
+  color:#fff;font-weight:500;box-shadow:0 1px 2px rgba(91,91,214,.3);
+}
+.nav.on .cnt{color:rgba(255,255,255,.92);background:rgba(255,255,255,.24)}
+.nav .ic{width:16px;height:16px;flex:0 0 16px;display:grid;place-items:center}
+.nav .lb{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* 侧栏底部：把 500pt 空白填成有用信息 —— 磁盘体检卡 */
+.gauge{margin:8px 6px 0;padding:12px;border-radius:8px;background:var(--surface);border:1px solid var(--line)}
+.gauge .lbl{font:600 10px/1 -apple-system,sans-serif;color:var(--t3);letter-spacing:.04em;text-transform:uppercase}
+.gauge .big{font:600 22px/1.1 -apple-system,sans-serif;letter-spacing:-.02em;margin:6px 0 2px}
+.gauge .big span{font-size:12px;font-weight:500;color:var(--t2);letter-spacing:0}
+.gauge .bar{height:4px;border-radius:2px;background:rgba(0,0,0,.07);margin:8px 0 7px;overflow:hidden}
+.gauge .bar i{display:block;height:100%;width:34%;background:linear-gradient(90deg,var(--accent-2),var(--accent));border-radius:2px}
+.gauge .meta{font-size:11px;color:var(--t2);display:flex;justify-content:space-between}
+.gauge .meta b{font-weight:600;color:var(--danger)}
+
+.pathbox{
+  margin:8px 6px 0;padding:9px 10px;border-radius:8px;
+  background:rgba(91,91,214,.06);border:1px solid rgba(91,91,214,.13);
+}
+.pathbox .t{font:600 10px/1 -apple-system,sans-serif;color:var(--accent);letter-spacing:.03em;text-transform:uppercase;margin-bottom:5px}
+.pathbox .p{font:11px/1.4 "SF Mono",Menlo,monospace;color:var(--t2);word-break:break-all}
+.pathbox .btn{width:100%;justify-content:center;margin-top:8px;height:24px;background:var(--surface);border-color:var(--line-2);color:var(--t1)}
+
+/* ---- 中栏 400pt ---- */
+.mid{
+  width:400px;flex:0 0 400px;background:var(--surface);
+  display:flex;flex-direction:column;min-height:0;
+}
+.filter{padding:10px 12px 8px;border-bottom:1px solid var(--line);background:var(--surface)}
+.search{
+  height:28px;border-radius:7px;background:var(--bg);border:1px solid var(--line-2);
+  display:flex;align-items:center;gap:6px;padding:0 8px;
+  transition:border-color .12s,box-shadow .12s;
+}
+.search:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgba(91,91,214,.12)}
+.search .mag{color:var(--t3);display:grid;place-items:center}
+.search input{flex:1;border:0;background:transparent;font:13px -apple-system,sans-serif;color:var(--t1);outline:0}
+.search input::placeholder{color:var(--t3)}
+.search .clr{color:var(--t3);cursor:pointer;display:none}
+.filter .row2{display:flex;align-items:center;gap:8px;margin-top:8px}
+.seg{display:flex;background:rgba(0,0,0,.045);border-radius:6px;padding:2px;gap:2px}
+.seg span{font:500 11px/1 -apple-system,sans-serif;color:var(--t2);padding:5px 9px;border-radius:4px;cursor:pointer;transition:.12s}
+.seg span.on{background:var(--surface);color:var(--t1);box-shadow:0 1px 2px rgba(0,0,0,.1);font-weight:600}
+.count{font-size:11px;color:var(--t3);margin-left:auto}
+
+/* 提示条：不再用绿底横条，改成自绘胶囊通知 */
+.toast{
+  margin:8px 12px 0;padding:7px 9px;border-radius:7px;
+  display:flex;align-items:center;gap:7px;
+  background:rgba(48,164,108,.09);border:1px solid rgba(48,164,108,.2);
+  font-size:11.5px;color:#1F7A4F;
+}
+.toast .x{margin-left:auto;color:rgba(31,122,79,.6);cursor:pointer;font-weight:500}
+
+/* 列表：自绘，取代 List + Toggle */
+.list{flex:1;overflow-y:auto;padding:4px 0 8px}
+.row{
+  height:32px;display:flex;align-items:center;gap:8px;
+  padding:0 12px 0 10px;cursor:pointer;position:relative;
+  transition:background .1s;
+}
+.row:hover{background:var(--bg)}
+/* 选中态：左侧 2pt 靛蓝竖条（内嵌，不挤占布局）+ 极淡靛蓝底 */
+.row.sel{background:var(--accent-wash)}
+.row.sel::before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--accent)}
+
+/* 自绘勾选框 */
+.cb{
+  width:14px;height:14px;flex:0 0 14px;border-radius:4px;
+  border:1.5px solid var(--line-2);background:var(--surface);
+  display:grid;place-items:center;transition:.1s;
+}
+.cb:hover{border-color:var(--t3)}
+.cb.on{background:var(--accent);border-color:var(--accent)}
+.cb.on::after{content:"";width:8px;height:4.5px;border:1.6px solid #fff;border-top:0;border-right:0;transform:rotate(-45deg) translate(1px,-1px)}
+.cb.mixed{border-color:var(--accent);background:var(--accent)}
+.cb.mixed::after{content:"";width:7px;height:0;border-bottom:1.8px solid #fff}
+
+.ric{width:16px;height:16px;flex:0 0 16px;display:grid;place-items:center;border-radius:4px}
+.tcol{flex:1;min-width:0;display:flex;flex-direction:column;gap:0;line-height:1.25}
+.tcol .t{font-size:12.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.005em}
+.row.sel .tcol .t{font-weight:600}
+.tcol .s{font-size:10.5px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* 体积 = 第一视觉层级：13pt semibold tabular，比标题更重 */
+.sz{font:600 12.5px/1 -apple-system,sans-serif;text-align:right;flex:0 0 52px;letter-spacing:-.01em}
+.row.zero{opacity:.5}
+/* 占比迷你条：数字用体积，形状用条，互不干扰 */
+.mn{width:38px;height:5px;border-radius:3px;background:rgba(0,0,0,.07);flex:0 0 38px;overflow:hidden}
+.mn i{display:block;height:100%;background:var(--accent);border-radius:2px}
+
+/* 批量条 */
+.batch{
+  height:44px;flex:0 0 44px;border-top:1px solid var(--line);
+  display:flex;align-items:center;gap:8px;padding:0 12px;background:var(--bg);
+}
+.batch .st{font-size:11.5px;color:var(--t2)}
+.batch .st b{color:var(--t1);font-weight:600}
+
+/* ---- 右栏 ---- */
+.det{
+  flex:1;background:var(--bg);display:flex;flex-direction:column;min-height:0;
+}
+.det-scroll{flex:1;overflow-y:auto;padding:20px 24px}
+.ph{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px}
+.ph h2{font:600 15px/1 -apple-system,sans-serif;letter-spacing:-.01em}
+.ph .n{font-size:11px;color:var(--t3)}
+
+.big{border-radius:8px;background:var(--surface);border:1px solid var(--line);overflow:hidden;margin-bottom:22px}
+.brow{
+  height:44px;display:flex;align-items:center;gap:12px;
+  padding:0 14px;cursor:pointer;transition:background .1s;
+  border-bottom:1px solid var(--line);
+}
+.brow:last-child{border-bottom:0}
+.brow:hover{background:var(--bg)}
+.brow .nm{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center}
+.brow .nm .t{font-size:12.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brow .nm .s{font-size:10.5px;color:var(--t3);margin-top:1px}
+/* 占比条：靛蓝渐变填充，一眼看出谁最大 —— 不再用黑灰 */
+.brow .tr{width:76px;height:4px;border-radius:2px;background:rgba(91,91,214,.11);flex:0 0 76px;overflow:hidden}
+.brow .tr i{display:block;height:100%;background:linear-gradient(90deg,var(--accent-2),var(--accent));border-radius:2px}
+.brow .pc{font:500 11px/1 -apple-system,sans-serif;color:var(--t3);width:34px;text-align:right;flex:0 0 34px}
+.brow .sz2{font:600 13px/1 -apple-system,sans-serif;width:58px;text-align:right;flex:0 0 58px;letter-spacing:-.01em}
+
+.dt{font:600 12px/1 -apple-system,sans-serif;color:var(--t1);margin:0 0 10px;letter-spacing:-.005em}
+
+/* 分布：堆叠总览条 + 横条列表（原来只有数字列表 + 一条灰长条） */
+.stack{height:8px;border-radius:4px;overflow:hidden;display:flex;gap:2px;margin-bottom:14px;background:rgba(0,0,0,.05)}
+.stack i{display:block;height:100%;transition:opacity .12s}
+.distrow{display:flex;align-items:center;gap:10px;padding:5px 0;cursor:pointer}
+.distrow:hover .dn{color:var(--t1)}
+.distrow .sw{width:8px;height:8px;border-radius:2px;flex:0 0 8px}
+.distrow .dn{font-size:12px;color:var(--t2);width:112px;flex:0 0 112px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:color .12s}
+.distrow .dt2{flex:1;height:5px;border-radius:3px;background:rgba(0,0,0,.05);overflow:hidden}
+.distrow .dt2 i{display:block;height:100%;border-radius:3px}
+.distrow .pc2{font:500 11px/1 -apple-system,sans-serif;color:var(--t2);width:34px;text-align:right;flex:0 0 34px}
+.distrow .sz3{font:500 11px/1 -apple-system,sans-serif;color:var(--t3);width:54px;text-align:right;flex:0 0 54px}
+
+.note{
+  margin-top:20px;padding:11px 13px;border-radius:8px;
+  background:rgba(91,91,214,.05);border:1px solid rgba(91,91,214,.12);
+  display:flex;gap:9px;align-items:flex-start;
+}
+.note .ni{color:var(--accent);flex:0 0 14px;margin-top:1px}
+.note p{font-size:11.5px;line-height:1.55;color:var(--t2)}
+.note p b{color:var(--t1);font-weight:600}
+</style>
+</head>
+<body>
+<div class="win">
+
+  <!-- ===== 顶栏 ===== -->
+  <div class="top">
+    <div class="lights"><i></i><i></i><i></i></div>
+    <div class="brand">ConversationClean</div>
+    <div class="tot">99 MB<span class="n"> · 28 个会话</span></div>
+    <div class="grow"></div>
+    <div class="btn icon" title="清除全部">🗑</div>
+    <div class="btn primary">↻&nbsp; 一键扫描</div>
+    <div class="btn icon" title="设置">⚙</div>
+  </div>
+
+  <div class="cols">
+
+    <!-- ===== 侧栏 ===== -->
+    <div class="side">
+      <div class="side-scroll">
+        <div class="sect">AGENT 分类</div>
+
+        <div class="nav on">
+          <span class="ic">▦</span><span class="lb">全部会话</span><span class="cnt">28</span>
+        </div>
+        <div class="nav">
+          <span class="ic">◧</span><span class="lb">Pi Agent</span><span class="cnt">19</span>
+        </div>
+        <div class="nav">
+          <span class="ic">◨</span><span class="lb">Antigravity</span><span class="cnt">7</span>
+        </div>
+        <div class="nav">
+          <span class="ic">◔</span><span class="lb">Copilot / VS Code</span><span class="cnt">1</span>
+        </div>
+        <div class="nav">
+          <span class="ic">◑</span><span class="lb">Zed AI</span><span class="cnt">1</span>
+        </div>
+
+        <div class="sect">工具</div>
+        <div class="nav">
+          <span class="ic" style="color:var(--accent)">☑</span><span class="lb">仅显示有数据</span>
+        </div>
+        <div class="nav">
+          <span class="ic">⚙</span><span class="lb">设置…</span>
+        </div>
+
+        <!-- 空白填成有用信息：当前分类的磁盘体检 -->
+        <div class="sect">当前分类</div>
+        <div class="gauge">
+          <div class="lbl">可回收空间</div>
+          <div class="big">52.3<span> MB</span></div>
+          <div class="bar"><i></i></div>
+          <div class="meta"><span>占 Pi Agent 全量 100%</span><b>19 会话</b></div>
+        </div>
+
+        <div class="pathbox">
+          <div class="t">存储路径</div>
+          <div class="p">~/.pi/agent/sessions</div>
+          <div class="btn">↗ 在 Finder 中打开</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== 中栏 ===== -->
+    <div class="mid">
+      <div class="filter">
+        <div class="search">
+          <span class="mag">🔍</span>
+          <input placeholder="搜索标题、摘要、项目路径或会话 ID" value="搜索框">
+          <span class="clr">✕</span>
+        </div>
+        <div class="row2">
+          <div class="seg">
+            <span>最近更新</span><span class="on">占用空间</span><span>对话轮数</span>
+          </div>
+          <span class="count">共 28 项</span>
+        </div>
+      </div>
+
+      <div class="toast">
+        <span>✓</span><span>扫描完成 · 命中 28 个会话，合计 99 MB。</span>
+        <span class="x">知道了</span>
+      </div>
+
+      <div class="list">
+        <div class="row sel">
+          <span class="cb on"></span>
+          <span class="ric" style="background:rgba(91,91,214,.1);color:var(--accent)">◧</span>
+          <span class="tcol">
+            <span class="t">重构扫描器的并发调度</span>
+            <span class="s">conversation-clean · main · 2 小时前</span>
+          </span>
+          <span class="mn"><i style="width:46%"></i></span>
+          <span class="sz">45 MB</span>
+        </div>
+        <div class="row">
+          <span class="cb on"></span>
+          <span class="ric" style="background:rgba(224,108,117,.1);color:#C2414B">◨</span>
+          <span class="tcol">
+            <span class="t">加上分隔条拖拽与列宽记忆</span>
+            <span class="s">pi · main · 5 小时前</span>
+          </span>
+          <span class="mn"><i style="width:19%"></i></span>
+          <span class="sz">19 MB</span>
+        </div>
+        <div class="row">
+          <span class="cb on"></span>
+          <span class="ric" style="background:rgba(224,108,117,.1);color:#C2414B">◨</span>
+          <span class="tcol">
+            <span class="t">CleanConfirmSheet 补危险操作二次确认</span>
+            <span class="s">conversation-clean · main · 7 小时前</span>
+          </span>
+          <span class="mn"><i style="width:15%"></i></span>
+          <span class="sz">15 MB</span>
+        </div>
+        <div class="row">
+          <span class="cb"></span>
+          <span class="ric" style="background:rgba(91,91,214,.1);color:var(--accent)">◧</span>
+          <span class="tcol">
+            <span class="t">语义字体迁移：63 处硬编码字号</span>
+            <span class="s">conversation-clean · 1 天前</span>
+          </span>
+          <span class="mn"><i style="width:6%"></i></span>
+          <span class="sz">6.1 MB</span>
+        </div>
+        <div class="row">
+          <span class="cb"></span>
+          <span class="ric" style="background:rgba(120,140,180,.12);color:#5B6B8C">◔</span>
+          <span class="tcol">
+            <span class="t">写 state.vscdb 索引同步的测试</span>
+            <span class="s">context-mode · 1 天前</span>
+          </span>
+          <span class="mn"><i style="width:4%"></i></span>
+          <span class="sz">3.7 MB</span>
+        </div>
+        <div class="row">
+          <span class="cb"></span>
+          <span class="ric" style="background:rgba(91,91,214,.1);color:var(--accent)">◧</span>
+          <span class="tcol">
+            <span class="t">Pi Agent 索引与快照不一致的排查</span>
+            <span class="s">pi · main · 2 天前</span>
+          </span>
+          <span class="mn"><i style="width:3%"></i></span>
+          <span class="sz">1.4 MB</span>
+        </div>
+        <div class="row zero">
+          <span class="cb"></span>
+          <span class="ric" style="background:rgba(120,140,180,.12);color:#5B6B8C">◑</span>
+          <span class="tcol">
+            <span class="t">Swift 6 并发警告批量修复</span>
+            <span class="s">agent-harness · 3 天前</span>
+          </span>
+          <span class="mn"><i style="width:2%"></i></span>
+          <span class="sz">960 KB</span>
+        </div>
+        <div class="row">
+          <span class="cb"></span>
+          <span class="ric" style="background:rgba(91,91,214,.1);color:var(--accent)">◧</span>
+          <span class="tcol">
+            <span class="t">清理任务被中断时的幂等处理</span>
+            <span class="s">conversation-clean · 4 天前</span>
+          </span>
+          <span class="mn"><i style="width:1%"></i></span>
+          <span class="sz">301 KB</span>
+        </div>
+        <div class="row">
+          <span class="cb"></span>
+          <span class="ric" style="background:rgba(224,108,117,.1);color:#C2414B">◨</span>
+          <span class="tcol">
+            <span class="t">README 截图与文档对齐</span>
+            <span class="s">default-app-manager · 5 天前</span>
+          </span>
+          <span class="mn"><i style="width:1%"></i></span>
+          <span class="sz">204 KB</span>
+        </div>
+        <div class="row">
+          <span class="cb"></span>
+          <span class="ric" style="background:rgba(224,108,117,.1);color:#C2414B">◨</span>
+          <span class="tcol">
+            <span class="t">统一扫描的单元测试覆盖</span>
+            <span class="s">context-mode · 6 天前</span>
+          </span>
+          <span class="mn"><i style="width:1%"></i></span>
+          <span class="sz">130 KB</span>
+        </div>
+        <div class="row">
+          <span class="cb"></span>
+          <span class="ric" style="background:rgba(120,140,180,.12);color:#5B6B8C">◔</span>
+          <span class="tcol">
+            <span class="t">App Sandbox 权限清单与扫描范围</span>
+            <span class="s">conversation-clean · 1 周前</span>
+          </span>
+          <span class="mn"><i style="width:1%"></i></span>
+          <span class="sz">88 KB</span>
+        </div>
+        <div class="row">
+          <span class="cb"></span>
+          <span class="ric" style="background:rgba(91,91,214,.1);color:var(--accent)">◧</span>
+          <span class="tcol">
+            <span class="t">用 Tweak 面板对比三种列表密度</span>
+            <span class="s">pi · 1 周前</span>
+          </span>
+          <span class="mn"><i style="width:1%"></i></span>
+          <span class="sz">64 KB</span>
+        </div>
+        <div class="row zero">
+          <span class="cb"></span>
+          <span class="ric" style="background:rgba(224,108,117,.1);color:#C2414B">◨</span>
+          <span class="tcol">
+            <span class="t">给 OpenHands 补 mock 用例</span>
+            <span class="s">open-hands · 2 周前</span>
+          </span>
+          <span class="mn"><i style="width:1%"></i></span>
+          <span class="sz">41 KB</span>
+        </div>
+        <div class="row zero">
+          <span class="cb"></span>
+          <span class="ric" style="background:rgba(120,140,180,.12);color:#5B6B8C">◑</span>
+          <span class="tcol">
+            <span class="t">Aider 会话文件的增量扫描</span>
+            <span class="s">aider · 2 周前</span>
+          </span>
+          <span class="mn"><i style="width:1%"></i></span>
+          <span class="sz">18 KB</span>
+        </div>
+      </div>
+
+      <div class="batch">
+        <span class="st">已选 <b>3</b> 项 · <b>79 MB</b></span>
+        <div class="btn">全选当前</div>
+        <div class="grow"></div>
+        <div class="btn icon">📁</div>
+        <div class="btn danger">🗑 清理选中项</div>
+      </div>
+    </div>
+
+    <!-- ===== 右栏 ===== -->
+    <div class="det">
+      <div class="det-scroll">
+        <div class="ph">
+          <h2>占用大户</h2>
+          <span class="n">共 28 个会话</span>
+        </div>
+
+        <div class="big">
+          <div class="brow">
+            <span class="nm"><span class="t">旧版扫描器遗留的整包缓存</span><span class="s">Pi Agent · 3 周前</span></span>
+            <span class="tr"><i style="width:46%"></i></span>
+            <span class="pc">46%</span><span class="sz2">45 MB</span>
+          </div>
+          <div class="brow">
+            <span class="nm"><span class="t">加上分隔条拖拽与列宽记忆</span><span class="s">Antigravity · 5 小时前</span></span>
+            <span class="tr"><i style="width:19%"></i></span>
+            <span class="pc">19%</span><span class="sz2">19 MB</span>
+          </div>
+          <div class="brow">
+            <span class="nm"><span class="t">CleanConfirmSheet 补二次确认</span><span class="s">Antigravity · 7 小时前</span></span>
+            <span class="tr"><i style="width:15%"></i></span>
+            <span class="pc">15%</span><span class="sz2">15 MB</span>
+          </div>
+          <div class="brow">
+            <span class="nm"><span class="t">语义字体迁移：63 处硬编码</span><span class="s">Pi Agent · 1 天前</span></span>
+            <span class="tr"><i style="width:6%"></i></span>
+            <span class="pc">6%</span><span class="sz2">6.1 MB</span>
+          </div>
+          <div class="brow">
+            <span class="nm"><span class="t">state.vscdb 索引同步测试</span><span class="s">Copilot / VS Code · 1 天前</span></span>
+            <span class="tr"><i style="width:4%"></i></span>
+            <span class="pc">4%</span><span class="sz2">3.7 MB</span>
+          </div>
+        </div>
+
+        <div class="dt">按 Agent 分布</div>
+
+        <!-- 堆叠总览条：靛蓝 6 阶，同 hue 明度阶梯，深浅色都可辨 -->
+        <div class="stack">
+          <i style="width:52%;background:var(--d1)"></i>
+          <i style="width:48%;background:var(--d3)"></i>
+          <i style="width:0.6%;background:var(--d5)"></i>
+          <i style="width:0.4%;background:var(--d6)"></i>
+        </div>
+
+        <!-- 横条列表：原来只有"色块+名字+数字"，看不出量的对比 -->
+        <div class="distrow">
+          <span class="sw" style="background:var(--d1)"></span>
+          <span class="dn">Pi Agent</span>
+          <span class="dt2"><i style="width:52%;background:var(--d1)"></i></span>
+          <span class="pc2">52%</span><span class="sz3">52 MB</span>
+        </div>
+        <div class="distrow">
+          <span class="sw" style="background:var(--d3)"></span>
+          <span class="dn">Antigravity</span>
+          <span class="dt2"><i style="width:48%;background:var(--d3)"></i></span>
+          <span class="pc2">48%</span><span class="sz3">47 MB</span>
+        </div>
+        <div class="distrow">
+          <span class="sw" style="background:var(--d5)"></span>
+          <span class="dn">Zed AI</span>
+          <span class="dt2"><i style="width:1%;background:var(--d5)"></i></span>
+          <span class="pc2">&lt;1%</span><span class="sz3">3.4 KB</span>
+        </div>
+        <div class="distrow">
+          <span class="sw" style="background:var(--d6)"></span>
+          <span class="dn">Copilot / VS Code</span>
+          <span class="dt2"><i style="width:0.6%;background:var(--d6)"></i></span>
+          <span class="pc2">&lt;1%</span><span class="sz3">0.8 KB</span>
+        </div>
+
+        <div class="note">
+          <span class="ni">ⓘ</span>
+          <p><b>原子清理</b>：删除会话时同步删除 Pi Agent 的 context-mode SQLite 索引行
+             与快照子代理数据，回收空目录，不留下幽灵会话。</p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// 行选中（演示交互）
+document.querySelectorAll('.row').forEach(r=>{
+  r.addEventListener('click',e=>{
+    if(e.target.closest('.cb'))return;
+    document.querySelectorAll('.row').forEach(x=>x.classList.remove('sel'));
+    r.classList.add('sel');
+  });
+});
+// 勾选框（演示半选态）
+document.querySelectorAll('.cb').forEach(c=>{
+  c.addEventListener('click',e=>{
+    e.stopPropagation();
+    c.classList.toggle('on');
+    if(c.classList.contains('on'))c.classList.remove('mixed');
+  });
+});
+// 侧栏切换
+document.querySelectorAll('.nav').forEach(n=>{
+  n.addEventListener('click',()=>{
+    document.querySelectorAll('.nav').forEach(x=>x.classList.remove('on'));
+    n.classList.add('on');
+  });
+});
+</script>
+</body>
+</html>

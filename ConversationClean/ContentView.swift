@@ -10,12 +10,14 @@ import AppKit
 // 侧栏是深灰、标题栏是另一种灰，视觉上永远是"贴了块补丁"。`.windowStyle(.hiddenTitleBar)`
 // 把那块变成我们自己的背景，深浅色自动跟着走，代价是得自己给红绿灯让出左侧 78pt。
 //
-// 另外三栏也是手搓 HStack + Divider，不是 NavigationSplitView：后者会自己往窗口上
-// 挂一条 NSToolbar（多出 ~52pt 带子）、给侧栏套 sidebar 材质、列宽可拖拽且自带记忆，
-// 这些都不是我们要的形态。
+// 三栏也是手搓 HStack，不是 NavigationSplitView：后者会自己往窗口上挂一条
+// NSToolbar（多出 ~52pt 带子）、给侧栏套 sidebar 材质，这些都不是我们要的形态。
 //
 // 本文件只管窗口这一层：顶部条、三栏几何、全局动作、弹层编排。
-// 侧栏 / 列表 / 详情栏各自画自己的内容。
+//
+// 视觉基线 ui-a-precision.html：三栏**不是**同一个 windowBackgroundColor。
+// 原实现三栏同色，截图里就是三块白板拼贴；现在按表面梯分四层 ——
+// 侧栏 sunken 之下、内容面 surface 最亮、详情栏 bg 居中，层级一下就出来了。
 
 struct ContentView: View {
     @EnvironmentObject var viewModel: CleanViewModel
@@ -40,7 +42,7 @@ struct ContentView: View {
                 columns(available: geo.size.width)
             }
         }
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(Theme.bg)
         // 让内容铺到窗口最顶端 y=0，红黄绿浮在我们自己的背景上。
         // 不用 NSWindow.styleMask 插 fullSizeContentView：那个 mask 由 SwiftUI 自己持有，
         // 手动插会被回退。
@@ -84,81 +86,80 @@ struct ContentView: View {
     // MARK: - 顶部条
     //
     // 左侧 78pt 让给红绿灯（三个 12pt 圆点 + 两个 8pt gap + 16pt 外边距），
-    // 之后是产品名，右侧是全局动作。
+    // 之后是产品名与总量，右侧是全局动作。
+    //
+    // 与旧版的差别：按钮不再是 `.foregroundStyle(.secondary)` 的裸 SF Symbol 加
+    // `accentColor.opacity(0.14)` 自绘淡蓝底（那套看着像网页），改成走
+    // DrawnButtonStyle —— 主操作是靛蓝渐变实心，次要操作是 hover 才显底。
 
     private var topBar: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Theme.Space.s) {
             Text("ConversationClean")
-                .font(.headline)
-            Text("· 会话清理")
-                .font(.body)
-                .foregroundStyle(.secondary)
+                .font(Theme.Typo.brand)
+                .foregroundStyle(Theme.t1)
+            Text("会话清理")
+                .font(Theme.Typo.navItem)
+                .foregroundStyle(Theme.t3)
 
-            // 总量是常量信息，常驻顶栏即可；把它摊在详情栏整页里既占地方
-            // 又给不出下一步动作，那一栏改成了「占用大户 Top 5」
-            Divider().frame(height: 12).padding(.horizontal, 4)
+            Rectangle()
+                .fill(Theme.lineStrong)
+                .frame(width: 1, height: 12)
+                .padding(.horizontal, 2)
             Text(Fmt.bytes(viewModel.totalSize))
-                .font(.callout.weight(.semibold).monospacedDigit())
+                .font(Theme.Typo.num(12, .semibold))
+                .foregroundStyle(Theme.t1)
             Text("· \(viewModel.conversations.count) 个会话")
-                .font(.callout)
-                .foregroundStyle(.secondary)
+                .font(Theme.Typo.rowSub)
+                .foregroundStyle(Theme.t3)
 
-            Spacer(minLength: 12)
+            Spacer(minLength: Theme.Space.l)
 
-            iconButton("trash", "清除当前列表中的全部会话",
-                       enabled: !viewModel.filteredConversations.isEmpty && !isBusy) {
-                viewModel.requestCleanAll()
+            // 危险动作图标：用 dangerQuiet（红前景、无底色）。顶栏只有 26pt 高，
+            // 实心红底会扎眼，但灰色又会让「删全部」看起来和「设置」一样重。
+            Button(action: { viewModel.requestCleanAll() }) {
+                Image(systemName: "trash")
+                    .font(.system(size: 12, weight: .medium))
+                    .frame(width: Theme.Size.buttonIcon, height: Theme.Size.button)
             }
+            .buttonStyle(DrawnButtonStyle(variant: .dangerQuiet, horizontalPadding: 0))
+            .disabled(viewModel.filteredConversations.isEmpty || isBusy)
             .keyboardShortcut(.delete, modifiers: .command)
+            .help("清除当前列表中的全部会话")
 
             Button {
                 Task { await viewModel.scanConversations() }
             } label: {
                 HStack(spacing: 5) {
-                    Image(systemName: viewModel.isScanning ? "arrow.triangle.2.circlepath" : "arrow.clockwise")
-                        .font(.callout.weight(.medium))
+                    Image(systemName: viewModel.isScanning
+                          ? "arrow.triangle.2.circlepath" : "arrow.clockwise")
+                        .font(.system(size: 11, weight: .semibold))
                     Text(viewModel.isScanning ? "正在扫描…" : "一键扫描")
-                        .font(.callout.weight(.medium))
+                        .font(Theme.Typo.navItem.weight(.medium))
                 }
-                .foregroundStyle(isBusy ? Color.secondary : Color.accentColor)
-                .padding(.horizontal, 10)
-                .frame(height: 26)
-                .background(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(Color.accentColor.opacity(isBusy ? 0.08 : 0.14))
-                )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(DrawnButtonStyle(variant: .primary, enabled: !isBusy))
             .disabled(isBusy)
             .keyboardShortcut("r", modifiers: .command)
             .help("扫描本机全部 Agent 的会话缓存")
 
-            iconButton("gear", "设置", enabled: true) {
+            Button {
                 NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+            } label: {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 12, weight: .medium))
+                    .frame(width: Theme.Size.buttonIcon, height: Theme.Size.button)
             }
+            .buttonStyle(DrawnButtonStyle(variant: .flat, horizontalPadding: 0))
+            .help("设置")
         }
-        .padding(.leading, 78)   // 红黄绿让位
-        .padding(.trailing, 12)
-        .frame(height: 44)
-        .background(Color(nsColor: .windowBackgroundColor))
-        .overlay(alignment: .bottom) { Divider() }
+        .padding(.leading, Theme.Size.trafficLightInset)
+        .padding(.trailing, Theme.Space.l)
+        .frame(height: Theme.Size.topBar)
+        .background(Theme.bg)
+        .hairline(.bottom)
     }
 
     private var isBusy: Bool { viewModel.isScanning || viewModel.isCleaning }
-
-    private func iconButton(_ symbol: String, _ help: String,
-                            enabled: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.body.weight(.medium))
-                .foregroundStyle(enabled ? Color.secondary : Color.secondary.opacity(0.4))
-                .frame(width: 28, height: 26)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(!enabled)
-        .help(help)
-    }
 }
 
 // MARK: - 栏间分隔条
@@ -183,10 +184,10 @@ private struct ColumnResizeHandle: View {
     var body: some View {
         Color.clear
             .frame(width: 11)
-            .background(hovering ? Color.secondary.opacity(0.14) : .clear)
+            .background(hovering ? Color.primary.opacity(0.05) : .clear)
             .overlay(alignment: .center) {
                 Rectangle()
-                    .fill(Color(nsColor: .separatorColor))
+                    .fill(Theme.line)
                     .frame(width: 1)
             }
             .contentShape(Rectangle())

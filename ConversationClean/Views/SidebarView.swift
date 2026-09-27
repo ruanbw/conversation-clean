@@ -3,11 +3,16 @@ import AppKit
 
 // MARK: - Sidebar
 //
-// 版式照 DefaultAppManager 的 SidebarView：彩色图标 + 选中项蓝色实心填充白字
-// + 右侧灰色计数胶囊。统计信息不在这里，已搬进详情栏（OverviewView）。
-//
 // 两道过滤不能丢：① 本机未安装的 Agent 不出现；② 「仅显示有数据」打开时
 // 再滤掉 0 会话的分类。`.all` 恒在首位且不受第二个开关影响。
+//
+// 视觉按 ui-a-precision.html 重做。修掉的三处：
+//   ① 顶部 38pt 的 Spacer 是多余空白 —— 它当初是给红绿灯让位，但红绿灯浮在
+//      顶栏（48pt）上，窗口几何是 VStack{topBar; columns}，侧栏从顶栏**下方**
+//      才开始，根本轮不到它让位。旧代码在顶栏下面又空 38pt，侧栏开头 86pt 全白。
+//   ② 下方 500pt 是纯空白（只装了 4 款 Agent 却有 15 个分类位）。现在填成
+//      「可回收空间」体检卡 + 存储路径卡，把空白换成决策信息。
+//   ③ 行高 28pt（原 5pt padding 撑出 ~30pt 但基线不对齐），计数改等宽数字。
 
 private let sidebarAgentOrder: [ConversationCategory] = [
     .claudeCode, .codex, .piAgent, .cline, .rooCode, .continueDev, .copilotChat,
@@ -19,71 +24,161 @@ struct SidebarView: View {
     @AppStorage("hideEmptyCategories") private var hideEmpty = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            // 顶部 38pt 让给红绿灯：hiddenTitleBar 之后内容铺到 y=0，
-            // 这段留白正好托住系统那三个圆点（照 DefaultAppManager 的 SidebarView）
-            Spacer().frame(height: 38)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                SectionLabel(text: "Agent 分类", paddingTop: Theme.Space.l)
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    sectionHeader("Agent 分类")
-                    ForEach(visibleCategories) { cat in
-                        categoryRow(cat)
-                    }
-                    sectionHeader("工具")
-                    toolRow("仅显示有数据", hideEmpty) { withAnimation(.easeOut(duration: 0.14)) { hideEmpty.toggle() } }
-                    toolRow("设置…", nil) {
-                        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-                    }
-                    sectionHeader("当前分类存储路径")
-                    pathFooter
+                ForEach(visibleCategories) { cat in
+                    categoryRow(cat)
                 }
-                .padding(.horizontal, 8)
-                .padding(.bottom, 16)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-        }
-        .background(Color(nsColor: .windowBackgroundColor))
-    }
 
-    private func sectionHeader(_ title: String) -> some View {
-        Text(title)
-            .font(.subheadline.weight(.semibold))
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 6)
-            .padding(.top, 14)
-            .padding(.bottom, 6)
-            .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    /// 工具行：标题左侧一个 20pt 图标位。`checked` 非 nil 时画勾选框。
-    private func toolRow(_ title: String, _ checked: Bool?,
-                         action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                Group {
-                    if let checked {
-                        Image(systemName: checked ? "checkmark.square.fill" : "square")
-                            .font(.system(size: 12))
-                            .foregroundStyle(checked ? Color.accentColor : Color.secondary)
-                    } else {
-                        Color.clear
-                    }
+                SectionLabel(text: "工具")
+                toolRow("仅显示有数据", hideEmpty) {
+                    withAnimation(.easeOut(duration: 0.14)) { hideEmpty.toggle() }
                 }
-                .frame(width: 20)
-                Text(title)
-                    .font(.body)
-                    .foregroundStyle(.primary)
-                Spacer(minLength: 0)
+                toolRow("设置…", nil) {
+                    NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                }
+
+                SectionLabel(text: "当前分类")
+                storageCard
+                recoveryGauge
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
-            .contentShape(Rectangle())
+            .padding(.horizontal, Theme.Space.m)
+            .padding(.bottom, Theme.Space.xl)
         }
-        .buttonStyle(.plain)
+        .background(Theme.sidebar)
     }
 
-    // MARK: - 分类
+    // MARK: - 可回收空间体检卡
+    //
+    // 侧栏那块空白最好的用途不是装饰，是一个能直接回答"我现在能省多少"的读数。
+    // 大号 22pt 数字 —— 母题是体积的重量感，数字就该是全侧栏最重的元素。
+
+    private var recoveryGauge: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("可回收空间")
+                .font(Theme.Typo.sectionHead)
+                .tracking(0.4)
+                .foregroundStyle(Theme.t3)
+
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(gaugeValue)
+                    .font(Theme.Typo.gauge)
+                    .foregroundStyle(Theme.t1)
+                Text(gaugeUnit)
+                    .font(Theme.Typo.gaugeUnit)
+                    .foregroundStyle(Theme.t2)
+            }
+            .padding(.top, 6)
+
+            // 占比条：当前分类占它自己 Agent 全量的比例。
+            // 100% 说明"这条分类下的全是可删的历史"，比一个绝对值更有决策价值。
+            ShareBar(percent: gaugeShare, width: nil, height: 4)
+                .frame(height: 4)
+                .padding(.top, Theme.Space.m)
+
+            HStack(spacing: Theme.Space.xs) {
+                Text(gaugeCaption)
+                    .font(Theme.Typo.rowSub)
+                    .foregroundStyle(Theme.t2)
+                    .lineLimit(1)
+                Spacer(minLength: Theme.Space.xs)
+                Text(gaugeCount)
+                    .font(Theme.Typo.num(11, .semibold))
+                    .foregroundStyle(Theme.danger)
+            }
+            .padding(.top, Theme.Space.s)
+        }
+        .padding(Theme.Space.l)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .cardSurface()
+        .padding(.top, Theme.Space.m)
+    }
+
+    /// 当前选中分类的会话数
+    private var currentStats: CategoryStats? {
+        viewModel.categoryStats[viewModel.selectedCategory]
+    }
+
+    /// 卡片上那支大数字。跟着当前分类走：全部会话显示全量，选中某款显示该款。
+    private var gaugeValue: String {
+        Fmt.splitValue(currentStats?.sizeInBytes ?? 0).0
+    }
+    private var gaugeUnit: String {
+        Fmt.splitValue(currentStats?.sizeInBytes ?? 0).1
+    }
+    /// 「占 Pi Agent 全量 100%」—— 有具体 Agent 名才有占比，否则说明是全量
+    private var gaugeShare: Double {
+        guard let s = currentStats, s.sizeInBytes > 0, s.sizeInBytes <= viewModel.totalSize else {
+            return 0
+        }
+        return Double(s.sizeInBytes) / Double(viewModel.totalSize) * 100
+    }
+    private var gaugeCaption: String {
+        let name = viewModel.selectedCategory == .all
+            ? "全部 Agent 合计"
+            : viewModel.selectedCategory.rawValue
+        return "占 \(name) \(Int(gaugeShare.rounded()))%"
+    }
+    private var gaugeCount: String {
+        "\(currentStats?.count ?? 0) 会话"
+    }
+
+    // MARK: - 存储路径卡
+
+    private var storageCard: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("存储路径")
+                .font(Theme.Typo.sectionHead)
+                .tracking(0.4)
+                .foregroundStyle(Theme.accent)
+
+            Text(displayedPath.isEmpty ? "—" : displayedPath)
+                .font(Theme.Typo.mono(11))
+                .foregroundStyle(Theme.t2)
+                .lineLimit(2)
+                .truncationMode(.middle)
+                .textSelection(.enabled)
+                .help(currentStoragePath)
+
+            // 说明跟着设置开关走：开关关掉时这句「同步删除」就是错的，不能写死。
+            Text(pathNote)
+                .font(Theme.Typo.rowSub)
+                .foregroundStyle(Theme.t3)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Button(action: revealCurrentPath) {
+                HStack(spacing: 5) {
+                    Image(systemName: "arrow.up.forward.square")
+                        .font(.system(size: 10, weight: .medium))
+                    Text("在 Finder 中打开")
+                        .font(Theme.Typo.rowSub.weight(.medium))
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(DrawnButtonStyle(
+                variant: currentStoragePath.isEmpty ? .flat : .ghost,
+                horizontalPadding: 0, compact: true))
+            .disabled(currentStoragePath.isEmpty)
+            .padding(.top, 2)
+        }
+        .padding(Theme.Space.l)
+        .tintedSurface()
+        .padding(.top, Theme.Space.m)
+    }
+
+    // MARK: - 分类行
+
+    private func categoryRow(_ cat: ConversationCategory) -> some View {
+        CategoryRow(
+            category: cat,
+            count: viewModel.categoryStats[cat]?.count ?? 0,
+            isSelected: viewModel.selectedCategory == cat
+        ) {
+            viewModel.selectedCategory = cat
+        }
+    }
 
     private var visibleCategories: [ConversationCategory] {
         let installed = sidebarAgentOrder.filter(isInstalled)
@@ -97,17 +192,7 @@ struct SidebarView: View {
         viewModel.agentInfos.first { $0.category == cat }?.isInstalled == true
     }
 
-    private func categoryRow(_ cat: ConversationCategory) -> some View {
-        CategoryRow(
-            category: cat,
-            count: viewModel.categoryStats[cat]?.count ?? 0,
-            isSelected: viewModel.selectedCategory == cat
-        ) {
-            viewModel.selectedCategory = cat
-        }
-    }
-
-    // MARK: - 路径 footer
+    // MARK: - 路径
 
     private var pathAgent: AgentInfo? {
         if viewModel.selectedCategory == .all {
@@ -117,30 +202,7 @@ struct SidebarView: View {
     }
 
     private var currentStoragePath: String { pathAgent?.storagePath ?? "" }
-
-    private var pathFooter: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(Fmt.abbreviateHome(currentStoragePath).isEmpty ? "—" : Fmt.abbreviateHome(currentStoragePath))
-                .font(.caption.monospaced())
-                .foregroundStyle(.secondary)
-                .textSelection(.enabled)
-                .fixedSize(horizontal: false, vertical: true)
-                .help(currentStoragePath)
-
-            // 说明跟着设置开关走：开关关掉时这句「同步删除」就是错的，不能写死。
-            Text(pathNote)
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Button { revealCurrentPath() } label: {
-                Label("在 Finder 中打开", systemImage: "arrow.up.forward.square").font(.callout)
-            }
-            .controlSize(.small)
-            .disabled(currentStoragePath.isEmpty)
-        }
-        .padding(.vertical, 4)
-    }
+    private var displayedPath: String { Fmt.abbreviateHome(currentStoragePath) }
 
     private var pathNote: String {
         guard let agent = pathAgent, isInstalled(agent.category) else {
@@ -161,12 +223,41 @@ struct SidebarView: View {
             NSWorkspace.shared.open(url)
         }
     }
+
+    // MARK: - 工具行
+    //
+    // 20pt 图标位：checked 非 nil 时画手绘勾选框，否则留空位保持文字左对齐。
+    private func toolRow(_ title: String, _ checked: Bool?,
+                         action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: Theme.Space.s) {
+                Group {
+                    if let checked {
+                        Image(systemName: checked ? "checkmark.square.fill" : "square")
+                            .font(Theme.Typo.body12)
+                            .foregroundStyle(checked ? Theme.accent : Theme.t3)
+                    } else {
+                        Color.clear
+                    }
+                }
+                .frame(width: 16)
+                Text(title)
+                    .font(Theme.Typo.navItem)
+                    .foregroundStyle(Theme.t1)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, Theme.Space.m)
+            .frame(height: Theme.Size.rowCompact)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
 }
 
 // MARK: - 分类行
 //
-// DefaultAppManager 的 sidebarRow：选中时整行填 accentColor、文字转白，
-// 右侧计数在选中态是白字胶囊、未选中是灰字。逐项照抄。
+// 选中态：靛蓝渐变实心 + 白字（设计稿 A 的做法）。
+// 计数用等宽数字，右侧对齐才不会因位数变化跳动。
 
 private struct CategoryRow: View {
     let category: ConversationCategory
@@ -174,40 +265,55 @@ private struct CategoryRow: View {
     let isSelected: Bool
     let action: () -> Void
 
+    @State private var hovering = false
+
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 8) {
-                AgentIconView(category: category, size: 18)
+            HStack(spacing: Theme.Space.m) {
+                AgentIconView(category: category, size: 16)
 
                 Text(category.rawValue)
-                    .font(.body.weight(isSelected ? .semibold : .regular))
-                    .foregroundStyle(isSelected ? .white : .primary)
+                    .font(isSelected ? Theme.Typo.navItemActive : Theme.Typo.navItem)
+                    .foregroundStyle(isSelected ? .white : Theme.t1)
                     .lineLimit(1)
 
-                Spacer(minLength: 4)
+                Spacer(minLength: Theme.Space.xs)
 
                 if count > 0 {
                     Text("\(count)")
-                        .font(.system(.subheadline, design: .rounded).weight(.medium))
-                        .foregroundStyle(isSelected ? Color.white.opacity(0.9) : .secondary)
+                        .font(Theme.Typo.num(11, .medium))
+                        .foregroundStyle(isSelected ? Color.white.opacity(0.92) : Theme.t3)
                         .padding(.horizontal, 6)
-                        .padding(.vertical, 1.5)
-                        .background(isSelected ? Color.white.opacity(0.25) : Color.secondary.opacity(0.12))
-                        .clipShape(Capsule())
+                        .padding(.vertical, 2)
+                        .background {
+                            Capsule().fill(isSelected
+                                           ? Color.white.opacity(0.24)
+                                           : Color.primary.opacity(0.055))
+                        }
                 }
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
-            .background(
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(isSelected ? Color.accentColor : .clear)
-            )
+            .padding(.horizontal, Theme.Space.m)
+            .frame(height: Theme.Size.rowCompact)
+            .background {
+                RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous)
+                    .fill(fill)
+            }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .onHover { hovering = $0 }
         .help("\(category.rawValue) · \(count) 个会话")
         .accessibilityLabel(category.rawValue)
         .accessibilityValue("\(count) 个会话")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    /// 选中态是渐变、未选中是纯色，所以返回 AnyShapeStyle 而非 Color。
+    private var fill: AnyShapeStyle {
+        if isSelected {
+            return AnyShapeStyle(LinearGradient(colors: [Theme.accentHi, Theme.accent],
+                                                startPoint: .top, endPoint: .bottom))
+        }
+        return AnyShapeStyle(hovering ? Color.primary.opacity(0.045) : Color.clear)
     }
 }

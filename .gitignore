@@ -39,5 +39,8 @@ Icon
 # Pi agent 后台任务输出
 .pi/tasks/
 
+# Serena MCP 本地状态
+.serena/
+
 # Git worktrees (SDD isolated workspace)
 .worktrees/

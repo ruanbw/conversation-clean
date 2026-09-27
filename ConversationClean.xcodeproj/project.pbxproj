@@ -13,6 +13,8 @@
 		CC0100042D00000100000001 /* CleanViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200042D00000100000001 /* CleanViewModel.swift */; };
 		CC0100052D00000100000001 /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200052D00000100000001 /* SidebarView.swift */; };
 		CC0100062D00000100000001 /* DetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200062D00000100000001 /* DetailView.swift */; };
+		CC01E0012D00000100000001 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC02E0012D00000100000001 /* Theme.swift */; };
+		CC01E0022D00000100000001 /* DrawnControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC02E0022D00000100000001 /* DrawnControls.swift */; };
 		CC0100072D00000100000001 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200072D00000100000001 /* SettingsView.swift */; };
 		CC0100082D00000100000001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CC0200082D00000100000001 /* Assets.xcassets */; };
 		CC0100102D00000100000001 /* AgentScannerProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0200102D00000100000001 /* AgentScannerProtocol.swift */; };
@@ -56,6 +58,8 @@
 		CC0200042D00000100000001 /* CleanViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanViewModel.swift; sourceTree = "<group>"; };
 		CC0200052D00000100000001 /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
 		CC0200062D00000100000001 /* DetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailView.swift; sourceTree = "<group>"; };
+		CC02E0012D00000100000001 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		CC02E0022D00000100000001 /* DrawnControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrawnControls.swift; sourceTree = "<group>"; };
 		CC0200072D00000100000001 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		CC0200082D00000100000001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		CC0200092D00000100000001 /* ConversationClean.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ConversationClean.entitlements; sourceTree = "<group>"; };
@@ -153,6 +157,8 @@
 				CC0200052D00000100000001 /* SidebarView.swift */,
 				CC0200062D00000100000001 /* DetailView.swift */,
 				CC0200072D00000100000001 /* SettingsView.swift */,
+				CC02E0012D00000100000001 /* Theme.swift */,
+				CC02E0022D00000100000001 /* DrawnControls.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -317,6 +323,8 @@
 				CC0100042D00000100000001 /* CleanViewModel.swift in Sources */,
 				CC0100052D00000100000001 /* SidebarView.swift in Sources */,
 				CC0100062D00000100000001 /* DetailView.swift in Sources */,
+				CC01E0012D00000100000001 /* Theme.swift in Sources */,
+				CC01E0022D00000100000001 /* DrawnControls.swift in Sources */,
 				CC0100072D00000100000001 /* SettingsView.swift in Sources */,
 				CC0100102D00000100000001 /* AgentScannerProtocol.swift in Sources */,
 				CC0100112D00000100000001 /* ClaudeCodeScanner.swift in Sources */,

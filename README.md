@@ -12,10 +12,12 @@
 
 - **15 款 Agent 全覆盖**：统一 `AgentScanner` 协议接入 CLI Agent（Claude Code、Codex、Pi Agent、Cline、Roo Code、Continue.dev、OpenViking、Aider、Zed AI、OpenHands）与 VS Code 系 IDE（VS Code Chat、Cursor、Windsurf、Trae、Antigravity）。
 - **双层索引原子清理**：对同时维护「会话文件 + SQLite 索引」的 Agent（VS Code 系 `state.vscdb`、Pi Agent context-mode），删除会话时同步清理索引，避免幽灵会话残留。
-- **macOS 原生观感**：隐藏标题栏 + 手搓三栏（`ContentView`），红黄绿浮在自有背景上，深浅色自动跟随；系统 `Form` / `Toggle` / `List` 承载设置与列表，不再自绘控件。
+- **全自绘 UI**：隐藏标题栏 + 手搓三栏（`ContentView`），红黄绿浮在自有背景上。**零系统 UI 控件**——列表、勾选框、按钮、分段器、搜索框、空态、开关全部手绘（`DrawnControls.swift`），只保留 `Button` / `TextField` 作为交互原语并在系统剥掉外观。视觉 100% 可控，不受 macOS 版本控件改版影响。
+- **设计系统 token 化**：色彩、间距、圆角、排版集中在 `Theme.swift`。8pt baseline grid、圆角 6/8/10pt、正文 13pt（macOS 真实值，非 iOS 的 17pt），视图里不允许出现颜色与字号字面量。
+- **三栏表面梯**：侧栏 / 列表 / 详情栏分属四级不同底色，不再是三块同色白板拼贴。
 - **可拖拽三栏**：两条分隔条可拖动并记忆列宽（`@AppStorage`），上限随窗口宽度动态收窄，缩窗口不会把三栏挤变形。
-- **键盘可达**：⌘R 扫描、⌘Delete 清理、⌘F 聚焦搜索、Esc 逐级清空（先清搜索词，再清勾选）。
-- **语义字体**：正文全部走 `.body` / `.callout` / `.caption` 等语义字体，系统字号设置下会一起缩放；仅 SF Symbol 图标保留按框计算的固定字号。
+- **键盘可达**：⌘R 扫描、⌘Delete 清理、⌘F 聚焦搜索、↑↓ 移动选中、Esc 逐级清空（先清搜索词，再清勾选）。自绘列表自己补齐了系统 `List` 自带的键盘导航。
+- **体积优先的信息层级**：清理工具里「多大」比「叫什么」重要，所以体积数字的视觉重量**高于**会话标题。数据可视化用同 hue 的靛蓝明度阶梯（可区分但不成彩虹），深浅色均已配降级值。
 - **清晰的 MVVM 架构**：`Models/` 数据模型、`ViewModels/` 状态管理、`Views/` 界面组件。
 - **并发扫描**：`AgentScanService` 通过 `withTaskGroup` 并发调度全部扫描器。
 - **标准 Xcode 工程**：自带完整的 `ConversationClean.xcodeproj` 与共享构建 Scheme。
@@ -30,6 +32,11 @@ conversation-clean/
 ├── .gitignore                                  # macOS / Xcode 专用忽略规则
 ├── README.md                                   # 项目说明文档
 ├── ConversationClean.xcodeproj/                # Xcode 工程与 Scheme 配置
+├── design-demos/                               # UI 设计稿（HTML，可交互）+ 方向定档
+│   ├── ui-a-precision.html                     # ✓ 锁定方向：精密密度（Linear 系）
+│   ├── ui-b-material.html                      # 备选：材质呼吸（Apple HIG 系）
+│   ├── ui-c-volumetric.html                    # 备选：体积优先（DaisyDisk 系）
+│   └── direction-approved.md                   # 三方向初稿记录 + 用户选择原话
 ├── scripts/
 │   ├── run_tests.sh                            # 扫描器验证套件：编译 + 运行
 │   └── tests/                                  # 按 Agent 家族拆分的测试用例
@@ -56,10 +63,17 @@ conversation-clean/
     ├── ViewModels/
     │   └── CleanViewModel.swift                # 状态与业务逻辑 ViewModel
     ├── Views/
-    │   ├── SidebarView.swift                   # 侧边栏与缓存概览
-    │   ├── DetailView.swift                    # 会话列表与批量操作栏
-    │   └── SettingsView.swift                  # 偏好设置面板
+    │   ├── Theme.swift                         # 设计系统 token：色彩/间距/圆角/排版
+    │   ├── DrawnControls.swift                 # 自绘控件库：按钮/勾选框/分段器/搜索框/空态
+    │   ├── SidebarView.swift                   # 侧边栏：分类导航 + 可回收空间体检卡 + 存储路径
+    │   ├── ConversationListView.swift          # 自绘会话列表 + 搜索/排序 + 批量操作栏
+    │   ├── OverviewView.swift                  # 详情栏未选中态：占用大户 Top5 + Agent 分布
+    │   ├── DetailView.swift                    # 详情栏选中态：会话元数据与操作
+    │   ├── CleanConfirmSheet.swift             # 清理前二次确认：收益/分布/容量预测
+    │   ├── SettingsView.swift                  # 偏好设置面板（自绘开关与分组）
+    │   └── AgentIconView.swift                 # 15 款 Agent 品牌标记
     ├── Core/                                   # 跨扫描器共享基建
+    │   ├── Formatting.swift                    # 1024 进制体积/时间/路径格式化
     │   ├── AgentScannerProtocol.swift          # 扫描器协议 + FileSizeHelper
     │   ├── AgentScanService.swift              # 并发调度与聚合
     │   ├── DateParsing.swift                   # 进程级共享 ISO8601 解析
