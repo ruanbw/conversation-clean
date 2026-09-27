@@ -94,6 +94,21 @@ enum CCButtonKind {
         default:       return fg
         }
     }
+    /// 开启态（非实心按钮）：原型 `#btnPanel[aria-pressed=true]` 会额外拿到
+    /// `background:var(--fg-soft); color:var(--fg)`，即用洗底而不是换色来表达「已打开」。
+    var onBg: Color {
+        switch self {
+        case .primary, .danger: return bg
+        default:                return CC.fillSoft
+        }
+    }
+    var onFg: Color {
+        switch self {
+        case .primary: return .white
+        case .danger:  return .white
+        default:       return CC.fg
+        }
+    }
 }
 
 /// The prototype's `.btn` — one component, four skins, two sizes.
@@ -106,12 +121,27 @@ struct CCButton: View {
     /// 用 `.frame(height:)` 从外面套是压不住的 —— 内部 34pt 的 min 高度会把内容撑回去。
     var height: CGFloat? = nil
     var enabled: Bool = true
+    /// 切换态：标题栏「检视器」用它。实心皮肤（primary / danger）忽略该值 ——
+    /// 它们本身就是常开外观，再加洗底只会糊掉。
+    var isOn: Bool = false
     var help: String? = nil
     let action: () -> Void
 
     @State private var hovering = false
 
     private var resolvedHeight: CGFloat { height ?? (compact ? CC.M.ctlSm : CC.M.ctl) }
+    private var showsOnSkin: Bool { isOn && kind != .primary && kind != .danger }
+
+    private var fgColor: Color {
+        guard enabled else { return CC.fg.opacity(0.42) }
+        if showsOnSkin { return kind.onFg }
+        return hovering ? kind.hoverFg : kind.fg
+    }
+    private var bgColor: Color {
+        guard enabled else { return .clear }
+        if showsOnSkin { return kind.onBg }
+        return hovering ? kind.hoverBg : kind.bg
+    }
 
     var body: some View {
         Button(action: action) {
@@ -126,12 +156,12 @@ struct CCButton: View {
                     Text(title).font(compact ? CC.F.label : CC.F.bodyEm)
                 }
             }
-            .foregroundStyle(enabled ? (hovering ? kind.hoverFg : kind.fg) : CC.fg.opacity(0.42))
+            .foregroundStyle(fgColor)
             .frame(height: resolvedHeight)
             .padding(.horizontal, compact ? 10 : 13)
             .background(
                 RoundedRectangle(cornerRadius: compact ? CC.R.sm : CC.R.md, style: .continuous)
-                    .fill(enabled ? (hovering ? kind.hoverBg : kind.bg) : .clear)
+                    .fill(bgColor)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: compact ? CC.R.sm : CC.R.md, style: .continuous)
@@ -144,6 +174,7 @@ struct CCButton: View {
         .onHover { hovering = $0 }
         .help(help ?? title)
         .animation(CC.Mv.quick, value: hovering)
+        .animation(CC.Mv.quick, value: isOn)
     }
 }
 
@@ -184,23 +215,6 @@ struct CCIconButton: View {
 }
 
 // MARK: - Surfaces
-
-/// Surface + 1px border + `--r-lg`. The prototype's card.
-struct CCCard<Content: View>: View {
-    var padding: CGFloat = 12
-    var radius: CGFloat = CC.R.lg
-    @ViewBuilder var content: Content
-
-    var body: some View {
-        content
-            .padding(padding)
-            .background(RoundedRectangle(cornerRadius: radius, style: .continuous).fill(CC.surface))
-            .overlay(
-                RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .strokeBorder(CC.border, lineWidth: 1)
-            )
-    }
-}
 
 /// Monospaced all-caps section label with an optional trailing accessory.
 struct CCSectionHeader<Accessory: View>: View {
@@ -269,95 +283,7 @@ struct CCBadge: View {
     }
 }
 
-// MARK: - Circular identity
-
-/// Circular agent mark with an optional share ring drawn around it.
-struct CCAgentBadge: View {
-    let category: ConversationCategory
-    var diameter: CGFloat = 30
-    /// 0…1 share of total storage; `nil` hides the ring.
-    var share: Double? = nil
-    var selected: Bool = false
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .fill(selected ? category.tint.opacity(0.18) : category.tintSoft)
-            Image(systemName: category.glyph)
-                .font(.system(size: diameter * 0.44, weight: .regular))
-                .foregroundStyle(selected ? CC.fg : category.tint)
-            if let share, share > 0 {
-                Circle()
-                    .trim(from: 0, to: max(0.02, min(1, share)))
-                    .stroke(category.tint, style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                    .padding(-2.5)
-            }
-        }
-        .frame(width: diameter, height: diameter)
-        .overlay(Circle().strokeBorder(CC.border, lineWidth: 1))
-    }
-}
-
-// MARK: - Circular data display
-
-/// Track + progress arc. Rotated so 0% is at 12 o'clock.
-struct CCRing: View {
-    var progress: Double
-    var lineWidth: CGFloat = 8
-    var tint: Color = CC.accent
-    var track: Color = CC.fillHair
-
-    var body: some View {
-        ZStack {
-            Circle().stroke(track, lineWidth: lineWidth)
-            Circle()
-                .trim(from: 0, to: max(0.0001, min(1, progress)))
-                .stroke(tint, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-        }
-        .animation(CC.Mv.ring, value: progress)
-    }
-}
-
-/// A fraction row: label, figure, thin bar. Used in breakdowns and legends.
-struct CCFractionRow: View {
-    let label: String
-    let value: String
-    var caption: String? = nil
-    var fraction: Double
-    var tint: Color = CC.accent
-
-    var body: some View {
-        VStack(spacing: 4) {
-            HStack(spacing: 8) {
-                Text(label)
-                    .font(CC.F.label)
-                    .foregroundStyle(CC.fg)
-                    .lineLimit(1)
-                Spacer(minLength: 6)
-                if let caption {
-                    Text(caption)
-                        .font(CC.F.num(10.5, .regular))
-                        .foregroundStyle(CC.muted)
-                }
-                Text(value)
-                    .font(CC.F.num(10.5, .medium))
-                    .foregroundStyle(CC.muted)
-            }
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(CC.fillHair)
-                    Capsule()
-                        .fill(tint)
-                        .frame(width: max(2, geo.size.width * min(1, max(0, fraction))))
-                }
-            }
-            .frame(height: 4)
-        }
-        .accessibilityElement(children: .combine)
-    }
-}
+// MARK: - Data display
 
 /// Monochrome stacked bar — the prototype's `.d-bar2`.
 struct CCStackBar: View {
@@ -437,9 +363,17 @@ struct CCSearchField: View {
     /// 对应原型 `.search{flex:1; max-width:420px}`。
     var width: CGFloat? = nil
     var maxWidth: CGFloat = 420
+    /// 焦点由外部驱动，供菜单里的 ⌘F「聚焦搜索框」使用
+    /// （原型 `document.addEventListener("keydown")` 里的 ⌘F 分支）。
+    /// 不传时退化为组件自持的 `@FocusState`，行为不变。
+    var focusBinding: FocusState<Bool>.Binding? = nil
 
     @State private var hovering = false
-    @FocusState private var focused: Bool
+    @FocusState private var localFocused: Bool
+
+    private var isFocused: Bool {
+        focusBinding.map { $0.wrappedValue } ?? localFocused
+    }
 
     var body: some View {
         HStack(spacing: 7) {
@@ -449,7 +383,7 @@ struct CCSearchField: View {
             TextField(placeholder, text: $text)
                 .textFieldStyle(.plain)
                 .font(CC.F.body)
-                .focused($focused)
+                .focused(focusBinding ?? $localFocused)
             if !text.isEmpty {
                 CCIconButton(systemImage: "xmark", size: 22, help: "清除搜索") { text = "" }
             }
@@ -458,17 +392,17 @@ struct CCSearchField: View {
         .frame(height: CC.M.ctl)
         .background(
             RoundedRectangle(cornerRadius: CC.R.md, style: .continuous)
-                .fill(focused ? CC.surface : CC.fillHair)
+                .fill(isFocused ? CC.surface : CC.fillHair)
         )
         .overlay(
             RoundedRectangle(cornerRadius: CC.R.md, style: .continuous)
-                .strokeBorder(focused ? CC.fg : (hovering ? CC.fg.opacity(0.22) : CC.border), lineWidth: 1)
+                .strokeBorder(isFocused ? CC.fg : (hovering ? CC.fg.opacity(0.22) : CC.border), lineWidth: 1)
         )
         // 弹性但有上限：原型 `.search{flex:1; max-width:420px}`。
         // 宽度约束必须放在背景/描边「之后」—— 否则后续任何拉伸 frame 都会把
         // 已经上好色的矩形一起拉宽，搜索框就会铺满整条工具条。
         .frame(maxWidth: width ?? maxWidth, alignment: .leading)
-        .animation(CC.Mv.quick, value: focused)
+        .animation(CC.Mv.quick, value: isFocused)
         .onHover { hovering = $0 }
     }
 }
@@ -514,33 +448,7 @@ struct CCSegmented<Value: Hashable>: View {
     }
 }
 
-/// Titled switch row, prototype `.tgl`.
-struct CCSwitchRow: View {
-    let title: String
-    let subtitle: String
-    @Binding var isOn: Bool
-
-    var body: some View {
-        Toggle(isOn: $isOn) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(CC.F.bodyEm).foregroundStyle(CC.fg)
-                Text(subtitle)
-                    .font(CC.F.caption)
-                    .foregroundStyle(CC.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            // 必须撑满：否则 Toggle 会随文案长度改变自身宽度，
-            // 开关不会靠右、且行底发丝线的长度也会逐行不同。
-            // 原型 `.tgl .tt{flex:1; min-width:0}` 就是这个作用。
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .toggleStyle(SwitchToggleStyle(tint: CC.accent))
-        .padding(.vertical, 5)
-    }
-}
-
 // MARK: - Feedback
-
 enum CCBannerTone {
     case ok, info, danger
     var tint: Color {
@@ -550,6 +458,15 @@ enum CCBannerTone {
         case .danger: return CC.danger
         }
     }
+    /// 横幅背景：ok 用 accent-soft（原型 `.banner.ok{background:var(--accent-soft)}`），
+    /// 其他色调用 7% 透明底。
+    var background: Color {
+        switch self {
+        case .ok: return CC.accentSoft
+        case .info: return CC.accentSoft
+        case .danger: return CC.dangerSoft
+        }
+    }
     var icon: String {
         switch self {
         case .ok: return "checkmark"
@@ -557,6 +474,8 @@ enum CCBannerTone {
         case .danger: return "exclamationmark.triangle"
         }
     }
+    /// 图标尺寸：原型 `.banner .bi{width:16px}`。
+    var iconSize: CGFloat { 16 }
 }
 
 struct CCBanner<Trailing: View>: View {
@@ -567,7 +486,7 @@ struct CCBanner<Trailing: View>: View {
     var body: some View {
         HStack(spacing: 9) {
             Image(systemName: tone.icon)
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(size: tone.iconSize, weight: .semibold))
                 .foregroundStyle(tone.tint)
             Text(text)
                 .font(CC.F.label)
@@ -578,7 +497,7 @@ struct CCBanner<Trailing: View>: View {
         }
         .padding(.horizontal, CC.M.gutter)
         .padding(.vertical, 9)
-        .background(tone.tint.opacity(0.07))
+        .background(tone.background)
         .ccHairline(.bottom)
     }
 }
@@ -597,7 +516,7 @@ struct CCRichBanner<Trailing: View>: View {
     var body: some View {
         HStack(spacing: 9) {
             Image(systemName: tone.icon)
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(size: tone.iconSize, weight: .semibold))
                 .foregroundStyle(tone.tint)
             text()
                 .font(CC.F.label)
@@ -608,7 +527,7 @@ struct CCRichBanner<Trailing: View>: View {
         }
         .padding(.horizontal, CC.M.gutter)
         .padding(.vertical, 9)
-        .background(tone.tint.opacity(0.07))
+        .background(tone.background)
         .ccHairline(.bottom)
     }
 }
@@ -625,13 +544,13 @@ struct CCEmptyState<Action: View>: View {
     var body: some View {
         VStack(spacing: 0) {
             Image(systemName: systemImage)
-                .font(.system(size: 34, weight: .light))
+                .font(.system(size: 44, weight: .light))
                 .foregroundStyle(CC.muted.opacity(0.7))
-                .padding(.bottom, 14)
+                .padding(.bottom, 16)
             Text(title)
-                .font(CC.F.title)
+                .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(CC.fg)
-                .padding(.bottom, 6)
+                .padding(.bottom, 7)
             Text(message)
                 .font(CC.F.label)
                 .foregroundStyle(CC.muted)
@@ -671,23 +590,76 @@ extension CCEmptyState where Action == EmptyView {
     }
 }
 
-/// Scanning / cleaning progress strip, hairline thin.
+/// 扫描 / 清理进度条 —— 原型 `.sbar`。
+/// 2pt 高的细条，背景 fg-hair、填充 fg，无文案。
+///
+/// 填充从 0 走到 100% 再归零，**不接 ViewModel**：原型 `runBusy()` 同样是
+/// `setInterval` 每 90ms 随机 +7~20% 的假进度，扫描器本身也不上报进度。
+/// 之前这条画的是写死的 60% —— 看着像卡在 60% 不动，比没有进度条更糟。
 struct CCProgressLine: View {
-    let label: String
-    var tint: Color = CC.accent
+    var tint: Color = CC.fg
+    /// 走满一整轮的时间。原型 7~20% / 90ms 平均约 13.5%，即约 0.67s 一轮；
+    /// 这里取 1.2s，慢一点，避免快扫时一闪而过。
+    var duration: Double = 1.2
+
+    @State private var phase: Double = 0
 
     var body: some View {
-        HStack(spacing: 9) {
-            ProgressView()
-                .controlSize(.small)
-                .scaleEffect(0.8)
-            Text(label)
-                .font(CC.F.label)
-                .foregroundStyle(CC.muted)
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Rectangle().fill(CC.fillHair)
+                Rectangle()
+                    .fill(tint)
+                    .frame(width: geo.size.width * phase)
+            }
         }
-        .padding(.horizontal, CC.M.gutter)
-        .padding(.vertical, 7)
-        .background(CC.fillHair)
-        .ccHairline(.bottom)
+        .frame(height: 2)
+        .task(id: duration) {
+            // 循环推进：每次归零后立刻重新起跑，进度条在长任务里不会「走完就停」。
+            while !Task.isCancelled {
+                withAnimation(.linear(duration: duration)) { phase = 1 }
+                try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
+                guard !Task.isCancelled else { break }
+                phase = 0
+            }
+        }
+        .onDisappear { phase = 0 }
+        .accessibilityHidden(true)
+    }
+}
+
+// MARK: - 弹层宿主
+
+/// 原型 `.scrim` 的原生等价物：铺满窗口的遮罩 + 居中弹层。
+///
+/// 之前用 SwiftUI `.sheet` 实现，形态对不上：`.sheet` 会另开一个附着窗口、
+/// 从标题栏滑下，还把窗口的 key 状态抢走；原型是**窗口内**的一层遮罩 ——
+/// 弹层盖在内容上，但红黄绿交通灯仍然可见可用（`.scrim` 是 `position:fixed;
+/// inset:0`，罩的是 `.desk` 里的内容区，不是整个浏览器视口）。
+///
+/// 关闭方式对齐原型：点遮罩空白处，或按 Esc（`onExitCommand`）。
+/// 原型的 Esc 有优先级（ctx → 设置 → 确认），这里由调用方串起来。
+struct ModalScrim<Content: View>: View {
+    /// 弹层的最大高度 = 视口高 - 上下留白。
+    /// 原型的 `.sheet-b{max-height:min(58vh,520px)}` 需要 vh，SwiftUI 没有，
+    /// 所以由宿主把可用高度量出来传下去。
+    let viewportHeight: CGFloat
+    let onDismiss: () -> Void
+    @ViewBuilder var content: (CGFloat) -> Content
+
+    var body: some View {
+        // 可用高度：视口减上下各 20pt 内边距（原型 `.scrim{padding:20px}`）。
+        let available = max(0, viewportHeight - 40)
+
+        ZStack {
+            CC.scrim
+                .background(.ultraThinMaterial)
+                .ignoresSafeArea()
+                // 只吃掉落在遮罩自身上的点击；弹层内的点击由 SwiftUI 自行截断。
+                .onTapGesture(perform: onDismiss)
+
+            content(available)
+        }
+        .onExitCommand(perform: onDismiss)
     }
 }

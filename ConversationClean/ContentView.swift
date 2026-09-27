@@ -19,23 +19,25 @@ struct ContentView: View {
 
     @EnvironmentObject var viewModel: CleanViewModel
 
-    /// 对应原型 `.split` 的第三列：grid-template-columns 第三列是 `0` 与 `324px`
-    /// 两种状态，`.doubleColumn` 即「第三列 0」。
-    @State private var columnVisibility: NavigationSplitViewVisibility = .all
-
     /// 标题栏「检视器」按钮的开关态（对应原型 `#btnPanel` 的 `aria-pressed`）。
-    @State private var inspectorOn: Bool = true
-
-    /// 标题栏「设置」按钮的弹层开关（对应原型 `#btnSettings` → `.settings` 弹层）。
-    @State private var settingsOn: Bool = false
+    /// 原型 `P.panel = false`，默认关闭。
+    ///
+    /// 持久化到 `UserDefaults`（原型 `P.panel` 存 `cc.proto.v1`）：面板是纯观感偏好，
+    /// 每次启动都重置会让「上次铺开的面板」这个心智模型失效。
+    @AppStorage("inspectorVisible") private var inspectorOn: Bool = false
+    /// 侧栏「仅显示有数据」开关（原型 `P.zero`），同样持久化。
+    @AppStorage("hideEmptyCategories") private var hideEmpty: Bool = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            titleBar
-            workspaceToolbar
-            split
+        GeometryReader { geo in
+            VStack(spacing: 0) {
+                titleBar
+                workspaceToolbar
+                split
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .overlay { modals(viewportHeight: geo.size.height) }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         // 关键的一行：让内容从窗口**顶端** y=0 开始铺，而不是从标题栏下沿开始。
         //
         // 配合 App 层的 `.windowStyle(.hiddenTitleBar)`，系统标题栏变成透明浮层，
@@ -47,15 +49,40 @@ struct ContentView: View {
         // styleMask 还有已知的交互异常），而 `ignoresSafeArea` 是受支持的官方路径。
         .ignoresSafeArea(edges: .top)
         .background(CC.bg)
-        // 确认清除用 sheet 而非 alert：alert 是系统材质弹层，和原型的自定义面板不是一套观感，
-        // 而且弹层外观由 CleanConfirmSheet 自己负责，这里不插手。
-        .sheet(isPresented: $viewModel.showCleanConfirmAlert) {
-            CleanConfirmSheet()
-                .environmentObject(viewModel)
-                // 这里不能再套 frame：sheet 窗口按内容的 fixed 宽度开窗，
-                // 外层再加一层 minWidth/minHeight 会让窗口尺寸与内容实际宽度脱钩，
-                // 表现为内容被居中后两侧裁掉。
-                // 面板的 520 宽由 CleanConfirmSheet 自身的 .frame(width: 520) 决定。
+        // ⌘F 从 `.commands` 里改的是 `viewModel.searchFieldFocused`，
+        // 这里把它翻译成本地 `@FocusState`，搜索框才会真的获得键盘焦点。
+        .onChange(of: viewModel.searchFieldFocused) { _, wanted in
+            guard wanted else { return }
+            searchFocus = true
+            // 复位，让下一次 ⌘F 能再次触发（否则值没变化，onChange 不再回调）。
+            viewModel.searchFieldFocused = false
+        }
+    }
+
+    /// 两层弹层都用窗口内遮罩，不用 `.sheet`。
+    ///
+    /// 之前是 `.sheet`，形态和原型差三处：① sheet 会另开一个附着窗口、从标题栏
+    /// 滑下，而原型是窗口内一层 `position:fixed; inset:0` 的遮罩；② sheet 抢走
+    /// 窗口的 key 状态；③ 两个 `.sheet` 挂在不同 view 上时彼此顶掉。
+    /// 换成 `ModalScrim` 后交通灯保持可用，与原型的 `.scrim` 一致。
+    ///
+    /// Esc 的优先级对齐原型末尾那段 keydown：设置先关、确认面板后关。
+    @ViewBuilder
+    private func modals(viewportHeight: CGFloat) -> some View {
+        if viewModel.settingsPresented {
+            ModalScrim(viewportHeight: viewportHeight, onDismiss: {
+                viewModel.settingsPresented = false
+            }) { _ in
+                SettingsView()
+                    .environmentObject(viewModel)
+            }
+        } else if viewModel.showCleanConfirmAlert {
+            ModalScrim(viewportHeight: viewportHeight, onDismiss: {
+                viewModel.cancelClean()
+            }) { available in
+                CleanConfirmSheet(availableHeight: available)
+                    .environmentObject(viewModel)
+            }
         }
     }
 
@@ -79,15 +106,18 @@ struct ContentView: View {
 
             Spacer(minLength: 12)
 
-            // `#btnPanel`：ghost + 面板图标，切换第三栏显隐
+            // `#btnPanel`：ghost + 面板图标，切换第三栏显隐。
+            // `isOn` 给出原型的开启态（fg-soft 底 + fg 字色），
+            // 之前只有无障碍 trait，视觉上看不出面板开着没有。
             CCButton(
                 title: "检视器",
                 systemImage: "sidebar.right",
                 kind: .ghost,
                 compact: true,
+                isOn: inspectorOn,
                 help: "显示/隐藏检视器"
             ) {
-                toggleInspector()
+                withAnimation(CC.Mv.base) { inspectorOn.toggle() }
             }
             .accessibilityAddTraits(inspectorOn ? .isSelected : [])
 
@@ -99,14 +129,14 @@ struct ContentView: View {
                 compact: true,
                 help: "设置"
             ) {
-                settingsOn = true
+                viewModel.settingsPresented = true
             }
         }
         .padding(.leading, 76)
         .padding(.trailing, 14)
         .frame(height: 46)          // 原型 .titlebar{height:46px}
         // 原型 `color-mix(in oklch, var(--bg) 55%, var(--surface))` ≈ #FAFCFD
-        .background(CC.panel)
+        .background(CC.panelStrong)
         .ccHairline(.bottom)
     }
 
@@ -118,17 +148,22 @@ struct ContentView: View {
             // 不传 width：对应 `.search{flex:1; max-width:420px}`
             CCSearchField(
                 text: $viewModel.searchText,
-                placeholder: "搜索标题、摘要、项目路径或会话 ID"
+                placeholder: "搜索标题、摘要、项目路径或会话 ID",
+                focusBinding: $searchFocus
             )
 
             Spacer(minLength: 8)
 
+            // 原型 `#btnCleanAll`：ghost 样式 + 文案随分类切换
+            // （"清除全部" / "清除本分类"），见 prototype.html renderList()
             CCButton(
-                title: "清除全部",
+                title: viewModel.selectedCategory == .all ? "清除全部" : "清除本分类",
                 systemImage: "trash",
-                kind: .outline,
+                kind: .ghost,
                 enabled: canCleanAll,
-                help: "清除当前列表中的全部会话"
+                help: viewModel.selectedCategory == .all
+                    ? "清除当前列表中的全部会话"
+                    : "清除当前分类下的全部会话"
             ) {
                 viewModel.requestCleanAll()
             }
@@ -138,7 +173,7 @@ struct ContentView: View {
                 title: viewModel.isScanning ? "正在扫描…" : "一键扫描",
                 systemImage: viewModel.isScanning ? "arrow.triangle.2.circlepath" : "arrow.clockwise",
                 kind: .primary,
-                enabled: !viewModel.isScanning,
+                enabled: !isBusy,
                 help: viewModel.isScanning ? "正在扫描本机会话缓存" : "扫描本机全部 Agent 的会话缓存"
             ) {
                 Task { await viewModel.scanConversations() }
@@ -151,54 +186,60 @@ struct ContentView: View {
         .ccHairline(.bottom)
     }
 
+    /// 搜索框的本地焦点态。
+    ///
+    /// 不直接绑到 `viewModel.searchFieldFocused`：`FocusState<Bool>.Binding`
+    /// 没有公开构造器，只能由 `@FocusState` 属性包装器自己产出，没法手工造一个
+    /// 把 ViewModel 的 Bool 接进来的绑定。所以改成「本地持有 + 双向同步」：
+    /// `CCSearchField` 拿的是 `$searchFocus`（属性包装器生成的合法绑定），
+    /// ⌘F 走 `.commands` 改的是 ViewModel 上的 Bool，这里 `onChange` 再把它推给本地态。
+    @FocusState private var searchFocus: Bool
+
+    /// 原型 `runBusy()` 期间会同时禁用扫描、清除本分类、清理选中三个入口。
+    private var isBusy: Bool { viewModel.isScanning || viewModel.isCleaning }
+
     // MARK: - 三栏（原型 `.split`）
+    //
+    // 原型是 CSS Grid：
+    //   .split          { grid-template-columns: 272px minmax(0,1fr) 0 }
+    //   .split.inspect  { grid-template-columns: 272px minmax(0,1fr) 324px }
+    //   transition: grid-template-columns .18s ease
+    //
+    // **这里手搓 HStack 而不用 `NavigationSplitView`。** 换掉的原因是后者带了一整套
+    // 原型不存在的行为：自动向窗口挂一条 NSToolbar（顶部会多出 ~52pt 的带子，
+    // 逼得 App 层写 WindowGeometryBridge 去藏它）、第一栏套 sidebar 材质、
+    // 列宽可拖拽、可被系统折叠、还有自己的列宽记忆。这些都会让「像不像原型」失守。
+    //
+    // 宽度必须用 `.frame(width:)` 插值 0↔324 而不是 `.transition`：
+    // transition 只让检视器自己淡入淡出，中栏宽度不变 —— 那就变成 overlay 了；
+    // 原型动的是**第三列的列宽**，效果是中栏被推开、检视器从右缘顶进来。
 
     private var split: some View {
-        NavigationSplitView(columnVisibility: $columnVisibility) {
+        HStack(spacing: 0) {
             SidebarView()
-                .navigationSplitViewColumnWidth(min: 240, ideal: CC.M.sidebar, max: 340)
-        } content: {
-            ConversationListView()
-                // 中栏在原型里是纯 --surface（.list 没有自己的底色），
-                // 这里补一层兜底底色，避免子视图未铺满时漏出系统材质。
-                .background(CC.surface)
-                .navigationSplitViewColumnWidth(min: 460, ideal: 720)
-        } detail: {
-            InspectorPanel()
-                .navigationSplitViewColumnWidth(min: 280, ideal: CC.M.inspector, max: 420)
+                .frame(width: CC.M.sidebar)
+
+            // 原型两栏之间都是 1px 边框。侧栏自画右侧发丝线、检视器自画左侧发丝线，
+            // 所以这里不再插分隔条，避免双线。
+            ConversationListView(onRequestInspector: {
+                if !inspectorOn { withAnimation(CC.Mv.base) { inspectorOn = true } }
+            })
+            .frame(maxWidth: .infinity)
+            .background(CC.surface)
+
+            if inspectorOn {
+                InspectorPanel()
+                    .frame(width: CC.M.inspector)
+                    .transition(.move(edge: .trailing))
+            }
         }
         .background(CC.bg)
-        // 三栏各自画了头部，窗口顶部只保留自绘的 titleBar。
-        // `.sidebarToggle` 是 macOS 14 起 `toolbar(removing:)` 唯一可用的默认项，
-        // 去掉它，窗口顶部就不会多出一个系统侧栏按钮。
-        //
-        // 为什么没有 `.toolbar(removing: .primaryAction)`：
-        // `ToolbarDefaultItemKind` 在 macOS 14 只有 `.sidebarToggle`，
-        // `.title` 是 macOS 15、`.search` 是 macOS 26，压根没有 `.primaryAction`
-        // （`.primaryAction` 是 `ToolbarItemPlacement` 的 case，不是可移除的默认项）。
-        //
-        // 挂在 NavigationSplitView 外层而不是分栏内部：三栏各自挂 toolbar(removing:)
-        // 会让移除指令只对该栏生效、作用域过窄。
-        .toolbar(removing: .sidebarToggle)
-        // 设置弹层挂在这一层（与外层「清理确认」sheet 不是同一棵 view），
-        // 避免两个 `.sheet` 挂在同一棵 view 上互相顶掉。
-        // 容器 760×560 由 SettingsView 自己画，这里不设 frame。
-        .sheet(isPresented: $settingsOn) {
-            SettingsView()
-                .environmentObject(viewModel)
-        }
     }
 
     // MARK: - 派生状态
 
-    /// 标题栏「检视器」按钮：切 `columnVisibility` 即切 `.split` 第三列的 0 / 324px。
-    private func toggleInspector() {
-        inspectorOn.toggle()
-        columnVisibility = inspectorOn ? .all : .doubleColumn
-    }
-
     private var canCleanAll: Bool {
-        !viewModel.filteredConversations.isEmpty && !viewModel.isCleaning && !viewModel.isScanning
+        !viewModel.filteredConversations.isEmpty && !isBusy
     }
 }
 
@@ -212,3 +253,5 @@ struct ContentView: View {
 //
 // ⌘R（扫描）/ ⌘⌫（清除）快捷键挂在上面 workspaceToolbar 的真实按钮上，
 // 不另造代理按钮，否则同一快捷键会出现在两个响应者上。
+// ⌘F 例外：它必须定义在 App 的 `.commands` 里（原型挂在 `document` 的 keydown 上，
+// 语义是「命令」而不是某个按钮的快捷键），焦点态因此经由 viewModel 传递。

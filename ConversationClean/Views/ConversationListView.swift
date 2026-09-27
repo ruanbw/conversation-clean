@@ -31,8 +31,32 @@ private enum ListSortMode: String, CaseIterable, Hashable {
 struct ConversationListView: View {
     @EnvironmentObject var viewModel: CleanViewModel
 
-    @State private var sort: ListSortMode = .date
+    /// 请求打开检视器面板（原型 `if(!P.panel){ P.panel=true; }`）。
+    /// 由 ContentView 注入，点击行时自动展开第三栏。
+    var onRequestInspector: (() -> Void)? = nil
+
+    /// 排序方式，持久化（原型 `P.sort` 存 `localStorage`，默认 `date`）。
+    @AppStorage("listSortMode") private var sortRaw: String = ListSortMode.date.rawValue
     @State private var focusedID: UUID?
+
+    /// 非法值（`UserDefaults` 里是旧版本留下的）回落默认，不让它传播成空列表。
+    private var sort: ListSortMode {
+        ListSortMode(rawValue: sortRaw) ?? .date
+    }
+
+    /// 提到外面避免类型检查超时：`CCSegmented` 的泛型 + `map` 写在 body 里
+    /// 会把整个 `contentHead` 表达式树的推断成本拉爆。
+    private var sortOptions: [CCSegmented<ListSortMode>.Option] {
+        ListSortMode.allCases.map { CCSegmented<ListSortMode>.Option(value: $0, label: $0.label) }
+    }
+
+    /// 写回 `@AppStorage` 用的绑定。
+    private var sortBinding: Binding<ListSortMode> {
+        Binding(
+            get: { sort },
+            set: { sortRaw = $0.rawValue }
+        )
+    }
 
     private var isBusy: Bool { viewModel.isScanning || viewModel.isCleaning }
     private var rows: [ConversationItem] { sorted }
@@ -40,9 +64,14 @@ struct ConversationListView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // 纵向顺序严格照抄原型 DOM（docs/prototype.html 559-607）：
+            //   .content-head → .sbar → .banner.ok → .list / .empty → .batchbar
+            // 之前把进度条和横幅提到了 contentHead 之前，于是「全部会话」这一行
+            // 会被两条带子顶下去、且位置随忙碌状态上下跳 —— 标题行在 macOS 上
+            // 是窗口里的固定锚点，不该动。
+            contentHead
             progressStrip
             successBanner
-            contentHead
             contentArea
             batchBar
         }
@@ -78,30 +107,55 @@ struct ConversationListView: View {
     @ViewBuilder
     private var progressStrip: some View {
         if isBusy {
-            CCProgressLine(label: viewModel.isScanning ? "正在扫描本机会话…" : "正在清理选中项…")
-                .transition(.opacity.combined(with: .move(edge: .top)))
+            CCProgressLine()
+                .transition(.opacity)
         }
     }
 
+
+
     @ViewBuilder
     private var successBanner: some View {
-        if viewModel.showCleanSuccessAlert && viewModel.lastCleanedBytes > 0 {
+        if viewModel.showCleanSuccessAlert {
+            // 原型 `.banner.ok`：accent-soft 背景 + 16px 图标 + 24pt 高按钮
             CCRichBanner(tone: .ok) {
-                Text("已释放 ")
-                + Text(Fmt.bytes(viewModel.lastCleanedBytes))
-                    .font(CC.F.num(12, .semibold))
-                    .foregroundStyle(CC.ok)
-                + Text("（")
+                Text("清理完成 · 删除 ")
                 + Text("\(viewModel.lastCleanedCount)")
                     .font(CC.F.num(12, .semibold))
                     .foregroundStyle(CC.ok)
-                + Text(" 个会话）本地磁盘存储空间")
+                + Text(" 个会话，释放 ")
+                + Text(Fmt.bytes(viewModel.lastCleanedBytes))
+                    .font(CC.F.num(12, .semibold))
+                    .foregroundStyle(CC.ok)
+                + Text(" 磁盘空间，剩余 ")
+                + Text("\(viewModel.conversations.count)")
+                    .font(CC.F.num(12, .semibold))
+                    .foregroundStyle(CC.ok)
+                + Text(" 个会话。")
             } trailing: {
-                CCButton(title: "知道了", kind: .ghost, compact: true, help: "关闭提示") {
+                CCButton(title: "知道了", kind: .ghost, height: 24, help: "关闭提示") {
                     withAnimation(CC.Mv.base) { viewModel.showCleanSuccessAlert = false }
                 }
             }
-            .transition(.opacity.combined(with: .move(edge: .top)))
+            .transition(.opacity)
+        } else if viewModel.showScanSuccessAlert {
+            // 原型 `flashOk("扫描完成 · 命中 N 个会话，合计 X。")`
+            CCRichBanner(tone: .ok) {
+                Text("扫描完成 · 命中 ")
+                + Text("\(viewModel.scanSuccessCount)")
+                    .font(CC.F.num(12, .semibold))
+                    .foregroundStyle(CC.ok)
+                + Text(" 个会话，合计 ")
+                + Text(Fmt.bytes(viewModel.scanSuccessBytes))
+                    .font(CC.F.num(12, .semibold))
+                    .foregroundStyle(CC.ok)
+                + Text("。")
+            } trailing: {
+                CCButton(title: "知道了", kind: .ghost, height: 24, help: "关闭提示") {
+                    withAnimation(CC.Mv.base) { viewModel.showScanSuccessAlert = false }
+                }
+            }
+            .transition(.opacity)
         }
     }
 
@@ -131,8 +185,8 @@ struct ConversationListView: View {
             Spacer(minLength: 8)
 
             CCSegmented<ListSortMode>(
-                options: ListSortMode.allCases.map { CCSegmented<ListSortMode>.Option(value: $0, label: $0.label) },
-                selection: $sort
+                options: sortOptions,
+                selection: sortBinding
             )
             .help("排序方式")
 
@@ -215,7 +269,8 @@ struct ConversationListView: View {
                         isFocused: focusedID == item.id,
                         isBusy: isBusy,
                         onFocus: { toggleFocus(item) },
-                        onDelete: { Task { await deleteRow(item) } }
+                        onToggleSelect: { viewModel.setItemSelected(item.id, selected: !item.isSelected) },
+                        onDelete: { requestDelete(item) }
                     )
                 }
             }
@@ -248,7 +303,8 @@ struct ConversationListView: View {
                 systemImage: "magnifyingglass",
                 title: "还没有扫描过会话",
                 message: "已关闭「启动时自动扫描」。点下方按钮手动扫描本机各 Agent 的会话缓存。",
-                path: path
+                path: path,
+                pathLabel: "存储路径："
             ) {
                 rescanButton
             }
@@ -257,7 +313,8 @@ struct ConversationListView: View {
                 systemImage: viewModel.selectedCategory.iconName,
                 title: "暂无 \(viewModel.selectedCategory.rawValue) 会话记录",
                 message: "未在本地检测到任何 Agent 历史会话文件，或所有会话均已被清理。",
-                path: path
+                path: viewModel.selectedCategory == .all ? nil : path,
+                pathLabel: "存储路径："
             ) {
                 rescanButton
             }
@@ -274,7 +331,8 @@ struct ConversationListView: View {
                 systemImage: viewModel.selectedCategory.iconName,
                 title: "暂无 \(viewModel.selectedCategory.rawValue) 会话记录",
                 message: "未在下面的存储路径中检测到该 Agent 的会话文件。",
-                path: path
+                path: path,
+                pathLabel: "存储路径："
             ) {
                 rescanButton
             }
@@ -328,8 +386,10 @@ struct ConversationListView: View {
                 for item in viewModel.selectedItems { viewModel.revealInFinder(item: item) }
             }
 
+            // 原型 renderBatch()：文案带条数，「清理选中项（3）」。
+            // 没有条数时按钮看着像个泛泛的操作，加了之后用户能一眼确认要删几个。
             CCButton(
-                title: "清理选中项",
+                title: cleanSelectedTitle,
                 systemImage: "trash",
                 kind: .danger,
                 enabled: !disabled,
@@ -339,8 +399,15 @@ struct ConversationListView: View {
             }
         }
         .padding(.init(top: 11, leading: 20, bottom: 11, trailing: 20))
-        .background(CC.bg)
+        // 原型 `.batchbar{background:color-mix(in oklch,var(--bg) 45%,var(--surface))}`
+        .background(CC.bg.opacity(0.45))
         .ccHairline(.top)
+    }
+
+    /// 原型：`"清理选中项"+(sel.length? "（"+sel.length+"）":"")`
+    private var cleanSelectedTitle: String {
+        let n = viewModel.selectedItems.count
+        return n > 0 ? "清理选中项（\(n)）" : "清理选中项"
     }
 
     /// 原型 `.batchbar .b-n`。
@@ -363,17 +430,27 @@ struct ConversationListView: View {
     }
 
     /// 再点一次已聚焦的行即取消聚焦：检视器不回传状态，取消聚焦的入口必须在本模块内。
+    /// 点击行时如果检视器未打开，自动展开（原型 `if(!P.panel){ P.panel=true; }`）。
     private func toggleFocus(_ item: ConversationItem) {
+        let shouldOpenInspector = focusedID != item.id
         setFocus(focusedID == item.id ? nil : item)
+        if shouldOpenInspector {
+            onRequestInspector?()
+        }
     }
 
     private func requestCleanSelected() {
         viewModel.requestCleanSelected()
     }
 
+    /// 行内删除 / 右键删除。保持原来的直接删除，不改行为。
     private func deleteRow(_ item: ConversationItem) async {
         await viewModel.deleteSingle(item: item)
         if focusedID == item.id { setFocus(nil) }
+    }
+
+    private func requestDelete(_ item: ConversationItem) {
+        Task { await deleteRow(item) }
     }
 }
 
@@ -388,15 +465,64 @@ private struct RowCell: View {
     let isFocused: Bool
     let isBusy: Bool
     let onFocus: () -> Void
+    let onToggleSelect: () -> Void
     let onDelete: () -> Void
 
     @State private var hovering = false
     @State private var cbHovering = false
+    /// 原型 `list.addEventListener("keydown")`：行是 `tabindex="0"` 的可聚焦元素，
+    /// Space 切换勾选、Enter 聚焦并展开检视器。没有这个状态行就收不到键盘事件。
+    @FocusState private var keyboardFocused: Bool
 
     private var isSelected: Bool { item.isSelected }
-    private var showActions: Bool { hovering || isFocused }
+    private var showActions: Bool { hovering || isFocused || keyboardFocused }
 
     var body: some View {
+        // 修饰符链分三段挂：背景/无障碍/焦点/键盘/菜单。
+        // 一次全挂上去时表达式树过大，编译器推不出类型。
+        rowLayout
+            .background { rowBackground }
+            .contentShape(RoundedRectangle(cornerRadius: CC.R.md, style: .continuous))
+            .overlay { focusBorder }
+            .onHover { hovering = $0 }
+            .animation(CC.Mv.quick, value: hovering)
+            .animation(CC.Mv.quick, value: isSelected)
+            .animation(CC.Mv.quick, value: isFocused)
+            .accessibilityElement(children: .contain)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityLabel(item.title)
+            .accessibilityValue(item.formattedSize)
+            .accessibilityHint("空格选择，回车查看详情")
+        .rowInteraction(
+            keyboardFocused: $keyboardFocused,
+            onToggleSelect: onToggleSelect,
+            onConfirm: onFocus
+        )
+        .contextMenu { rowMenu }
+    }
+
+    /// 状态底色 + 整行点击热区（在背景层，见 `rowHitArea` 的注释）。
+    private var rowBackground: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: CC.R.md, style: .continuous)
+                .fill(isFocused || isSelected ? CC.fillSoft : (hovering ? CC.fillHair : .clear))
+            rowHitArea
+        }
+    }
+
+    /// 聚焦描边。原型 `.row.focus{border-color:fg 34%}`。
+    private var focusBorder: some View {
+        RoundedRectangle(cornerRadius: CC.R.md, style: .continuous)
+            .strokeBorder(isFocused ? CC.fg.opacity(0.34) : .clear, lineWidth: 1)
+    }
+
+    /// 行的内容骨架，与修饰符链分开。
+    ///
+    /// 拆开是**编译需要**：修饰符链（背景 / overlay / 焦点 / 两个 onKeyPress /
+    /// 无障碍 / contextMenu）挂在同一个 HStack 之后时，整条表达式树大到 Swift
+    /// 编译器在合理时间内推不出类型，报 "unable to type-check this expression"。
+    /// 骨架单独成一个属性后，两边各自都小得能推完。
+    private var rowLayout: some View {
         HStack(alignment: .top, spacing: 11) {
             checkbox
                 .frame(width: 20, height: 16, alignment: .leading)
@@ -432,25 +558,30 @@ private struct RowCell: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.init(top: 11, leading: 10, bottom: 11, trailing: 8))
-        .background(
-            RoundedRectangle(cornerRadius: CC.R.md, style: .continuous)
-                .fill(isFocused || isSelected ? CC.fillSoft : (hovering ? CC.fillHair : .clear))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: CC.R.md, style: .continuous)
-                .strokeBorder(isFocused ? CC.fg.opacity(0.34) : .clear, lineWidth: 1)
-        )
-        .contentShape(RoundedRectangle(cornerRadius: CC.R.md, style: .continuous))
-        .onHover { hovering = $0 }
-        .animation(CC.Mv.quick, value: hovering)
-        .animation(CC.Mv.quick, value: isSelected)
-        .animation(CC.Mv.quick, value: isFocused)
-        // 用 .contain 而不是 .combine：.combine 会把行内子元素合并成一个整体，
-        // 连带把复选框 Button 的独立可达性也吃掉，VoiceOver 用户就再也听不到
-        // “选择/取消选择 <会话名>” 这一步。改为 .contain 后行本身是容器、
-        // 复选框与标题各自可聚焦。
-        .accessibilityElement(children: .contain)
-        .accessibilityAddTraits(.isButton)
+    }
+
+    /// 原型 `openCtx()` 的四项，顺序照抄。
+    /// 每项执行前先 `onFocus()`：原型是在 `contextmenu` 事件里就把焦点设上，
+    /// 而 `.contextMenu` 没有「即将弹出」的回调，只能退到执行时同步。
+    @ViewBuilder
+    private var rowMenu: some View {
+        Button("在 Finder 中显示", systemImage: "folder") {
+            onFocus()
+            viewModel.revealInFinder(item: item)
+        }
+        Button("复制项目路径", systemImage: "doc.on.doc") {
+            onFocus()
+            viewModel.copyToClipboard(text: item.displayProjectPath)
+        }
+        Button("复制会话 ID", systemImage: "number") {
+            onFocus()
+            viewModel.copyToClipboard(text: item.sessionId)
+        }
+        Divider()
+        Button("删除此会话", systemImage: "trash", role: .destructive) {
+            onFocus()
+            onDelete()
+        }
     }
 
     // MARK: 行内零件
@@ -463,12 +594,13 @@ private struct RowCell: View {
             .help("所属分类：\(item.category.rawValue)")
     }
 
-    /// 聚焦手势只挂在标题上：挂整行会吞掉复选框的点击。
+    /// 标题可点击聚焦。
+    ///
+    /// 必须用真正的 Button，而不是 `.onTapGesture` + `.help()`：
+    /// macOS 上 `.help()` 会额外叠一层 tooltip 展示层，若它盖在 tap 手势之上，
+    /// 点击会被这层吃掉（实测点击标题无反应、而同一行的复选框点击正常）。
+    /// Button 自带鼠标命中与键盘 / 切换控制可达性。
     private var titleText: some View {
-        // 必须用真正的 Button，而不是 `.onTapGesture` + `.help()`：
-        // macOS 上 `.help()` 会额外叠一层 tooltip 展示层，若它盖在 tap 手势之上，
-        // 点击会被这层吃掉（实测点击标题无反应、而同一行的复选框点击正常）。
-        // Button 自带鼠标命中与键盘 / 切换控制可达性。
         Button(action: onFocus) {
             Text(item.title)
                 .font(.system(size: 13.5, weight: .semibold))
@@ -481,12 +613,31 @@ private struct RowCell: View {
         .help(item.title)
     }
 
+    /// 铺满整行的点击热区。
+    ///
+    /// 原型 `.row` 的 list click 处理器里，只要不落在 `[data-act]`（复选框 / 删除）
+    /// 上就聚焦该行并展开检视器 —— 摘要行、元信息行、行尾空白都算。实现之前只有
+    /// 标题可点，右侧大片区域点了没反应。
+    ///
+    /// **必须挂在 `.background` 而不是 `.overlay`**：这层是透明矩形，
+    /// 放在内容之上会把子 Button（复选框、删除）的鼠标命中一起吃掉，
+    /// 而原型明确要求这两个按钮优先于行的聚焦行为。放到底下则相反 ——
+    /// 内容先命中，没命中内容的地方才落到热区。
+    private var rowHitArea: some View {
+        Color.clear
+            .contentShape(Rectangle())
+            .onTapGesture(perform: onFocus)
+    }
+
     /// `.r-l3`：每项都是「11pt 图标 + 文字」，项间用更淡的「·」分隔。
     private var metaLine: some View {
         HStack(spacing: 7) {
-            // 1. 项目路径（原型用 RTL 截断，SwiftUI 用尾部截断近似）
+            // 1. 项目路径 —— 只显示末两级（`Fmt.pathTail`），前缀 `…/`。
+            // 原型 `shortPath()` 就是这个口径；CSS 再叠一层 `direction:rtl` 只是溢出兜底。
+            // 之前显示整条路径再从尾部截断，砍掉的恰是末两级 ——
+            // 而末两级才是区分同名项目的唯一信息。
             metaIcon("folder")
-            Text(item.displayProjectPath)
+            Text(Fmt.pathTail(item.displayProjectPath))
                 .font(CC.F.mono)
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -596,6 +747,54 @@ private struct RowCell: View {
         .opacity(showActions ? 1 : 0)
         .animation(CC.Mv.quick, value: showActions)
         .accessibilityHidden(true)
+    }
+}
+
+// MARK: - 行交互（键盘）
+
+/// 原型 `list.addEventListener("keydown")` 的两条分支 + `tabindex="0"`。
+///
+/// 单独抽成 `ViewModifier` 有两个原因：
+///   1. **编译需要** —— 焦点 + 两个 `onKeyPress` 挂在行主体上时，表达式树大到
+///      Swift 编译器推不出类型（"unable to type-check this expression"）。
+///   2. 这几条是**键盘焦点态的唯一消费者**，装进修饰符后 `@FocusState` 的读写
+///      范围跟着修饰符走，不用担心行视图里其它代码误读。
+private struct RowInteractionModifier: ViewModifier {
+    @FocusState.Binding var keyboardFocused: Bool
+    let onToggleSelect: () -> Void
+    let onConfirm: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            // `.focusEffectDisabled()`：原型用 `.row.focus` 自己画一圈 34% fg 描边
+            // 表示键盘焦点，系统焦点环会叠在上面变成双圈。
+            .focusable()
+            .focusEffectDisabled()
+            .focused($keyboardFocused)
+            .onKeyPress(.space) {
+                onToggleSelect()
+                return .handled
+            }
+            // `.return` 而不是 `.enter`：`KeyEquivalent` 里没有 `enter` 这个静态成员，
+            // 回车键的名字就是 `.return`。
+            .onKeyPress(.return) {
+                onConfirm()
+                return .handled
+            }
+    }
+}
+
+private extension View {
+    func rowInteraction(
+        keyboardFocused: FocusState<Bool>.Binding,
+        onToggleSelect: @escaping () -> Void,
+        onConfirm: @escaping () -> Void
+    ) -> some View {
+        modifier(RowInteractionModifier(
+            keyboardFocused: keyboardFocused,
+            onToggleSelect: onToggleSelect,
+            onConfirm: onConfirm
+        ))
     }
 }
 

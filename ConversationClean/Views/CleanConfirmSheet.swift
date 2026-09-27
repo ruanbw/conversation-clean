@@ -19,7 +19,13 @@ import SwiftUI
 
 struct CleanConfirmSheet: View {
     @EnvironmentObject var viewModel: CleanViewModel
-    @Environment(\.dismiss) var dismiss
+
+    /// 弹层可用高度（视口高 - 上下留白），由 `ModalScrim` 传入。
+    /// 原型 `.sheet-b{max-height:min(58vh,520px)}` 用 vh 表达，SwiftUI 没有 vh 单位。
+    let availableHeight: CGFloat
+
+    /// 滚动区的上限：`.sheet-b` 的 `min(58vh, 520px)`。
+    private var bodyMaxHeight: CGFloat { min(availableHeight * 0.58, 520) }
 
     // MARK: - 常量（对应原型 IDX_PER / MAIN_MAX）
 
@@ -58,12 +64,11 @@ struct CleanConfirmSheet: View {
 
     // MARK: - 数据（先算好，避免 body 里反复 reduce）
 
-    private var targets: [ConversationItem] {
-        switch viewModel.cleanTarget {
-        case .selected:             return viewModel.selectedItems
-        case .allInCurrentCategory: return viewModel.filteredConversations
-        }
-    }
+    /// 目标集合以**面板打开那一刻**为准（`estimateCategory` + `cleanTarget`），
+    /// 而不是读当前的 `selectedCategory` / `filteredConversations`。
+    /// 面板开着的时候用户仍能切分类、点搜索，原型是按 `pending` 列表算的 ——
+    /// 面板上写着的条数与「确认清除」实际删掉的必须始终是同一批。
+    private var targets: [ConversationItem] { viewModel.estimateTargets(for: viewModel.cleanTarget) }
 
     private var count: Int { targets.count }
     private var mainBytes: Int64 { targets.reduce(0) { $0 + $1.sizeInBytes } }
@@ -94,12 +99,13 @@ struct CleanConfirmSheet: View {
     }
 
     /// 原型 askClean 的 label：整类清理时带上范围名；无分类或只清选中项时省略「「X」的 」。
+    /// 分类取 `estimateCategory`（打开面板时的那个），不是当前的 `selectedCategory`。
     private var scopeLabel: String? {
         switch viewModel.cleanTarget {
         case .selected:
             return nil
         case .allInCurrentCategory:
-            return viewModel.selectedCategory == .all ? nil : viewModel.selectedCategory.rawValue
+            return viewModel.estimateCategory == .all ? nil : viewModel.estimateCategory.rawValue
         }
     }
 
@@ -145,8 +151,8 @@ struct CleanConfirmSheet: View {
                     compositionSection
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                // 内容不足一屏时顶对齐（原型 .est-sec 从头排下来，不做垂直居中）
-                .frame(maxHeight: 460, alignment: .top)
+                // 原型 .sheet-b{max-height:min(58vh,520px)}；内容不足一屏时顶对齐
+                .frame(maxHeight: bodyMaxHeight, alignment: .top)
                 // 原型 .sheet-b 的 padding-bottom: 18px
                 .padding(.bottom, 18)
             }
@@ -154,6 +160,11 @@ struct CleanConfirmSheet: View {
             footer
         }
         .frame(width: Self.panelWidth)
+        // 弹层由 `ModalScrim` 承载，不用 `.sheet`：
+        // 之前是 sheet 会自动按内容开窗，这里的 fixed width + 自身高度不再需要，
+        // 但垂直方向仍不能溢出视口 —— 头部/hero/页脚是固定高，滚动区是弹性，
+        // 整体超过视口时先压滚动区，再让内容整体上移。
+        .frame(maxHeight: availableHeight)
         .background(
             RoundedRectangle(cornerRadius: CC.R.lg, style: .continuous).fill(CC.surface)
         )
@@ -464,7 +475,7 @@ struct CleanConfirmSheet: View {
         HStack(spacing: 9) {
             Spacer(minLength: 0)
             CCButton(title: "取消", kind: .ghost, help: "放弃本次清理") {
-                dismiss()
+                viewModel.cancelClean()
             }
             CCButton(
                 title: viewModel.isCleaning ? "正在清除…" : "确认清除 · \(Fmt.bytes(totalBytes))",
@@ -472,8 +483,9 @@ struct CleanConfirmSheet: View {
                 enabled: count > 0 && !viewModel.isCleaning,
                 help: count > 0 ? "删除这 \(count) 个会话文件及其索引行" : "没有可清理的会话"
             ) {
+                // 面板由 `showCleanConfirmAlert` 驱动显隐，`executeClean` 内部自行收起。
+                // 之前这里是 `dismiss()`（`.sheet` 的环境动作），换成遮罩后没有 dismiss 可用。
                 Task { await viewModel.executeClean() }
-                dismiss()
             }
         }
         .padding(.init(top: 13, leading: 22, bottom: 13, trailing: 22))

@@ -13,7 +13,11 @@ enum CC {
 
     static let bg      = Color(hex: 0xF6F9FC)
     static let surface = Color(hex: 0xFFFFFF)
-    static let panel   = Color(hex: 0xFAFBFC)   // sidebar wash (bg 42% over surface)
+    /// 侧栏 / 检视器洗底：原型 `color-mix(in oklch, var(--bg) 42%, var(--surface))` ≈ #FBFDFE
+    static let panel   = Color(hex: 0xFBFDFE)
+    /// 标题栏洗底：同一公式但 bg 占 55%（原型 `.titlebar`），比侧栏略深一档。
+    /// 之前两者共用一个 token，标题栏因此偏浅 —— 截图上一眼能看出顶部那条带子发白。
+    static let panelStrong = Color(hex: 0xFAFCFD)
     static let fg      = Color(hex: 0x121C23)
     static let muted   = Color(hex: 0x5A656D)
     static let border  = Color(hex: 0xD9DFE3)
@@ -36,7 +40,9 @@ enum CC {
     /// outline 按钮 hover 时的边框加深，对应
     /// `color-mix(in oklch, var(--fg) 20%, var(--border))`
     static let hoverBorder = Color(hex: 0xB1B8BD)
-    static let scrim      = Color.black.opacity(0.28)
+    /// 原型 `.scrim{background:color-mix(in oklch, var(--fg) 34%, transparent)}`。
+    /// 之前写的是纯黑 28%，叠在界面上偏中性灰，与原型那种「冷调压深」差一档。
+    static let scrim      = Color(hex: 0x121C23).opacity(0.34)
 
     // MARK: Radii
 
@@ -91,71 +97,7 @@ enum CC {
     enum Mv {
         static let quick = Animation.easeOut(duration: 0.14)
         static let base  = Animation.easeInOut(duration: 0.18)
-        static let ring  = Animation.easeOut(duration: 0.35)
     }
-}
-
-// MARK: - Category identity
-
-/// One tint per agent, drawn from a single-hue oklch(145) ramp so the whole UI
-/// stays monochrome-green and only the destructive red breaks out of it.
-private let ramp: [Color] = [
-    Color(hex: 0x9EB19E), Color(hex: 0x93AA93), Color(hex: 0x88A288), Color(hex: 0x7E9B7E),
-    Color(hex: 0x739374), Color(hex: 0x698C69), Color(hex: 0x5F855F), Color(hex: 0x547E55),
-    Color(hex: 0x4A774B), Color(hex: 0x3F6F41), Color(hex: 0x346837), Color(hex: 0x29612D),
-    Color(hex: 0x1C5A22), Color(hex: 0x0B5317), Color(hex: 0x004C09)
-]
-
-extension ConversationCategory {
-
-    /// Stable tint for this agent. `.all` is neutral on purpose.
-    var tint: Color {
-        guard self != .all else { return CC.fg }
-        let i = ConversationCategory.allCases.firstIndex(of: self) ?? 0
-        return ramp[min(max(i - 1, 0), ramp.count - 1)]
-    }
-
-    /// Soft wash of the tint, for badge fills.
-    var tintSoft: Color { tint.opacity(0.12) }
-
-    /// The circular identity mark. Line-style symbol, never filled-heavy.
-    var glyph: String {
-        switch self {
-        case .all:          return "tray.2"
-        case .claudeCode:   return "terminal"
-        case .codex:        return "chevron.left.forwardslash.chevron.right"
-        case .piAgent:      return "cpu"
-        case .cline:        return "bolt"
-        case .rooCode:      return "sparkles"
-        case .continueDev:  return "play.rectangle"
-        case .copilotChat:  return "bubble.left.and.bubble.right"
-        case .cursor:       return "cursorarrow.rays"
-        case .windsurf:     return "wind"
-        case .trae:         return "circle.hexagongrid"
-        case .aider:        return "terminal.badge.clock"
-        case .openViking:   return "shield"
-        case .zed:          return "character.cursor.ibeam"
-        case .openHands:    return "hand.raised"
-        case .antigravity:  return "square.stack.3d.up"
-        }
-    }
-
-    /// 1–2 character mark for the circular badge fallback.
-    var badgeText: String {
-        let words = rawValue
-            .replacingOccurrences(of: "/", with: " ")
-            .split(whereSeparator: { $0 == " " })
-            .map(String.init)
-            .filter { !$0.isEmpty && $0.first!.isLetter }
-        if words.count >= 2 { return (words[0].prefix(1) + words[1].prefix(1)).uppercased() }
-        if words.count == 1 { return String(words[0].prefix(2)).uppercased() }
-        return "?"
-    }
-}
-
-extension AgentInfo {
-    var tint: Color { category.tint }
-    var tintSoft: Color { category.tintSoft }
 }
 
 // MARK: - Formatting helpers
@@ -216,10 +158,17 @@ enum Fmt {
         return f.string(from: date)
     }
 
-    /// Compact trailing path segment, e.g. "conversation-clean".
-    static func pathTail(_ path: String, _ keep: Int = 1) -> String {
-        let parts = path.split(separator: "/").map(String.init).filter { !$0.isEmpty }
-        guard parts.count > keep else { return path }
-        return parts.suffix(keep).joined(separator: "/")
+    /// 原型 `shortPath()`：只保留路径末两级，前面加省略号。
+    ///
+    ///   `~/projects/conversation-clean` → `…/projects/conversation-clean`
+    ///   `~/Developer/atlas-api`          → `…/atlas-api`
+    ///
+    /// 列表行第 3 行的项目路径用它，而不是整条路径 + `.tail` 截断 ——
+    /// 后者砍掉的恰恰是末段，而末段才是区分两个同名项目的东西
+    /// （`~/Library/Application Support/Open…` 在真实数据里占满整列，全都一样没用）。
+    static func pathTail(_ path: String) -> String {
+        let parts = path.split(separator: "/").map(String.init)
+        guard parts.count > 2 else { return path }
+        return "…/" + parts.suffix(2).joined(separator: "/")
     }
 }

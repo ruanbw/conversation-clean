@@ -28,9 +28,9 @@ private let distRamp: [Double] = [1.00, 0.80, 0.63, 0.49, 0.38, 0.26, 0.20, 0.14
 
 struct SidebarView: View {
     @EnvironmentObject var viewModel: CleanViewModel
-    /// 原型 `P.zero`：控制是否只列出有会话数据的分类。
+    /// 原型 `P.zero`：控制是否只列出有会话数据的分类，持久化到 `localStorage`。
     /// 无论开关如何，**本机没装的 Agent 都不列** —— 列一个永远选不出内容的分类只是噪音。
-    @State private var hideEmpty = false
+    @AppStorage("hideEmptyCategories") private var hideEmpty = false
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: true) {
@@ -183,9 +183,8 @@ struct SidebarView: View {
             .padding(.top, 2)
             .padding(.bottom, 10)
 
-            // 原型 `renderOverview()` 里这句跟着「删除空项目目录」设置走，
-            // 本轮不接设置开关，先固定成默认开启时的文案。
-            Text("删除会同时清理关联快照、索引行与空项目目录。")
+            // 原型 `renderOverview()`：这句跟着「删除空项目目录」设置走。
+            Text(viewModel.emptyFolderPolicyText)
                 .font(CC.F.caption)
                 .foregroundStyle(CC.muted)
                 .lineSpacing(2)
@@ -322,11 +321,9 @@ private struct SidebarCategoryRow: View {
 
     private var isEmpty: Bool { count == 0 }
 
-    /// 一律是数字。
-    /// 原型 `catBtn()` 在没有会话时会分「空闲」/「未安装」两种文案，但那是演示数据下
-    /// 用 `det:false` 名单硬凑出来的；本机真没装的 Agent 已经被过滤掉、根本不会出现在
-    /// 列表里，而「已安装但还没扫到会话」用「空闲」描述纯属绕 —— 直接给 0 更直白。
-    private var rightText: String { "\(count)" }
+    /// 原型 `catBtn()`：有会话时显示数字，无会话时显示「空闲」。
+    /// （本机未装的 Agent 已被过滤掉、根本不出现在列表里，所以不需要「未安装」那一档。）
+    private var rightText: String { count > 0 ? "\(count)" : "空闲" }
 
     var body: some View {
         Button(action: action) {

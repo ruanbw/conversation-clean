@@ -20,40 +20,59 @@ enum ConversationCategory: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    /// 原型 `<defs>` 里 24 个图标的**唯一对应物**。
+    ///
+    /// 铁律：一律线性。原型的每个 glyph 都是
+    /// `fill="none" stroke="currentColor" stroke-width="1.6"`，整套 UI 只靠 1.6px 描边
+    /// 建立识别度；一旦混入 `.fill` 变体，描边语言就断了，侧栏 / 标题行 / 检视器 /
+    /// 设置路径页会各自用不同粗细的符号。
+    ///
+    /// 取名对照（原型 id → SF Symbol，形状尽量贴近，线稿变体优先）：
+    /// `i-tray→tray.2` `i-terminal→terminal` `i-code→chevron.left.forwardslash.chevron.right`
+    /// `i-cpu→cpu` `i-bolt→bolt` `i-spark→sparkles` `i-play→play.rectangle`
+    /// `i-chat→bubble.left.and.bubble.right` `i-cursor→cursorarrow.rays` `i-wind→wind`
+    /// `i-ring→circle.hexagongrid` `i-layers→square.stack.3d.up` `i-shield→shield`
+    /// `i-textbox→character.cursor.ibeam` `i-hand→hand.raised`
+    ///
+    /// 两处**刻意**不与原型同形，理由都是「SF Symbols 没有等价线稿」：
+    ///   · Aider 原型复用 `i-terminal`（与 Claude Code 完全同形）。这里给
+    ///     `terminal.badge.clock`，因为真实侧栏里两款会同时出现、同形等于没有区分。
+    ///   · Zed AI 原型是 `i-textbox`。`character.textbox` 只有填充版，太重，
+    ///     换成同为文本光标意象的线稿 `character.cursor.ibeam`。
     var iconName: String {
         switch self {
         case .all:
-            return "tray.2.fill"
+            return "tray.2"
         case .claudeCode:
-            return "terminal.fill"
+            return "terminal"
         case .codex:
             return "chevron.left.forwardslash.chevron.right"
         case .piAgent:
             return "cpu"
         case .cline:
-            return "bolt.horizontal.fill"
+            return "bolt"
         case .rooCode:
             return "sparkles"
         case .continueDev:
-            return "play.rectangle.fill"
+            return "play.rectangle"
         case .copilotChat:
-            return "bubble.left.and.exclamationmark.bubble.right.fill"
+            return "bubble.left.and.bubble.right"
         case .cursor:
             return "cursorarrow.rays"
         case .windsurf:
             return "wind"
         case .trae:
-            return "bolt.ring.closed"
+            return "circle.hexagongrid"
         case .aider:
-            return "terminal"
+            return "terminal.badge.clock"
         case .openViking:
-            return "shield.lefthalf.filled"
+            return "shield"
         case .zed:
-            return "character.textbox"
+            return "character.cursor.ibeam"
         case .openHands:
-            return "hand.raised.fill"
+            return "hand.raised"
         case .antigravity:
-            return "sparkles.rectangle.stack"
+            return "square.stack.3d.up"
         }
     }
 }
@@ -72,8 +91,10 @@ struct ConversationItem: Identifiable, Hashable {
     var snippet: String
     var associatedPaths: [String] = []
 
+    /// 与原型 `fmtBytes` 同口径的 1024 进制（见 `Fmt.bytes`）。
+    /// 不能用 `ByteCountFormatter`，它是 1000 进制，会把 2,411,724 字节打成 2.4 MB。
     var formattedSize: String {
-        ByteCountFormatter.string(fromByteCount: sizeInBytes, countStyle: .file)
+        Fmt.bytes(sizeInBytes)
     }
 
     var formattedDate: String {
