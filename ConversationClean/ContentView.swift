@@ -58,6 +58,15 @@ struct ContentView: View {
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
 
+            // 总量是常量信息，常驻顶栏即可；把它摊在详情栏整页里既占地方
+            // 又给不出下一步动作，那一栏改成了「占用大户 Top 5」
+            Divider().frame(height: 12).padding(.horizontal, 4)
+            Text(Fmt.bytes(viewModel.totalSize))
+                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+            Text("· \(viewModel.conversations.count) 个会话")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+
             Spacer(minLength: 12)
 
             iconButton("trash", "清除当前列表中的全部会话",

@@ -33,7 +33,7 @@ private enum ListSortMode: String, CaseIterable, Hashable, Identifiable {
 struct ConversationListView: View {
     @EnvironmentObject var viewModel: CleanViewModel
 
-    @AppStorage("listSortMode") private var sortRaw: String = ListSortMode.date.rawValue
+    @AppStorage("listSortMode") private var sortRaw: String = ListSortMode.size.rawValue
     @AppStorage("searchText") private var searchRaw: String = ""
 
     private var sort: ListSortMode { ListSortMode(rawValue: sortRaw) ?? .date }
@@ -300,42 +300,48 @@ private struct ConversationRow: View {
                 .help(item.isSelected ? "取消选择此会话" : "选择此会话")
                 .disabled(isBusy)
 
-            // 彩色徽章：Agent 名首字母
-            ZStack {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(Color.secondary.opacity(0.13))
-                Text(String(item.category.rawValue.prefix(1)))
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
-                    .foregroundStyle(.primary)
-            }
-            .frame(width: 34, height: 26)
-
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.title)
                     .font(.system(size: 13, weight: .medium))
                     .lineLimit(1)
-                Text(subtitle)
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                // 副标题给「这条属于哪、什么时候的」，而不是重复标题。
+                // 标题常常就是首条 user prompt 的原文，再显示一遍只会让每行
+                // 看起来都是重复噪音；而删除决策需要的是位置与时间。
+                HStack(spacing: 5) {
+                    Text(item.category.rawValue)
+                        .foregroundStyle(.secondary)
+                    if !path.isEmpty {
+                        Text("·").foregroundStyle(.tertiary)
+                        Text(path).foregroundStyle(.secondary)
+                    }
+                    Text("·").foregroundStyle(.tertiary)
+                    Text(Fmt.relative(item.updatedAt)).foregroundStyle(.secondary)
+                }
+                .font(.system(size: 10.5))
+                .lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            // 右侧：会话 ID + 体积，数字等宽便于竖向比较
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(item.formattedSize)
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .lineLimit(1)
-                Text("#\(item.shortSessionId)")
-                    .font(.system(size: 9.5, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            .frame(width: 72, alignment: .trailing)
+            // 体积是这行的主数字：清理工具里「多大」比「叫什么」重要
+            Text(item.formattedSize)
+                .font(.system(size: 12.5, weight: .semibold, design: .monospaced))
+                .foregroundStyle(item.sizeInBytes > 0 ? Color.primary : Color.secondary)
+                .frame(width: 68, alignment: .trailing)
+                .lineLimit(1)
+
+            Text("#\(item.shortSessionId)")
+                .font(.system(size: 9.5, design: .monospaced))
+                .foregroundStyle(.tertiary)
+                .frame(width: 62, alignment: .trailing)
+                .lineLimit(1)
         }
         .padding(.vertical, 3)
+        // 0 KB 的条目删了不省空间，不该和有体积的抢注意力
+        .opacity(item.sizeInBytes > 0 ? 1 : 0.55)
         .accessibilityElement(children: .contain)
     }
+
+    private var path: String { Fmt.pathTail(item.displayProjectPath) }
 }
 
 private extension String {
