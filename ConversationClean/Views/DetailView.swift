@@ -83,19 +83,19 @@ struct DetailView: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(item.title)
-                    .font(.system(size: 22, weight: .bold))
+                    .font(.title.weight(.bold))
                     .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
 
                 HStack(spacing: 8) {
                     Text(item.category.rawValue)
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.subheadline.weight(.medium))
                         .padding(.horizontal, 7)
                         .padding(.vertical, 2)
                         .background(Capsule().fill(Color.secondary.opacity(0.15)))
                         .foregroundStyle(.secondary)
                     Text(item.formattedSize)
-                        .font(.system(size: 11, design: .monospaced))
+                        .font(.subheadline.monospacedDigit())
                         .foregroundStyle(.secondary)
                     Spacer(minLength: 0)
                 }
@@ -130,7 +130,7 @@ struct DetailView: View {
                 .gridColumnAlignment(.leading)
             // 长路径要在任意字符处折行，不能只行尾省略
             Text(value.isEmpty ? "—" : value)
-                .font(mono ? .system(size: 11, design: .monospaced) : .callout)
+                .font(mono ? .system(.subheadline, design: .monospaced) : .callout)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -263,7 +263,7 @@ private struct FileRow: View {
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                 Text(path)
-                    .font(.system(size: 10.5, design: .monospaced))
+                    .font(.caption.monospaced())
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Spacer(minLength: 0)

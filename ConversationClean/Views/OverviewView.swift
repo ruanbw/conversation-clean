@@ -120,11 +120,11 @@ struct OverviewView: View {
                             Text(seg.name).font(.callout).lineLimit(1)
                             Spacer(minLength: 8)
                             Text(percent(seg))
-                                .font(.system(size: 10.5, design: .monospaced))
+                                .font(.caption.monospaced())
                                 .foregroundStyle(.secondary)
                                 .frame(width: 38, alignment: .trailing)
                             Text(Fmt.bytes(seg.bytes))
-                                .font(.system(size: 10.5, design: .monospaced))
+                                .font(.caption.monospaced())
                                 .foregroundStyle(.secondary)
                                 .frame(width: 62, alignment: .trailing)
                         }
@@ -200,10 +200,10 @@ private struct BiggestRow: View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.title)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.body.weight(.medium))
                     .lineLimit(1)
                 Text("\(item.category.rawValue) · \(Fmt.relative(item.updatedAt))")
-                    .font(.system(size: 10.5))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -220,12 +220,12 @@ private struct BiggestRow: View {
             .frame(width: 72, height: 5)
 
             Text(shareText)
-                .font(.system(size: 10.5, design: .monospaced))
+                .font(.caption.monospaced())
                 .foregroundStyle(.secondary)
                 .frame(width: 38, alignment: .trailing)
 
             Text(Fmt.bytes(item.sizeInBytes))
-                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                .font(.callout.weight(.semibold).monospacedDigit())
                 .frame(width: 64, alignment: .trailing)
                 .lineLimit(1)
         }

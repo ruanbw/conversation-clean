@@ -107,7 +107,7 @@ struct SettingsView: View {
 
                 // 原型把版本写死成 1.0.0；真机应显示 Info.plist 里的真实版本。
                 Text("版本 \(appVersion) · macOS 14.0 Sonoma 及以上")
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.subheadline.monospaced())
                     .foregroundStyle(.secondary)
                     .padding(.top, 4)
 
@@ -134,7 +134,7 @@ struct SettingsView: View {
     private func fact(_ value: String, _ label: String) -> some View {
         VStack(spacing: 2) {
             Text(value)
-                .font(.system(size: 18, weight: .semibold))
+                .font(.title2.weight(.semibold))
                 .monospacedDigit()
             Text(label)
                 .font(.caption)
@@ -192,7 +192,7 @@ private struct AgentPathRow: View {
                         .background(Capsule().fill(.quaternary))
                 }
                 Text(agent.storagePath)
-                    .font(.system(size: 10.5, design: .monospaced))
+                    .font(.caption.monospaced())
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)

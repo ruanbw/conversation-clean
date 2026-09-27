@@ -42,5 +42,12 @@ struct ConversationCleanApp: App {
     @CommandsBuilder
     private var appCommands: some Commands {
         CommandGroup(replacing: .newItem) {}
+
+        // ⌘F 聚焦搜索。搜索框是三栏里唯一需要高频敲的输入位，
+        // 没有它就只能先拿鼠标点一下才能打字。
+        CommandGroup(after: .toolbar) {
+            Button("搜索会话") { viewModel.searchFocusRequest &+= 1 }
+                .keyboardShortcut("f", modifiers: .command)
+        }
     }
 }

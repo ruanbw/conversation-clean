@@ -187,7 +187,7 @@ struct CleanConfirmSheet: View {
     private var hero: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("预计释放")
-                .font(.system(size: 10, design: .monospaced))
+                .font(.system(.caption, design: .monospaced))
                 .tracking(1.1)
                 .foregroundStyle(.secondary)
 
@@ -207,22 +207,22 @@ struct CleanConfirmSheet: View {
         HStack(alignment: .firstTextBaseline, spacing: 4) {
             if count == 0 {
                 Text("—")
-                    .font(.system(size: 34, weight: .semibold, design: .monospaced))
-                    .tracking(-1.36)
+                    .font(.system(.largeTitle, design: .monospaced).weight(.semibold))
+                    .tracking(-1.04)
                     .foregroundStyle(.primary)
             } else if split.unit.isEmpty {
                 // 没有可拆的单位（如 "0 B"）时整串用大号排，避免留一个空单位占位
                 Text(split.value)
-                    .font(.system(size: 34, weight: .semibold, design: .monospaced))
-                    .tracking(-1.36)
+                    .font(.system(.largeTitle, design: .monospaced).weight(.semibold))
+                    .tracking(-1.04)
                     .foregroundStyle(.primary)
             } else {
                 Text(split.value)
-                    .font(.system(size: 34, weight: .semibold, design: .monospaced))
-                    .tracking(-1.36)          // .est-hero .v 的 letter-spacing: -.04em
+                    .font(.system(.largeTitle, design: .monospaced).weight(.semibold))
+                    .tracking(-1.04)          // .est-hero .v 的 letter-spacing: -.04em
                     .foregroundStyle(.primary)
                 Text(split.unit)
-                    .font(.system(size: 16, weight: .medium, design: .monospaced))
+                    .font(.system(.title3, design: .monospaced).weight(.medium))
                     .foregroundStyle(.secondary)
             }
         }
@@ -232,18 +232,18 @@ struct CleanConfirmSheet: View {
     private var heroCaption: some View {
         if count == 0 {
             Text("当前没有可清理的会话。")
-                .font(.system(size: 11.5))
+                .font(.callout)
                 .foregroundStyle(.secondary)
                 .lineSpacing(3.4)             // 原型 line-height: 1.5
                 .fixedSize(horizontal: false, vertical: true)
         } else {
             (Text("将删除")
              + (scopeLabel.map { Text("「\($0)」的 ") } ?? Text(""))
-             + Text("\(count)").figureEmphasis(size: 11.5)
+             + Text("\(count)").figureEmphasis(.callout)
              + Text(" 个会话文件，覆盖 ")
-             + Text("\(shares.count)").figureEmphasis(size: 11.5)
+             + Text("\(shares.count)").figureEmphasis(.callout)
              + Text(" 个 Agent。此操作不可撤销。"))
-                .font(.system(size: 11.5))
+                .font(.callout)
                 .foregroundStyle(.secondary)
                 .lineSpacing(3.4)
                 .fixedSize(horizontal: false, vertical: true)
@@ -264,12 +264,12 @@ struct CleanConfirmSheet: View {
                 ) {
                     // 「全部可清理 X · 本次占 Y%」，一位小数
                     (Text("全部可清理 ")
-                     + Text(Fmt.bytes(allBytes)).figureEmphasis(size: 10.5)
+                     + Text(Fmt.bytes(allBytes)).figureEmphasis(.caption)
                      + Text(" · 本次占 ")
                      + Text(allBytes > 0
                             ? String(format: "%.1f%%", Double(totalBytes) / Double(allBytes) * 100)
-                            : "0%").figureEmphasis(size: 10.5))
-                        .font(.system(size: 10.5))
+                            : "0%").figureEmphasis(.caption))
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                 }
 
@@ -282,11 +282,11 @@ struct CleanConfirmSheet: View {
                     ) {
                         // 卷容量口径三位小数：几百 MB 摊到 TB 级卷上，两位小数会全变成 0.00%
                         (Text("卷容量 ")
-                         + Text(Fmt.bytes(vol.capacity)).figureEmphasis(size: 10.5)
+                         + Text(Fmt.bytes(vol.capacity)).figureEmphasis(.caption)
                          + Text(" · 本次占 ")
                          + Text(String(format: "%.3f%%", Double(totalBytes) / Double(vol.capacity) * 100))
-                            .figureEmphasis(size: 10.5))
-                            .font(.system(size: 10.5))
+                            .figureEmphasis(.caption))
+                            .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -342,21 +342,28 @@ struct CleanConfirmSheet: View {
             ? String(format: "%.2f", Double(totalBytes) / Double(freeBefore) * 100)
             : "0.00"
 
-        return HStack(alignment: .firstTextBaseline, spacing: 8) {
-            LevelBadge(text: level.0, isOK: level.1)
-            (Text("可用空间 ")
-             + Text("\(Self.fmtVol(freeBefore)) → \(Self.fmtVol(freeAfter))").figureEmphasis(size: 11.5)
-             + Text("（+\(freeJump)%），相当于卷容量的 ")
-             + Text(String(format: "%.3f%%", gainPct)).figureEmphasis(size: 11.5)
-             + Text("。"))
-                .font(.system(size: 11.5))
-                .foregroundStyle(.secondary)
-                .lineSpacing(4.6)                 // 原型 line-height: 1.6
-                .fixedSize(horizontal: false, vertical: true)
+        // 原来这里是 `return HStack { ... }.padding(.top, 10)` 后面跟一句独立的
+        // `Divider().padding(.top, 11)`：函数已经 return，那句的结果没人接，
+        // 分隔线被静默丢弃（编译器会报 "result of call to 'padding' is unused"）。
+        // 「卷占用」与下面「释放说明」之间因此少了一根线。用 VStack 把两者收进同一个返回值。
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                LevelBadge(text: level.0, isOK: level.1)
+                (Text("可用空间 ")
+                 + Text("\(Self.fmtVol(freeBefore)) → \(Self.fmtVol(freeAfter))").figureEmphasis(.callout)
+                 + Text("（+\(freeJump)%），相当于卷容量的 ")
+                 + Text(String(format: "%.3f%%", gainPct)).figureEmphasis(.callout)
+                 + Text("。"))
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .lineSpacing(4.6)                 // 原型 line-height: 1.6
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.top, 10)
+
+            Divider()
+                .padding(.top, 11)
         }
-        .padding(.top, 10)
-        Divider()
-        .padding(.top, 11)
     }
 
     /// 原型 `.est-note`：释放量为什么可能低于预估；若本次之外还有会话，一并交代。
@@ -367,7 +374,7 @@ struct CleanConfirmSheet: View {
                 .foregroundStyle(.secondary)
                 .padding(.top, 2)
             noteText
-                .font(.system(size: 10.5))
+                .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineSpacing(4.2)                 // 原型 line-height: 1.6
                 .fixedSize(horizontal: false, vertical: true)
@@ -383,9 +390,9 @@ struct CleanConfirmSheet: View {
             // 原型只把两个数字裹进 <b>，连接文字保持常规字重
             text = text
                 + Text("本次之外另有 ")
-                + Text("\(others)").figureEmphasis(size: 10.5)
+                + Text("\(others)").figureEmphasis(.caption)
                 + Text(" 个会话占用 ")
-                + Text(Fmt.bytes(max(allBytes - totalBytes, 0))).figureEmphasis(size: 10.5)
+                + Text(Fmt.bytes(max(allBytes - totalBytes, 0))).figureEmphasis(.caption)
                 + Text("，未纳入本次预估。")
         }
         return text
@@ -426,7 +433,7 @@ struct CleanConfirmSheet: View {
                 .foregroundStyle(.secondary)
                 .padding(.top, 2)
             tipText
-                .font(.system(size: 11.5))
+                .font(.callout)
                 .foregroundStyle(.secondary)
                 .lineSpacing(3.4)                 // 原型 line-height: 1.5
                 .fixedSize(horizontal: false, vertical: true)
@@ -492,7 +499,7 @@ struct CleanConfirmSheet: View {
 
     private func sectionLabel(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 10, design: .monospaced))
+            .font(.system(.caption, design: .monospaced))
             .tracking(1.1)                     // .sh{letter-spacing:.11em}
             .foregroundStyle(.secondary)
     }
@@ -503,14 +510,14 @@ struct CleanConfirmSheet: View {
             sectionLabel(title)
             if let path {
                 Text(path)
-                    .font(.system(size: 10, design: .monospaced))          // .sh .p{letter-spacing:0}
+                    .font(.system(.caption, design: .monospaced))          // .sh .p{letter-spacing:0}
                     .foregroundStyle(.primary.opacity(0.72))
                     .lineLimit(1)
             }
             Spacer(minLength: 4)
             if let badge {
                 Text(badge)
-                    .font(.system(size: 10, design: .monospaced))
+                    .font(.system(.caption, design: .monospaced))
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(Capsule().fill(.quaternary))
@@ -552,8 +559,8 @@ private struct AgentShare: Identifiable {
 extension Text {
     /// 原型 `.sheet-b b` / `.est-note b`：等宽、半粗、表格数字。
     /// 用在说明句里的数字上，让「读了几个 / 有多大」能被逐行扫读。
-    fileprivate func figureEmphasis(size: CGFloat) -> Text {
-        font(.system(size: size, weight: .semibold, design: .monospaced)).foregroundColor(.primary)
+    fileprivate func figureEmphasis(_ base: Font) -> Text {
+        font(base.monospaced().weight(.semibold)).foregroundColor(.primary)
     }
 }
 
@@ -573,12 +580,12 @@ private struct EstBarRow<Cap: View>: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Text(label)
-                    .font(.system(size: 11.5))
+                    .font(.callout)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                 Spacer(minLength: 8)
                 Text(Fmt.bytes(val))
-                    .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
+                    .font(.system(.callout, design: .monospaced).weight(.semibold))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
             }
@@ -629,7 +636,7 @@ private struct CapRow: View {
     var body: some View {
         HStack(spacing: 9) {
             Text(label)
-                .font(.system(size: 11, weight: isAfter ? .semibold : .regular))
+                .font(.subheadline.weight(isAfter ? .semibold : .regular))
                 .foregroundStyle(isAfter ? .primary : .secondary)
                 .lineLimit(1)
                 .frame(width: 36, alignment: .leading)
@@ -661,8 +668,8 @@ private struct CapRow: View {
             .accessibilityHidden(true)
 
             // 原型 .cap .rv{b{fg 600}}：百分号数字加重，「 已用」保持 muted 常规字重
-            (Text(String(format: "%.3f%%", readout * 100)).figureEmphasis(size: 10.5)
-             + Text(" 已用").font(.system(size: 10.5, design: .monospaced)).foregroundColor(.secondary))
+            (Text(String(format: "%.3f%%", readout * 100)).figureEmphasis(.caption)
+             + Text(" 已用").font(.system(.caption, design: .monospaced)).foregroundColor(.secondary))
                 .lineLimit(1)
                 .frame(width: 96, alignment: .trailing)
         }
@@ -687,7 +694,7 @@ private struct CompositionRow: View {
         HStack(spacing: 9) {
             HStack(spacing: 6) {
                 Text(name)
-                    .font(.system(size: 11.5))
+                    .font(.callout)
                     .foregroundStyle(isEstimated ? .secondary : .primary)
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -704,13 +711,13 @@ private struct CompositionRow: View {
             bar
 
             Text(Fmt.bytes(bytes))
-                .font(.system(size: 10.5, design: .monospaced))
+                .font(.system(.caption, design: .monospaced))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .frame(width: 58, alignment: .trailing)
 
             Text(String(format: "%.1f%%", percent))
-                .font(.system(size: 10.5, design: .monospaced))
+                .font(.system(.caption, design: .monospaced))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .frame(width: 42, alignment: .trailing)
@@ -773,7 +780,7 @@ private struct LevelBadge: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: 10, design: .monospaced))
+            .font(.system(.caption, design: .monospaced))
             .tracking(0.2)                        // .lvl{letter-spacing:.02em}
             .foregroundStyle(isOK ? Color.green : Color.orange)
             .padding(.horizontal, 7)

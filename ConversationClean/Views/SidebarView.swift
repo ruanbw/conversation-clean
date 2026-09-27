@@ -48,7 +48,7 @@ struct SidebarView: View {
 
     private func sectionHeader(_ title: String) -> some View {
         Text(title)
-            .font(.system(size: 11, weight: .semibold))
+            .font(.subheadline.weight(.semibold))
             .foregroundStyle(.secondary)
             .padding(.horizontal, 6)
             .padding(.top, 14)
@@ -72,7 +72,7 @@ struct SidebarView: View {
                 }
                 .frame(width: 20)
                 Text(title)
-                    .font(.system(size: 13))
+                    .font(.body)
                     .foregroundStyle(.primary)
                 Spacer(minLength: 0)
             }
@@ -121,7 +121,7 @@ struct SidebarView: View {
     private var pathFooter: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(Fmt.abbreviateHome(currentStoragePath).isEmpty ? "—" : Fmt.abbreviateHome(currentStoragePath))
-                .font(.system(size: 10.5, design: .monospaced))
+                .font(.caption.monospaced())
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
@@ -180,7 +180,7 @@ private struct CategoryRow: View {
                 AgentIconView(category: category, size: 18)
 
                 Text(category.rawValue)
-                    .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+                    .font(.body.weight(isSelected ? .semibold : .regular))
                     .foregroundStyle(isSelected ? .white : .primary)
                     .lineLimit(1)
 
@@ -188,7 +188,7 @@ private struct CategoryRow: View {
 
                 if count > 0 {
                     Text("\(count)")
-                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .font(.system(.subheadline, design: .rounded).weight(.medium))
                         .foregroundStyle(isSelected ? Color.white.opacity(0.9) : .secondary)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 1.5)
