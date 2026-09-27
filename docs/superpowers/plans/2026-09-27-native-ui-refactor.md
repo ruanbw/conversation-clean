@@ -17,13 +17,23 @@
 - **部署目标 macOS 14.0**，Xcode 15+ / 16+ 可打开。**不得**迁移 `project.pbxproj` 到 `objectVersion = 77`（会放弃 Xcode 15 支持，与 README 冲突）。
 - **不新增第三方依赖。**
 - **不改任何扫描器、Core 层扫描/删除逻辑、数据模型。**（`Core/` 只允许新增 `Formatting.swift` 这一个纯格式化文件。）
-- **不改 `scripts/tests/` 下已有的 18 个测试用例的断言语义。**（可以新增文件与注册项。）
+- **不改 `scripts/tests/` 下已有 18 个测试用例的断言语义。**（可以新增文件与注册项；Task 1 会修一处让套件崩溃的 off-by-one，那不是断言语义。）
 - **字节数一律 1024 进制**，走 `Fmt.bytes`。**禁止** `ByteCountFormatter`（1000 进制，与 `du`/`df` 对不上）。
 - **颜色一律语义色**：`.primary` / `.secondary` / `.tertiary` / `.accentColor` / `Color(NSColor.controlBackgroundColor)` / `Color(NSColor.windowBackgroundColor)` / `Color(NSColor.separatorColor)`。**禁止** `Color(hex:)` 字面量。
 - **破坏性操作用红色**：`.tint(.red)` 或 `.foregroundStyle(.red)`。非破坏性主操作跟随 `.accentColor`。
 - **不删 `docs/prototype.html`**，只是代码不再参照它。
 - **用户可见文案逐字保留**，不重写、不润色（除非 spec 明确要求）。
-- 每个 task 结束前必须 `xcodebuild` 通过**且** `./scripts/run_tests.sh` 退出码为 0。
+- 每个 task 结束前的门禁：
+  1. `xcodebuild -scheme ConversationClean -configuration Debug build` → `** BUILD SUCCEEDED **`
+  2. `./scripts/run_tests.sh` **不崩溃**（退出码 ≠ 132 / 4）
+  3. **mock** 测试 0 条 FAIL
+  4. **real** 测试的 FAIL 条数不超过基线 **5** 条
+
+  门禁**不是**「退出码 0」：本机上 real 只读测试断言的是本机特定事实
+  （`Detected at least 44 sessions (found: 1)`、`Detected exactly 28 sessions from 975 files (found: 0)`、
+  `Session fc6c5632 not found in real scan`），在任何机器上都不可能全绿。
+  这 5 条是**改动前就存在**的基线，不是回归。真正保护本次重构的是 mock 测试
+  ——它们是确定性的、且恰好覆盖被改动的 `Fmt` / 数据模型路径。
 
 ## Review Focus
 
@@ -127,22 +137,53 @@ let threeDaysAgo = now.addingTimeInterval(-3 * 86_400)
 // 今天的日期 → 以 "今天 " 开头
 ```
 
-- [ ] **Step 2: 注册测试用例**
+- [ ] **Step 2: 注册测试用例——放在 suite 第一项**
 
-在 `scripts/tests/TestSupport/TestRegistry.swift` 的 `suite` 数组**末尾**（`MockVSCDBIndexSync` 那行之后）加一行，注释用 `// 格式化`：
+在 `scripts/tests/TestSupport/TestRegistry.swift` 的 `suite` 数组**最前面**
+（`// Claude Code` 注释之前）加一行，注释用 `// 格式化`：
 
 ```swift
 TestEntry("Formatting", testFormatting),
 ```
 
-- [ ] **Step 3: 运行，确认通过**
+**必须放第一项，不能放末尾。** 套件当前会在中途崩溃（Step 3 修），
+注册在末尾的用例根本执行不到 —— 一个永不运行的测试比没有测试更危险，
+它会给人「已覆盖」的错觉。
+
+- [ ] **Step 3: 修掉让套件崩溃的 off-by-one（本 task 顺带做）**
+
+套件目前稳定崩在 `OpenVikingTests.swift:29`，退出码 132：
+
+```swift
+for i in 0..<(items.count - 1) {   // items.count == 0 时是 0..<(-1) → Range trap
+```
+
+`Range requires lowerBound <= upperBound` 正是 `0..<(-1)` 的报错。改法：
+
+```swift
+for i in 0..<max(0, items.count - 1) {
+```
+
+**同样写法共 5 处，全部要改**（前 4 处目前是 latent，一旦对应 scanner 在某台机器上返回 0 条就会崩）：
+
+- `scripts/tests/OpenVikingTests.swift:29`
+- `scripts/tests/CodexTests.swift:117`
+- `scripts/tests/PiAgentTests.swift:43`
+- `scripts/tests/AntigravityTests.swift:38`
+- `scripts/tests/ClaudeCodeTests.swift:43`
+
+这不改变任何断言语义 —— 原本 count 为 0 时循环一次都不该执行，
+只是 `0..<(-1)` 在进入循环**之前**就 trap 了。
+
+改完后套件应当跑完全程，退出码为 0 或 1（取决于 real 测试的 FAIL 数），
+**不再是 132**。把这次改动单独作为一次提交，与本 task 其余部分分开。
+
+- [ ] **Step 4: 运行，确认通过**
 
 Run: `./scripts/run_tests.sh 2>&1 | tail -30`
-Expected: 输出里出现 `Formatting` 这一节（**必须是第一节**，紧跟套件大标题之后），
-该节 0 条 FAIL。套件整体此时仍会在中途崩溃（退出码 132）——那是 Step 3 要修的，
-不是本步的问题。本步只要求 `Formatting` 那一节跑到了、且全过。
+Expected: 退出码 0，输出里出现 `Formatting` 这一节且无失败断言。
 
-- [ ] **Step 4: 变异检查——证明测试不是空转**
+- [ ] **Step 5: 变异检查——证明测试不是空转**
 
 临时把 `CCTheme.swift` 里 `Fmt.bytes` 的两处 `/ 1024` 改成 `/ 1000`，重跑：
 
@@ -150,14 +191,14 @@ Run: `./scripts/run_tests.sh 2>&1 | grep -A3 "Formatting"`
 Expected: **失败**，报出 `2411724 → 2.3 MB` 断言不成立（1000 进制会得到 2.4 MB）。
 然后**改回 `/ 1024`**，重跑确认恢复退出码 0。
 
-- [ ] **Step 5: 搬家**
+- [ ] **Step 6: 搬家**
 
 用 `git mv` 的等价操作把 `enum Fmt { ... }` 整段（含其上方的 `// MARK: - Formatting helpers` 注释）从 `ConversationClean/DesignSystem/CCTheme.swift` 剪切到新文件 `ConversationClean/Core/Formatting.swift`。
 
 - 文件头写 `import Foundation`（`Date` / `Calendar` / `FileManager` / `DateFormatter` 需要）。
 - `CCTheme.swift` 保留 `enum CC { ... }`，**不要**在本次删掉整个文件——Task 2–9 还在用。
 
-- [ ] **Step 6: 更新 `run_tests.sh` 注释**
+- [ ] **Step 7: 更新 `run_tests.sh` 注释**
 
 `scripts/run_tests.sh:10-14` 的注释块现在写着「DesignSystem 必须包含：ConversationItem.formattedSize 走的是 Fmt.bytes」。改为指向新位置，并说明 `DesignSystem` 会在后续 task 被删：
 
@@ -169,30 +210,12 @@ Expected: **失败**，报出 `2411724 → 2.3 MB` 断言不成立（1000 进制
 APP_SOURCES=$(find "$APP_DIR/Models" "$APP_DIR/Core" "$APP_DIR/Scanners" -name '*.swift' | sort)
 ```
 
-- [ ] **Step 7: 验证**
+- [ ] **Step 8: 验证**
 
-Run: `./scripts/run_tests.sh 2>&1 | tail -20`
-Expected: 退出码 0 或 1（**不再是 132**），`Formatting` 一节 0 FAIL，
-`Formatting` 是第一节，real 测试 FAIL 数 ≤ 5。
-
+Run: `./scripts/run_tests.sh 2>&1 | tail -5` → 退出码 0
 Run: `xcodebuild -scheme ConversationClean -configuration Debug build 2>&1 | tail -3` → `** BUILD SUCCEEDED **`
 
-- [ ] **Step 8: 提交（两次）**
-
-第一次 —— 崩溃修复单独提交，与本 task 其余部分分开：
-
-```bash
-git add scripts/tests/OpenVikingTests.swift scripts/tests/CodexTests.swift scripts/tests/PiAgentTests.swift scripts/tests/AntigravityTests.swift scripts/tests/ClaudeCodeTests.swift
-git commit -m "fix(tests): 修掉 0..<(count-1) 在 count 为 0 时的崩溃
-
-5 处同样的写法，count 为 0 时构成 0..<(-1)，在进入循环之前就 trap
-（Range requires lowerBound <= upperBound），导致套件中途退出 132、
-后续用例全部不执行。当前实际崩在 OpenVikingTests，另 4 处是 latent。
-
-断言语义未变：count 为 0 时循环本就不该执行。"
-```
-
-第二次 —— 本 task 的主体：
+- [ ] **Step 9: 提交**
 
 ```bash
 git add ConversationClean/Core/Formatting.swift ConversationClean/DesignSystem/CCTheme.swift scripts/tests/FormattingTests.swift scripts/tests/TestSupport/TestRegistry.swift scripts/run_tests.sh
@@ -202,9 +225,7 @@ Fmt 是扫描器测试套件与 UI 的唯一耦合点（run_tests.sh glob 了 De
 而设计系统即将整体删除。它是纯格式化逻辑，搬进已在 glob 里的 Core/ 即可解耦。
 
 新增 FormattingTests 钉住 1024 进制这条关键属性：同一条 2411724 字节，
-1000 进制会打成 2.4 MB，1024 进制打成 2.3 MB——后者才与 du/df 一致。
-注册为 suite 第一项：套件中途曾崩溃，注册在末尾的用例执行不到，
-一个永不运行的测试比没有测试更危险。"
+1000 进制会打成 2.4 MB，1024 进制打成 2.3 MB——后者才与 du/df 一致。"
 ```
 
 ---
