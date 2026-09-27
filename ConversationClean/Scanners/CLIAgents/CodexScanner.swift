@@ -88,10 +88,10 @@ final class CodexScanner: AgentScanner, @unchecked Sendable {
         var deletedSessionIds = Set<String>()
 
         for item in items {
-            totalBytesFreed += item.sizeInBytes
+            totalBytesFreed += CleanPrefs.freedBytes(reported: item.sizeInBytes, for: item)
             deletedSessionIds.insert(item.sessionId)
 
-            for path in item.associatedPaths {
+            for path in CleanPrefs.deletionPaths(for: item) {
                 _ = FileSizeHelper.removeIfExists(path: path)
             }
         }

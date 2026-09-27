@@ -106,10 +106,10 @@ final class ClaudeCodeScanner: AgentScanner, @unchecked Sendable {
         var deletedSessionIds = Set<String>()
 
         for item in items {
-            totalBytesFreed += item.sizeInBytes
+            totalBytesFreed += CleanPrefs.freedBytes(reported: item.sizeInBytes, for: item)
             deletedSessionIds.insert(item.sessionId)
 
-            for path in item.associatedPaths {
+            for path in CleanPrefs.deletionPaths(for: item) {
                 _ = FileSizeHelper.removeIfExists(path: path)
             }
         }
@@ -125,13 +125,15 @@ final class ClaudeCodeScanner: AgentScanner, @unchecked Sendable {
         let items = try await scan()
         var freed = try await delete(items: items)
 
+        // backups / shell-snapshots 是「一键清空」路径上唯二属于文件快照的目录，
+        // 开关关掉时保留；cache 不是快照，照旧清。
         let extraPaths = [
             storageURL.appendingPathComponent("cache").path,
             storageURL.appendingPathComponent("backups").path,
             storageURL.appendingPathComponent("shell-snapshots").path
         ]
 
-        for path in extraPaths {
+        for path in extraPaths where CleanPrefs.cleanFileHistorySnapshots || !CleanPrefs.isSnapshotPath(path) {
             let size = FileSizeHelper.sizeOf(path: path)
             if FileSizeHelper.removeIfExists(path: path) {
                 freed += size
@@ -502,6 +504,9 @@ final class ClaudeCodeScanner: AgentScanner, @unchecked Sendable {
     }
 
     private func cleanEmptyProjectDirectories() {
+        // 「回收空项目目录」关掉时磁盘上保留空 project 目录。
+        guard CleanPrefs.cleanEmptyProjectFolders else { return }
+
         let projectsURL = storageURL.appendingPathComponent("projects")
         let fileManager = FileManager.default
         guard fileManager.fileExists(atPath: projectsURL.path),

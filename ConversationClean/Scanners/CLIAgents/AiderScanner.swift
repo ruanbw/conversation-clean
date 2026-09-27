@@ -92,8 +92,8 @@ final class AiderScanner: AgentScanner, @unchecked Sendable {
         var totalBytesFreed: Int64 = 0
 
         for item in items {
-            totalBytesFreed += item.sizeInBytes
-            for path in item.associatedPaths {
+            totalBytesFreed += CleanPrefs.freedBytes(reported: item.sizeInBytes, for: item)
+            for path in CleanPrefs.deletionPaths(for: item) {
                 guard isSafeToDelete(path: path) else { continue }
                 _ = FileSizeHelper.removeIfExists(path: path)
             }

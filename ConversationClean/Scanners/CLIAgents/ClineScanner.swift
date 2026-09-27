@@ -95,10 +95,10 @@ class ClineScanner: AgentScanner, @unchecked Sendable {
         var deletedSessionIds = Set<String>()
 
         for item in items {
-            totalBytesFreed += item.sizeInBytes
+            totalBytesFreed += CleanPrefs.freedBytes(reported: item.sizeInBytes, for: item)
             deletedSessionIds.insert(item.sessionId)
 
-            for path in item.associatedPaths {
+            for path in CleanPrefs.deletionPaths(for: item) {
                 _ = FileSizeHelper.removeIfExists(path: path)
             }
         }
@@ -119,8 +119,10 @@ class ClineScanner: AgentScanner, @unchecked Sendable {
         let fileManager = FileManager.default
 
         // Clean checkpoints folder completely
+        // checkpoints/<taskId> 就是 Cline / Roo 的文件改动快照，开关关掉时整目录保留。
         let checkpointsDir = storageURL.appendingPathComponent("checkpoints")
-        if fileManager.fileExists(atPath: checkpointsDir.path) {
+        if CleanPrefs.cleanFileHistorySnapshots,
+           fileManager.fileExists(atPath: checkpointsDir.path) {
             let cpSize = FileSizeHelper.sizeOf(path: checkpointsDir.path)
             if FileSizeHelper.removeIfExists(path: checkpointsDir.path) {
                 freed += cpSize

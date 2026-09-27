@@ -10,6 +10,10 @@ enum DirectoryCleaner {
     ///
     /// - Parameter root: workspace 数据根目录，通常是 `<userDir>/User`。
     static func cleanEmptyWorkspaceStorageDirs(under root: URL) {
+        // 开关关掉时整个方法空转：下面那层 removeIfEmptyDirectory 也会拦一道，
+        // 这里提前 return 是为了不白跑一遍 workspaceStorage 的目录枚举。
+        guard CleanPrefs.cleanEmptyProjectFolders else { return }
+
         let fileManager = FileManager.default
         let workspaceStorageDir = root.appendingPathComponent("workspaceStorage")
         guard fileManager.fileExists(atPath: workspaceStorageDir.path),
@@ -33,6 +37,8 @@ enum DirectoryCleaner {
     ///
     /// - Parameter root: 要清理的根目录；不存在时直接返回。
     static func cleanEmptyDirectories(in root: URL) {
+        guard CleanPrefs.cleanEmptyProjectFolders else { return }
+
         let fileManager = FileManager.default
         guard fileManager.fileExists(atPath: root.path),
               let enumerator = fileManager.enumerator(

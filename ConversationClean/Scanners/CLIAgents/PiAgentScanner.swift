@@ -118,7 +118,7 @@ final class PiAgentScanner: AgentScanner, @unchecked Sendable {
         var deletedPaths = Set<String>()
 
         for item in items {
-            totalBytesFreed += item.sizeInBytes
+            totalBytesFreed += CleanPrefs.freedBytes(reported: item.sizeInBytes, for: item)
             for path in item.associatedPaths {
                 deletedPaths.insert(path)
                 if path.hasSuffix(".jsonl") {
@@ -131,8 +131,11 @@ final class PiAgentScanner: AgentScanner, @unchecked Sendable {
             }
         }
 
+        // 物理删除：关掉快照开关时只删会话文件。
+        // 上面的 sessionFilePaths 仍用完整的 associatedPaths —— context-mode 索引行
+        // 属于「会话存在性」，不是快照，留着反而会让 Pi 界面列出空会话。
         for item in items {
-            for path in item.associatedPaths {
+            for path in CleanPrefs.deletionPaths(for: item) {
                 _ = FileSizeHelper.removeIfExists(path: path)
             }
         }

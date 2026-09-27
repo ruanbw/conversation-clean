@@ -69,12 +69,15 @@ final class ZedScanner: AgentScanner, @unchecked Sendable {
         let dbExists = FileManager.default.fileExists(atPath: dbURL.path)
 
         for item in items {
-            totalBytesFreed += item.sizeInBytes
+            totalBytesFreed += CleanPrefs.freedBytes(reported: item.sizeInBytes, for: item)
 
+            // threads.db 里的线程行属于「会话存在性」，不受快照开关影响；
+            // 物理文件删除才走 deletionPaths。
+            let pathsToDelete = Set(CleanPrefs.deletionPaths(for: item))
             var hasPhysicalFile = false
             for path in item.associatedPaths {
                 // If path is a real file on disk and not threads.db itself
-                if path != dbURL.path && !path.hasPrefix("zed-thread:") {
+                if path != dbURL.path && !path.hasPrefix("zed-thread:") && pathsToDelete.contains(path) {
                     if FileSizeHelper.removeIfExists(path: path) {
                         hasPhysicalFile = true
                     }

@@ -184,9 +184,9 @@ final class AntigravityScanner: AgentScanner, @unchecked Sendable {
                 continue
             }
 
-            totalFreed += item.sizeInBytes
+            totalFreed += CleanPrefs.freedBytes(reported: item.sizeInBytes, for: item)
 
-            for path in item.associatedPaths {
+            for path in CleanPrefs.deletionPaths(for: item) {
                 _ = FileSizeHelper.removeIfExists(path: path)
             }
 

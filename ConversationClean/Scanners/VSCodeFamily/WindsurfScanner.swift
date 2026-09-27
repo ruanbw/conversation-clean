@@ -179,9 +179,11 @@ final class WindsurfScanner: AgentScanner, @unchecked Sendable {
         let allSessionIds = Set(items.map { $0.sessionId })
 
         for item in items {
-            totalFreed += item.sizeInBytes
+            totalFreed += CleanPrefs.freedBytes(reported: item.sizeInBytes, for: item)
 
             // 1. Remove associated paths and ensure cascade folders are completely removed
+            // state.vscdb 索引行不属于快照，始终跟着删；只有文件删除受开关控制。
+            let pathsToDelete = Set(CleanPrefs.deletionPaths(for: item))
             for path in item.associatedPaths {
                 let fileURL = URL(fileURLWithPath: path)
                 if path.contains("chatSessions") {
@@ -192,6 +194,8 @@ final class WindsurfScanner: AgentScanner, @unchecked Sendable {
                     let globalDb = userDir.appendingPathComponent("globalStorage/state.vscdb")
                     stateDbToSessions[globalDb, default: []].insert(item.sessionId)
                 }
+
+                guard pathsToDelete.contains(path) else { continue }
 
                 var isDir: ObjCBool = false
                 if fileManager.fileExists(atPath: path, isDirectory: &isDir) {
@@ -280,7 +284,7 @@ final class WindsurfScanner: AgentScanner, @unchecked Sendable {
                 }
 
                 let editDir = wsDir.appendingPathComponent("chatEditingSessions")
-                if fileManager.fileExists(atPath: editDir.path) {
+                if CleanPrefs.cleanFileHistorySnapshots, fileManager.fileExists(atPath: editDir.path) {
                     let sz = FileSizeHelper.sizeOf(path: editDir.path)
                     if FileSizeHelper.removeIfExists(path: editDir.path) {
                         freed += sz

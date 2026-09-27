@@ -52,6 +52,9 @@ extension PiAgentScanner {
     }
 
     func cleanEmptyProjectDirectories() {
+        // 「回收空项目目录」关掉时磁盘上保留空 project 目录。
+        guard CleanPrefs.cleanEmptyProjectFolders else { return }
+
         let sessionsURL = storageURL.appendingPathComponent("agent").appendingPathComponent("sessions")
         let fm = FileManager.default
         guard fm.fileExists(atPath: sessionsURL.path),

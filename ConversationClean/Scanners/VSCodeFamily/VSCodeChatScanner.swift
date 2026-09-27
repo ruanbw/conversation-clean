@@ -159,7 +159,10 @@ final class VSCodeChatScanner: AgentScanner, @unchecked Sendable {
         let allSessionIds = Set(items.map { $0.sessionId })
 
         for item in items {
-            totalFreed += item.sizeInBytes
+            totalFreed += CleanPrefs.freedBytes(reported: item.sizeInBytes, for: item)
+            // 索引行收集与物理删除分开：state.vscdb / session-store.db 的行是
+            // 「会话存在性」的一部分，不受快照开关影响；只有文件删除走 deletionPaths。
+            let pathsToDelete = Set(CleanPrefs.deletionPaths(for: item))
             for path in item.associatedPaths {
                 let fileURL = URL(fileURLWithPath: path)
                 if path.contains("chatSessions") {
@@ -170,7 +173,9 @@ final class VSCodeChatScanner: AgentScanner, @unchecked Sendable {
                     let globalDb = storageURL.appendingPathComponent("globalStorage/state.vscdb")
                     stateDbToSessions[globalDb, default: []].insert(item.sessionId)
                 }
-                _ = FileSizeHelper.removeIfExists(path: path)
+                if pathsToDelete.contains(path) {
+                    _ = FileSizeHelper.removeIfExists(path: path)
+                }
             }
         }
 
@@ -219,7 +224,7 @@ final class VSCodeChatScanner: AgentScanner, @unchecked Sendable {
                     }
                 }
                 let editDir = wsDir.appendingPathComponent("chatEditingSessions")
-                if fileManager.fileExists(atPath: editDir.path) {
+                if CleanPrefs.cleanFileHistorySnapshots, fileManager.fileExists(atPath: editDir.path) {
                     let sz = FileSizeHelper.sizeOf(path: editDir.path)
                     if FileSizeHelper.removeIfExists(path: editDir.path) {
                         freed += sz

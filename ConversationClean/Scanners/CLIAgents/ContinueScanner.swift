@@ -64,9 +64,9 @@ final class ContinueScanner: AgentScanner, @unchecked Sendable {
         var totalBytesFreed: Int64 = 0
 
         for item in items {
-            totalBytesFreed += item.sizeInBytes
+            totalBytesFreed += CleanPrefs.freedBytes(reported: item.sizeInBytes, for: item)
 
-            for path in item.associatedPaths {
+            for path in CleanPrefs.deletionPaths(for: item) {
                 _ = FileSizeHelper.removeIfExists(path: path)
             }
         }
