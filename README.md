@@ -2,6 +2,10 @@
 
 基于 Swift 6 + SwiftUI 构建的 macOS 原生应用，用于扫描并清理本机各类 AI 编码 Agent / IDE 遗留的会话数据。
 
+<img src="docs/app-screenshot.png" alt="ConversationClean 主界面：左侧为 Agent 分类与缓存统计，中间为会话列表，右侧为选中会话的详情" width="900">
+
+<sub>真实运行截图，会话标题 / 项目路径 / 会话 ID 等内容已做马赛克处理。</sub>
+
 ---
 
 ## 🌟 项目特性
