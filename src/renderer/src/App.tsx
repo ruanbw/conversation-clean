@@ -15,11 +15,9 @@ import styles from './App.module.css'
 /**
  * 应用外壳：三栏工作台 + 顶栏 + 全局键盘。
  *
- * 移植自 `ConversationClean/ContentView.swift`。
- *
- * 为什么不是 `NavigationSplitView`：后者会自己往窗口上挂一条 NSToolbar
- * （多出约 52px 带子）、给侧栏套 sidebar 材质，形态都不是我们要的。
- * 三栏手搓 HStack，隐藏标题栏把标题栏那块变成我们自己的背景，
+ * 三栏为什么是手搓的 flex 布局：现成的分栏容器会自己往窗口上挂一条工具栏
+ * （多出约 52px 带子）、给侧栏套一层侧栏材质，形态都不是我们要的。
+ * 现在隐藏标题栏、把标题栏那块变成我们自己的背景，
  * 代价是得自己给红绿灯让出左侧 78px（`--size-traffic-light-inset`）。
  *
  * 外壳样式（`.app` / `.topBar` / `.cols` / `.col*` / `.overlay` / `.settingsPanel`）
@@ -236,8 +234,9 @@ export default function App() {
         </div>
       </div>
 
-      {/* 清理二次确认：无 props，自己连 store 读 `showCleanConfirmAlert`，
-          常年挂在根上，开不开由它自己判断（Swift 的 `.sheet` 语义）。 */}
+      {/* 清理二次确认：无 props，自己连 store 读 `showCleanConfirmAlert`。
+          常年挂在根上而不是条件渲染 —— 挂载/卸载就是它的开关，
+          这样清干净时它的滚动与内部状态会随之重置，不用手动清理。 */}
       <CleanConfirmSheet />
 
       {settingsOpen ? (

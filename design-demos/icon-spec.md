@@ -1,9 +1,9 @@
 # ConversationClean 图标设计 Spec
 
 ## 产品背景
-- **产品**：ConversationClean — macOS 原生应用
+- **产品**：ConversationClean — macOS 应用
 - **功能**：扫描并清理 15 款 AI 编码 Agent / IDE 遗留的会话数据
-- **技术栈**：Swift 6 + SwiftUI，macOS 14.0+
+- **技术栈**：Electron 44 + React 19 + TypeScript 5.9，macOS 12.0+
 - **目标用户**：开发者、AI 工具重度用户
 
 ## 设计需求

@@ -27,8 +27,6 @@ import {
 /**
  * GitHub Copilot Chat / VS Code Chat 会话扫描器。
  *
- * 移植自 Swift 版 `Scanners/VSCodeFamily/VSCodeChatScanner.swift`。
- *
  * 与 Cursor 的最大差别：**只看会话文件，不解析 `state.vscdb`**。
  * Copilot 的会话正文一律落在
  * `workspaceStorage/<hash>/chatSessions/<sessionId>.jsonl` 与
@@ -40,13 +38,13 @@ import {
  * 1. `scan()` 只读：不写文件、不开 SQLite 写连接（本类根本不开 SQLite）。
  * 2. `delete()` 里的「索引行收集」与「文件删除」是**两件独立的事**：
  *    索引行属于会话本体，永远跟着删；只有文件删除受 `cleanFileHistorySnapshots` 开关控制。
- *    照抄 Swift 原注释：删了正文却留着索引行，Agent 侧会出现永远查不到的幽灵会话。
+ *    删了正文却留着索引行，Agent 侧会出现永远查不到的幽灵会话。
  */
 
-/** 会话正文为空时的兜底标题（Swift 版是同一个中文字面量）。 */
+/** 会话正文为空时的兜底标题。 */
 const FALLBACK_TITLE = 'GitHub Copilot 对话'
 
-/** 一条待解析的会话文件。Swift 版是 `private struct ScanTarget`。 */
+/** 一条待解析的会话文件。 */
 interface ScanTarget {
   /** `chatSessions/<sid>.jsonl` 或 `emptyWindowChatSessions/<sid>.jsonl` 的绝对路径。 */
   filePath: string
@@ -64,7 +62,7 @@ const COPILOT_GLOBAL_DIR_NAMES = ['github.copilot-chat', 'GitHub.copilot-chat'] 
 export class VSCodeChatScanner implements AgentScanner {
   readonly category = 'copilotChat' as const
 
-  /** Swift 版的 `customStorageURL`。测试用它指到夹具目录（`init(storageURL:)`）。 */
+  /** 测试通过 `ScannerOptions.storagePath` 注入的夹具目录；`null` 表示走真实用户目录。 */
   private readonly customStoragePath: string | null
 
   constructor(options: ScannerOptions = {}) {
@@ -136,8 +134,8 @@ export class VSCodeChatScanner implements AgentScanner {
 
     if (targets.length === 0) return []
 
-    // Swift 版用 `withTaskGroup` 并发解析；这里解析是纯同步的 CPU/IO，
-    // 放进 Promise 不会让它更快，反而多一层 await。循环语义与并发结果一致。
+    // 解析是纯同步的 CPU/IO，逐条循环即可：放进 Promise 不会更快，
+    // 反而多一层 await。循环语义与并发结果一致。
     const items: ConversationItem[] = []
     for (const target of targets) {
       const item = parseSession(target, this.category)
@@ -243,7 +241,7 @@ export class VSCodeChatScanner implements AgentScanner {
       }
 
       // vscode-sessions-* / copilot-cli-images 目录。
-      // Swift 版没有判断条目类型，文件与目录一视同仁，这里照抄。
+      // 不判断条目类型，文件与目录一视同仁：`removeAndCount` 两种都能处理。
       for (const name of [...listDirectories(copilotGlobal), ...listFiles(copilotGlobal)]) {
         const entryName = basename(name)
         if (entryName.startsWith('vscode-sessions-') || entryName === 'copilot-cli-images') {
@@ -487,7 +485,7 @@ function removeAndCount(path: string, recreate = false): number {
   return size
 }
 
-/** `realpath` 规范化；路径不存在时退回 `resolve` 的标准化结果（对齐 Swift 的 `.standardized`）。 */
+/** `realpath` 规范化；路径不存在时退回 `resolve` 的标准化结果。 */
 function canonical(path: string): string {
   const normalized = resolve(path)
   try {
@@ -497,13 +495,13 @@ function canonical(path: string): string {
   }
 }
 
-/** `components(separatedBy: .newlines).first` —— 取第一行。 */
+/** 取第一行。行分隔符含 `\n` `\r` `\r\n` 以及 U+0085 / U+2028 / U+2029。 */
 function firstLine(text: string): string {
   const index = text.search(/\r\n|[\n\r\u0085\u2028\u2029]/)
   return index === -1 ? text : text.slice(0, index)
 }
 
-/** `trimmingCharacters(in: .whitespaces)` —— 只去空格/制表符，保留换行。 */
+/** 只去首尾的空格/制表符，保留换行。 */
 function trimSpaces(text: string): string {
   return text.replace(/^[^\S\r\n]+|[^\S\r\n]+$/g, '')
 }
@@ -526,7 +524,7 @@ function asNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
-/** Swift 的 `as? [[String: Any]]`：只要有一个元素不是字典，整个转换就失败。 */
+/** 收窄语义：只要有一个元素不是字典，整个转换就失败（不会跳过坏元素）。 */
 function asRecordArray(value: unknown): Record<string, unknown>[] | null {
   if (!Array.isArray(value)) return null
   const out: Record<string, unknown>[] = []

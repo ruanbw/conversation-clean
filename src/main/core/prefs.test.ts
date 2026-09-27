@@ -1,8 +1,9 @@
 /**
  * `core/prefs.ts` 的测试。
  *
- * 移植自 Swift 版 `CleanPrefs`（原实现读 `UserDefaults`，
- * 这里读 userData 下的 `preferences.json`），键名与默认值逐字一致。
+ * 覆盖：4 个开关的默认值与合并语义、落盘（先写临时文件再 rename）、
+ * 损坏 / 非对象 JSON 的回落、模块级缓存，以及
+ * `isSnapshotPath` / `deletionPathsFor` / `freedBytesBeforeDelete` 的快照扣减。
  *
  * ## 为什么整个文件要 mock `electron`
  *
@@ -10,13 +11,13 @@
  * `resolveCachePath()` 靠 `try { app.getPath('userData') } catch { … }` 兜底到
  * `~/.conversation-clean/preferences.json` —— 那会**真的往用户家目录写文件**。
  * 所以这里用 `vi.mock('electron')` 把 `getPath` 指到临时目录。
+ * （`prefs.ts` 也认 `CONVERSATION_CLEAN_DATA_DIR`，指到临时目录同样能隔离。）
  *
  * ## 模块级缓存
  *
- * `prefs.ts` 有模块级 `cache` / `cachePath`，测试之间要重置就靠
- * `vi.resetModules()` + 动态 `import()`（见 `loadPrefs()`）。
- * 这条路径能work，但**建议给 `CleanPrefs` 加一个 `__resetForTests()`**，
- * 否则每个用例都得重复 `resetModules` + 动态 import（见报告）。
+ * `prefs.ts` 有模块级 `cache` / `cachePath`，用例之间会互相看到对方的值。
+ * `loadPrefs()` 用 `vi.resetModules()` + 动态 `import()` 拿一份全新模块实例，
+ * 每个用例都从空缓存开始 —— 这是本文件所有隔离手段的来源。
  */
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'

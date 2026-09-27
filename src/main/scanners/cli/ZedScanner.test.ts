@@ -23,7 +23,7 @@ interface ThreadFixture {
   createdAt: string
 }
 
-/** 与 Swift 测试 `testMockZedScanner` 逐条对齐的两条线程。 */
+/** 两条线程的固定数据。 */
 const THREADS: ThreadFixture[] = [
   {
     id: 'zed-th-001',
@@ -97,7 +97,7 @@ function writeJson(path: string, value: unknown): void {
   writeFileSync(path, JSON.stringify(value), 'utf8')
 }
 
-/** 造一个与 Swift 夹具等价的数据根：2 条 DB 线程 + 1 个会话存档 + 1 个挂起转储。 */
+/** 造一个数据根：2 条 DB 线程 + 1 个会话存档 + 1 个挂起转储。 */
 function buildFixture(base: string, rows: readonly ThreadFixture[] = THREADS): void {
   mkdirSync(join(base, 'threads'), { recursive: true })
   mkdirSync(join(base, 'conversations'), { recursive: true })
@@ -277,7 +277,7 @@ describe('ZedScanner · 夹具扫描', () => {
   it('summary 为空时标题回落成「Zed 会话 + id」', async () => {
     writeJson(join(rawRoot, 'conversations', 'zed-empty.json'), { summary: '' })
     const item = find(await scanner.scan(), 'zed-empty')
-    // 回退标题里的 sessionId 只取前 8 位（Swift 的 `id.prefix(8)`）。
+    // 回退标题里的 sessionId 只取前 8 位。
     expect(item.title).toBe('Zed 会话 zed-empt')
     expect(item.snippet).toBe('Zed 会话存档')
     expect(item.messageCount).toBe(1)

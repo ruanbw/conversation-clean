@@ -4,12 +4,12 @@
  * 视觉基线 `design-demos/ui-a-precision.html` + `docs/prototype.html` 的
  * `#scrim > .sheet`（.sheet-h / .sheet-hero / .sheet-b / .sheet-f）
  * 与 `renderEstimate()` 生成的四个内容块，结构与配色逐条照抄
- * Swift 版 `Views/CleanConfirmSheet.swift`。
+ * 基准稿。
  *
  * 铁律（见 docs/porting-guide.md §3.1）：
  * · 颜色 / 间距 / 字号一律 `var(--token)`，本文件里没有裸 hex。
  * · 只有**结构性尺寸**（条高 9/14/8/5、面板宽 520、读数列宽 38/56/96）
- *   用了裸 px —— tokens.css 里没有这些档位，Swift 版也是写死的常量，
+ *   用了裸 px —— tokens.css 里没有这些档位，基准稿也是写死的常量，
  *   照抄比编一个 token 更接近基准。
  * · 字号也**不**用 `calc()` 拼档位：26px 主读数、9/10px 徽标分别对应
  *   `--text-hero-readout` / `--text-badge-small` / `--text-badge-tiny`。
@@ -101,7 +101,7 @@
   margin-top: var(--space-s);
 }
 
-/* Swift 版是 `Theme.Typo.num(26, .semibold)`，对应 `--text-hero-readout`。 */
+/* 主读数用 `--text-hero-readout` 这一档。 */
 .heroValue {
   font-size: var(--text-hero-readout);
   font-weight: var(--weight-semibold);
@@ -128,7 +128,7 @@
 }
 
 /* 说明句里的数字：半粗 + 表格数字 + t1 前景。
-   Swift 用 `base.monospacedDigit().weight(.semibold)`，不是等宽设计字体。 */
+   这里用 tabular-nums 而不是等宽设计字体：数字列要右对齐，等宽设计字体会挤掉字距。 */
 .fig {
   font-weight: var(--weight-semibold);
   font-variant-numeric: tabular-nums;
@@ -149,7 +149,7 @@
 }
 
 /* ---- 通用分区（.est-sec） ----
-   顶线走满幅，内容再往里缩 22pt —— 与 Swift 的「hairline 在外、内边距在内」同构。 */
+   顶线走满幅，内容再往里缩 22px —— 线在外、留白在内，卡片才不会像贴了张贴纸。 */
 
 .section {
   margin-top: calc(var(--space-xl) + var(--space-xxs));
@@ -223,7 +223,7 @@
   height: 9px;
   margin-top: var(--space-s);
   border-radius: var(--radius-chip-small);
-  /* 靛蓝 11% 轨道：tokens 只给了 6% 的 --accent-soft，这里按 Swift 原值现算。 */
+  /* 靛蓝 11% 轨道：tokens 只给了 6% 的 --accent-soft，这里按基准现算。 */
   background: color-mix(in srgb, var(--accent) 11%, transparent);
   overflow: hidden;
 }
@@ -313,7 +313,7 @@
   color: var(--t2);
 }
 
-/* Swift 版的 `.lvl` 是 mono(9.5, .medium)，落在 `--text-badge-small` 这一档。 */
+/* 量级徽标落在 `--text-badge-small` 这一档。 */
 .lvl {
   flex: 0 0 auto;
   padding: 1.5px var(--space-s);
@@ -325,7 +325,7 @@
   background: color-mix(in srgb, var(--success) 14%, transparent);
 }
 
-/* Swift 版是 `NSColor.systemOrange`；token 化后的 `--warning` 是同一语义的档位
+/* token 化后的 `--warning` 就是「警示橙」这一语义的档位
    （深色下比 systemOrange 更亮，不会发糊）。「量级有限」是提醒不是错误，
    所以走警示橙而不是 `--danger`。 */
 .lvlWarn {

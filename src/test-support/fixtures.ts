@@ -1,16 +1,13 @@
 /**
  * 测试夹具工厂（文件系统 + 会话条目部分）。
  *
- * 移植自 Swift 版 `scripts/tests/TestSupport/Fixtures.swift` 的 `enum Fixture`：
- * `dir` / `write` / `tempDirectory` / `sqlite` 四个原语一一对应，
- * 差别只在于 TS 版要自己收尾（Swift 用 `defer { try? fm.removeItem(at:) }`，
- * 这里由 `useTempDir()` 注册的 `afterEach` 统一 `rmSync(recursive)`）。
- *
- * 与 Swift 版的同一条约定：**临时目录必须解析符号链接**。
- * macOS 上 `NSTemporaryDirectory()` 给的是 `/var/folders/...`，
- * 而它真身是 `/private/var/folders/...`；不 realpath 的话，
- * 扫描器里 `resolveStoragePath` 返回的规范路径和断言里的路径对不上，
+ * **一条必须遵守的约定：临时目录必须解析符号链接（realpath）。**
+ * macOS 的 `tmpdir()` 给的是 `/var/folders/...`，真身却是 `/private/var/folders/...`；
+ * 不 realpath 的话，扫描器里 `resolveStoragePath` 返回的规范路径和断言里的路径对不上，
  * 整条 `delete()` 链路的断言会随机红。
+ *
+ * **测试不要读用户真实目录**：一律用 `useTempDir()` / `createTempDir()` 自造夹具，
+ * 否则会扫到本机真实会话数据，用例结果不可复现。
  *
  * 本文件**只导出辅助函数**，不含任何 `describe` / `test`。
  * SQLite 夹具（mock `state.vscdb` / `session-store.db`）在 `./sqliteFixtures`。
@@ -27,9 +24,9 @@ import type { AgentCategory, ConversationItem } from '@shared/types'
 // MARK: - 临时目录
 
 /**
- * 建一个随机临时目录并返回它的**规范路径**（已 realpath）。
+ * 建一个临时目录并返回其 **realpath**（macOS 的 `/var` 是 `/private/var` 的软链，
+ * 不解析会让所有路径断言错位）。
  *
- * 对应 Swift `Fixture.tempDirectory(prefix:)`。
  * 目录会被登记到模块内的登记表，`cleanupTempDirs()` 一次全删。
  */
 export function createTempDir(prefix = 'cc-test-'): string {
@@ -43,7 +40,7 @@ export function createTempDir(prefix = 'cc-test-'): string {
 
 const createdTempDirs = new Set<string>()
 
-/** 删掉一个临时目录（不存在也不报错）。对应 Swift 的 `defer { removeItem }`。 */
+/** 删掉一个临时目录（不存在也不报错）。 */
 export function removeTempDir(dir: string): void {
   createdTempDirs.delete(dir)
   rmSync(dir, { recursive: true, force: true })
@@ -73,7 +70,7 @@ export function useTempDir(prefix?: string): string {
   return dir
 }
 
-/** 跑一段用到临时目录的逻辑，结束后无条件清理。对应 Swift 的 `defer` 写法。 */
+/** 跑一段用到临时目录的逻辑，结束后无条件清理。 */
 export async function withTempDir<T>(fn: (dir: string) => T | Promise<T>, prefix?: string): Promise<T> {
   const dir = createTempDir(prefix)
   try {
@@ -85,23 +82,20 @@ export async function withTempDir<T>(fn: (dir: string) => T | Promise<T>, prefix
 
 // MARK: - 目录 / 文件
 
-/** 递归建目录。对应 Swift `Fixture.dir(_:)`。 */
+/** 递归建目录，返回传入的路径。 */
 export function ensureDir(path: string): string {
   mkdirSync(path, { recursive: true })
   return path
 }
 
-/**
- * 写 UTF-8 文本（父目录自动创建），返回落盘路径。
- * 对应 Swift `Fixture.write(_:to:)`。
- */
+/** 写 UTF-8 文本（父目录自动创建），返回落盘路径。 */
 export function writeFile(path: string, content: string): string {
   ensureDir(dirname(path))
   writeFileSync(path, content, 'utf8')
   return path
 }
 
-/** 在 `dir` 下以 `name` 写 UTF-8 文本并返回绝对路径。对应 Swift 的三参重载。 */
+/** 在 `dir` 下以 `name` 写 UTF-8 文本并返回绝对路径。 */
 export function writeFileIn(dir: string, name: string, content: string): string {
   return writeFile(join(dir, name), content)
 }
@@ -117,7 +111,7 @@ export function writeJsonLinesFile(path: string, values: readonly unknown[]): st
   return writeFile(path, `${lines.join('\n')}\n`)
 }
 
-/** 拼路径的小糖，让扫描器用例读起来像 Swift 的 `appendingPathComponent`。 */
+/** 拼路径的小糖：`p('a', 'b')` → `<a>/<b>`。 */
 export function p(...segments: string[]): string {
   return join(...segments)
 }

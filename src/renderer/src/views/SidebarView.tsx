@@ -16,23 +16,22 @@ import { cleanStore, useCleanActions, useCleanState } from '@renderer/state/clea
 import styles from './SidebarView.module.css'
 
 /**
- * 侧栏。
+ * 侧栏：功能清单 + 存储体检。
  *
- * 移植自 `ConversationClean/Views/SidebarView.swift`。视觉按 `ui-a-precision.html`：
- *   ① 顶部不再留 38pt Spacer —— 红绿灯浮在顶栏上，侧栏从顶栏**下方**才开始，
- *      旧代码在顶栏下面又空 38pt，侧栏开头 86pt 全白。
- *   ② 下方 500pt 纯空白（只装了 4 款 Agent 却有 15 个分类位）现在填成
+ * 视觉基线 `design-demos/ui-a-precision.html`，三处刻意的取舍：
+ *   ① 顶部不再留 38px 空档 —— 红绿灯浮在顶栏上，侧栏从顶栏**下方**才开始，
+ *      旧布局在顶栏下面又空 38px，侧栏开头 86px 全白。
+ *   ② 下方大片空白（只装了 4 款 Agent 却有 15 个分类位）现在填成
  *      「可回收空间」体检卡 + 存储路径卡，把空白换成决策信息。
- *   ③ 行高 28pt，计数用等宽数字。
+ *   ③ 行高 28px，计数用等宽数字。
  *
- * 与 Swift 版的一处**有意分歧**（任务书明确要求）：
- * Swift 只列出**已安装**的 Agent（`visibleCategories` 里 `filter(isInstalled)`）。
- * 这里 15 款全部列出，未安装的置灰 —— 分类导航是该 App 的功能清单，
- * 装没装是运行时的事；未安装的行点进去会看到「未在本机检测到该 Agent 的存储目录」。
- * 「仅显示有数据」开关仍然会滤掉 0 会话的分类，与 Swift 一致。
+ * 分类列表的口径：**15 款全部列出**，未安装的置灰。理由是分类导航是本 App 的
+ * 功能清单，「装没装」是运行时的事；未安装的行点进去会看到
+ * 「未在本机检测到该 Agent 的存储目录」，这比先在侧栏里藏起来更有用。
+ * 「仅显示有数据」开关打开时才滤掉未安装与 0 会话的分类（`.all` 恒在首位）。
  */
 
-/** 侧栏固定顺序。Swift 的 `sidebarAgentOrder`（注意 antigravity 排在 windsurf 之后）。 */
+/** 侧栏固定顺序。注意 antigravity 排在 windsurf 之后，不是字母序。 */
 const SIDEBAR_AGENT_ORDER: readonly Exclude<AgentCategory, 'all'>[] = [
   'claudeCode',
   'codex',
@@ -51,7 +50,7 @@ const SIDEBAR_AGENT_ORDER: readonly Exclude<AgentCategory, 'all'>[] = [
   'openHands'
 ]
 
-/** Swift 用 `@AppStorage("hideEmptyCategories")`，这里落到 localStorage 的同名键。 */
+/** 「仅显示有数据」开关的持久化键。 */
 const LS_HIDE_EMPTY = 'hideEmptyCategories'
 
 function readHideEmpty(): boolean {
@@ -71,7 +70,7 @@ function writeHideEmpty(value: boolean): void {
 }
 
 export interface SidebarViewProps {
-  /** 打开设置面板。Swift 是 `showSettingsWindow:`，Electron 侧由 App 编排弹层。 */
+  /** 打开设置面板。这里只抛事件，遮罩与显隐由 App 编排。 */
   onOpenSettings?: () => void
 }
 
@@ -98,8 +97,8 @@ export function SidebarView({ onOpenSettings }: SidebarViewProps) {
     [installedSet]
   )
 
-  // 15 款全部列出；未安装的置灰。`hideEmpty` 打开时才回到 Swift 的口径 ——
-  // 滤掉未安装的与 0 会话的分类（`.all` 恒在首位且不受影响）。
+  // 15 款全部列出；未安装的置灰。`hideEmpty` 打开时才滤掉未安装的
+  // 与 0 会话的分类（`.all` 恒在首位且不受影响）。
   const visibleCategories = useMemo<AgentCategory[]>(() => {
     const agents = SIDEBAR_AGENT_ORDER.filter((category) => {
       if (!hideEmpty) return true
@@ -225,7 +224,7 @@ export function SidebarView({ onOpenSettings }: SidebarViewProps) {
 /**
  * 当前分类对应的存储路径来源。
  * `.all` 时取占用最大的那款 Agent —— 「全部会话」的存储路径指向最大的那块盘，
- * 点 Finder 打开它最有用。与 Swift 的 `pathAgent` 一致。
+ * 点 Finder 打开它最有用。
  */
 function pathAgentFor(
   category: AgentCategory,

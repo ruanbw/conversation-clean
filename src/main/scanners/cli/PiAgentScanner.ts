@@ -21,15 +21,17 @@ import { cleanEmptyProjectDirectories, pruneACPSessionMap } from './PiAgentScann
 /**
  * Pi Agent（`~/.pi`）会话扫描器。
  *
- * 移植自 `ConversationClean/Scanners/CLIAgents/PiAgentScanner.swift`，
- * 三个 Swift extension 拆到同目录的三个 `+*.ts` 文件，职责一一对应：
+ * 数据根：`PI_HOME` > `~/.pi`（测试可注入）。
  *
- * | Swift | TypeScript | 职责 |
- * |---|---|---|
- * | `PiAgentScanner.swift` | 本文件 | 协议实现、目录枚举、`scan` / `delete` / `cleanAll` |
- * | `+Parsing.swift` | `PiAgentScanner+Parsing.ts` | `tasks/` 预索引 + 单个 `.jsonl` 解析 |
- * | `+ContextMode.swift` | `PiAgentScanner+ContextMode.ts` | context-mode 双层 SQLite 索引同步 |
- * | `+ACPSessionMap.swift` | `PiAgentScanner+ACPSessionMap.ts` | `pi-acp/session-map.json` 裁剪 + 空项目目录回收 |
+ * 本文件只管协议实现、目录枚举与 `scan` / `delete` / `cleanAll`；
+ * 其余三块逻辑拆在同目录的 `+*.ts` 里，改动时先分清是哪一块：
+ *
+ * | 文件 | 职责 |
+ * |---|---|
+ * | `PiAgentScanner.ts`（本文件） | 协议实现、目录枚举、`scan` / `delete` / `cleanAll` |
+ * | `PiAgentScanner+Parsing.ts` | `tasks/` 预索引 + 单个 `.jsonl` 解析 |
+ * | `PiAgentScanner+ContextMode.ts` | context-mode 双层 SQLite 索引同步 |
+ * | `PiAgentScanner+ACPSessionMap.ts` | `pi-acp/session-map.json` 裁剪 + 空项目目录回收 |
  *
  * ## 目录布局
  *
@@ -51,7 +53,7 @@ import { cleanEmptyProjectDirectories, pruneACPSessionMap } from './PiAgentScann
  * Pi 界面留下一条点进去是空的幽灵会话。
  */
 
-/** 解析并发度。Swift 是 `withTaskGroup` 全并发，这里收一档，避免一次几千个文件把 fd 打爆。 */
+/** 解析并发度。纯 IO 密集，16 是实测下来 fd 与耗时的平衡点（再高就 fd 打爆）。 */
 const PARSE_CONCURRENCY = 16
 
 export class PiAgentScanner implements AgentScanner {
@@ -69,7 +71,7 @@ export class PiAgentScanner implements AgentScanner {
    *
    * 规范化不是为了好看：`/var` → `/private/var` 这类别名不解析，
    * 侧栏显示的路径会跟 Finder 里点开的不一致，删除时也会出现「文件明明存在却删不掉」。
-   * 目录还不存在时 realpath 会失败，此时退回原样（对应 Swift 的 `?? base.standardized`）。
+   * 目录还不存在时 realpath 会失败，此时退回原样。
    */
   get storagePath(): string {
     const env = process.env['PI_HOME']
@@ -103,7 +105,9 @@ export class PiAgentScanner implements AgentScanner {
   /**
    * 枚举 `agent/sessions/<project>/<时间戳>_<sid>.jsonl` 并逐条解析。
    *
-   * 只读：一个字节都不写，mtime 也不碰。
+   * 全程只读，**不打开任何 SQLite**：context-mode / pi-acp 那些索引只在 `delete` /
+   * `cleanAll` 里写。`scan()` 不得因为「补齐索引」而去动 db，否则每次刷新列表
+   * 都会锁一下 Pi 自己正开着的库。
    */
   async scan(): Promise<ConversationItem[]> {
     if (!this.isInstalled) return []
@@ -126,7 +130,7 @@ export class PiAgentScanner implements AgentScanner {
   /**
    * 删除一批会话：删文件 → 同步两层索引 → 回收空项目目录。
    *
-   * 顺序与 Swift 版逐条对应：
+   * 顺序不能改：
    * 1. 先按**完整** `associatedPaths` 收集 `.jsonl` 路径（含会话子目录里递归找到的
    *    子代理嵌套会话）与「已删路径」集合 —— 这一步必须在物理删除之前做，
    *    因为「某个 associatedPath 是不是目录」这个判断依赖它还在盘上。
@@ -230,7 +234,7 @@ export class PiAgentScanner implements AgentScanner {
  * 目录下的 `.jsonl` 文件绝对路径。
  *
  * 不用 `listFiles(dir, '.jsonl')`：那个原语把扩展名转小写再比，
- * 而 Swift 的 `pathExtension == "jsonl"` 是大小写敏感的。
+ * 而这里要的是大小写敏感比较（Pi 只写小写 `.jsonl`）。
  */
 function listJsonlFiles(dir: string): string[] {
   // `listFiles` 内部已经吞掉 readdir 异常，目录不存在时返回 `[]`。

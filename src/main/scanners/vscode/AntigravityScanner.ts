@@ -18,7 +18,7 @@ import { openReadOnly, openReadWrite } from '@main/core/vscdb'
 /**
  * Antigravity 会话扫描器。
  *
- * 移植自 Swift 版 `ConversationClean/Scanners/VSCodeFamily/AntigravityScanner.swift`。
+ * 数据根：`ANTIGRAVITY_HOME` > `~/.gemini/antigravity`（测试可注入）。
  *
  * Antigravity 不走 VS Code 的 `state.vscdb`，它自己有一套 SQLite 布局，而且**索引在前**：
  *
@@ -60,9 +60,9 @@ export class AntigravityScanner implements AgentScanner {
   /**
    * 当前活跃会话 id —— `delete` / `cleanAll` 见到它就跳过。
    *
-   * 环境变量优先；没设时返回一个内置 id（Swift 版就是这个硬编码常量）。
-   * 已知问题（照抄 Swift）：这个默认值是一个不透明的 UUID，用户真的在用它结对编程时，
-   * 删除**不会**被拦住。端口阶段不修，修要改 Swift 版一起改。
+   * 环境变量优先；没设时返回一个内置 id（下面那个硬编码常量）。
+   * 已知问题：这个默认值是一个不透明的 UUID，用户真的在用它结对编程时，
+   * 删除**不会**被拦住 —— 想拦必须自己设 `ANTIGRAVITY_CONVERSATION_ID`。
    */
   get activeConversationId(): string {
     const envId = process.env['ANTIGRAVITY_CONVERSATION_ID']
@@ -224,7 +224,7 @@ export class AntigravityScanner implements AgentScanner {
 
 // MARK: - 常量与工具
 
-/** Swift 版硬编码的兜底活跃会话 id。 */
+/** 兜底活跃会话 id：拿不到环境变量时用它，真实用户基本不可能撞上。 */
 const DEFAULT_ACTIVE_CONVERSATION_ID = 'd72aac4b-eb6f-4cdc-af17-bb25a2d18e19'
 
 function canonical(path: string): string {
@@ -259,11 +259,11 @@ function columnInt(value: unknown): number {
 }
 
 /**
- * `workspace_uris` → 项目路径。支持三种形态，与 Swift 版逐字一致：
+ * `workspace_uris` → 项目路径。支持三种形态：
  * · `file://…`        → 解码后的裸路径
  * · `["file://…"]`    → JSON 数组，取第一个再递归
  * · `/abs/path`       → 原样返回
- * 其余（`untitled:`、`vscode-remote://…` 之类）一律 `nil`。
+ * 其余（`untitled:`、`vscode-remote://…` 之类）一律 `null`。
  */
 function parseWorkspacePath(raw: string): string | null {
   if (raw.length === 0) return null

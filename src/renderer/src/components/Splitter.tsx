@@ -4,9 +4,7 @@ import styles from './Splitter.module.css'
 /**
  * 栏间分隔条。
  *
- * 移植自 `ConversationClean/ContentView.swift` 的 `ColumnResizeHandle`。
- *
- * 两处细节决定它好不好用（原注释照搬）：
+ * 两处细节决定它好不好用：
  *   ① 命中区 11px，视觉线只有 1px。线画多宽就只能拖多宽的话，那条线根本点不中。
  *   ② 拖动量从**按下那一刻**的宽度起算（anchor），不是逐帧累加 delta。
  *      累加的话掉一帧就把误差一并放大，鼠标一松手列宽会跳一下。
@@ -32,7 +30,7 @@ export interface SplitterProps {
   onChange: (next: number) => void
   /**
    * true = 往右拖变宽（左侧栏）；false = 往左拖变宽（中间列表）。
-   * 对应 Swift 的 `growsWithRightwardDrag`。
+   * 两条分隔条方向相反，所以这个开关不是冗余参数，是它们唯一的区别。
    */
   growsWithRightwardDrag: boolean
   help?: string

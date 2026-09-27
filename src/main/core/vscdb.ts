@@ -4,15 +4,15 @@ import { existsSync, statSync } from 'node:fs'
 /**
  * VS Code 系 IDE 的 `state.vscdb` 索引读写。
  *
- * 移植自 Swift 版 `Core/SQLite/VSCDBHelper.swift`（那里直接调 `sqlite3` C API，
- * 这里用 Node 24 内建的 `node:sqlite` —— Electron 44 内嵌 Node 24.21，
- * 两者都自带，不需要 `better-sqlite3` 那种要跟着 Electron ABI 重建的原生模块）。
+ * 用 Node 24 内建的 `node:sqlite`（`DatabaseSync`），不引 `better-sqlite3`：
+ * 后者是原生模块，要跟着 Electron 的 ABI 重建，测试环境与生产环境会变成两套二进制。
+ * Electron 44 内嵌 Node 24.21，两者都自带。
  *
  * ## 为什么必须有这一层
  *
  * VS Code 系（VS Code / Cursor / Windsurf / Trae / Antigravity / Copilot）除了
  * 会话文件，还在 `state.vscdb` 的 `ItemTable` 里维护**一堆**索引：正文删了而索引行还在，
- * Agent 侧就会留下永远查不到的幽灵会话。所以「删干净」= 删文件 + 改这 10 个 key。
+ * Agent 侧就会留下永远查不到的幽灵会话。所以「删干净」= 删文件 + 改这批 key。
  *
  * ## 用法约定
  *
@@ -116,7 +116,7 @@ function entryMatches(
   return false
 }
 
-// MARK: - 9 个索引 key 的清理器
+// MARK: - 8 个索引 key 的清理器
 
 /** 1. `chat.ChatSessionStore.index` → `entries` 字典里删掉命中的 sid。 */
 function updateChatSessionStoreIndex(db: DatabaseSync, sessionIds: Set<string>): void {

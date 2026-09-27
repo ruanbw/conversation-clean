@@ -21,8 +21,7 @@ import { AntigravityScanner } from './vscode/AntigravityScanner'
 /**
  * 全部 15 个扫描器的注册表。
  *
- * 移植自 Swift 版 `Core/AgentScanService.swift` 的 `AgentScanService.shared.scanners`，
- * **顺序逐个对应**：侧栏的分类顺序、扫描的并发顺序都依赖它。
+ * 顺序逐个对应侧栏的分类顺序，扫描的并发顺序也依赖它。
  *
  * 新增扫描器时只改这里一处，不要在别处再 `new` 一遍。
  */
@@ -80,8 +79,7 @@ export function validateRegistry(scanners: AgentScanner[] = allScanners()): stri
 /**
  * 并发扫描全部 Agent 并聚合。
  *
- * 移植自 Swift 版 `AgentScanService.scanAll()`（那里用 `withTaskGroup`）。
- * 这里用 `Promise.all` + 逐个 `catch`：**一个 Agent 挂掉不能拖垮整次扫描**，
+ * 用 `Promise.all` + 逐个 `catch`：**一个 Agent 挂掉不能拖垮整次扫描**，
  * 失败原因进 `issues` 带回 UI。
  */
 export async function scanAll(
@@ -106,7 +104,7 @@ export async function scanAll(
     items.push(...result.items)
     if (result.issue) issues.push(result.issue)
   }
-  // Swift 版同样是全局按 updatedAt 倒序，不按分类分组。
+  // 全局按 updatedAt 倒序，不按分类分组。
   items.sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0))
   return { items, issues }
 }
@@ -145,8 +143,8 @@ export async function deleteItems(
 
 /**
  * 清空指定分类（`null` / `all` = 全部）的会话。
- * 与 Swift 版一致：逐个扫描器串行执行，不并发 —— 多个扫描器同时删磁盘上的
- * 同一批目录会互相干扰，收益（省时间）远小于风险。
+ * 逐个扫描器串行执行，不并发 —— 多个扫描器同时删磁盘上的同一批目录会互相干扰，
+ * 收益（省时间）远小于风险。
  */
 export async function cleanAll(
   category: AgentCategory | null = null,

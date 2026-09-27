@@ -9,10 +9,10 @@ import { PiAgentScanner } from './PiAgentScanner'
 /**
  * Pi Agent 扫描器的 mock 夹具测试。
  *
- * 对照 `scripts/tests/PiAgentTests.swift` 的 `testMockPiAgentScanner`：
- * 同样的目录布局、同样断言标题 / 项目路径 / 消息数 / associatedPaths，
- * 同样验证「删掉一条 → 文件消失 + freedBytes 相等 → 空项目目录被回收」，
- * 再验证 `cleanAll()` 把扫描器看不见的目录一并清掉并重建。
+ * 钉住 Pi Agent 扫描的行为：`agent/sessions/<项目>` 三层目录布局的解析，
+ * 标题 / 项目路径 / 消息数 / associatedPaths 各字段，
+ * 「删掉一条 → 文件消失 + freedBytes 相等 → 空项目目录被回收」，
+ * 以及 `cleanAll()` 把扫描器看不见的目录一并清掉并重建。
  *
  * 夹具全部造在 `os.tmpdir()` 下，不碰真实的 `~/.pi`。
  * `CleanPrefs` 的落盘位置也一并重定向到临时 HOME，避免污染真实用户设置。
@@ -85,7 +85,7 @@ interface Fixture {
   runHistory: string
 }
 
-/** 与 Swift `testMockPiAgentScanner` 一致的夹具。 */
+/** 两个项目 + tasks / context-mode / web-search-cache 的完整夹具。 */
 function buildFixture(): Fixture {
   const projA = dir('agent', 'sessions', '--Users-mock-projectA--')
   const projB = dir('agent', 'sessions', '--Users-mock-projectB--')

@@ -1,7 +1,6 @@
 /**
  * 设计系统 token —— 全应用**唯一**允许出现颜色 / 间距 / 字号字面量的地方。
  *
- * 移植自 Swift 版 `Views/Theme.swift` 的 `enum Theme`，那份的注释原样保留：
  * 视觉基线是 `design-demos/ui-a-precision.html`（Linear 系精密密度，已锁定方向），
  * 配色取自 Linear 设计系统（主色 #5e6ad2 系）、Apple HIG（8pt 网格、圆角、13pt 正文）。
  *
@@ -43,7 +42,7 @@
   --danger: light-dark(#e5484d, #f2555a);
   --danger-soft: color-mix(in srgb, var(--danger) 12%, transparent);
   /* 警示橙：确认弹层的「量级」徽标用（微小/有限/显著三档的中间档）。
-     Swift 版直接用 systemOrange；这里给一个与靛蓝强调色同体系的橙，
+     这里给一个与靛蓝强调色同体系的橙，
      避免在深色模式下 systemOrange 偏暗发糊。 */
   --warning: light-dark(#d97706, #f0a03c);
   --warning-soft: color-mix(in srgb, var(--warning) 12%, transparent);

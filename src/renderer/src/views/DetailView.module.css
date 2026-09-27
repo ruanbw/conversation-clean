@@ -56,7 +56,7 @@
   font-weight: var(--weight-semibold);
   letter-spacing: -0.01em;
   color: var(--t1);
-  /* 最多 3 行，超出走行尾省略（Swift .lineLimit(3)） */
+  /* 最多 3 行，超出走行尾省略 */
   display: -webkit-box;
   -webkit-line-clamp: 3;
   line-clamp: 3;

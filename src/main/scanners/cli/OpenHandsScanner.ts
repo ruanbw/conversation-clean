@@ -21,11 +21,10 @@ import { parseIsoDate } from '@main/core/datetime'
 import { isInside } from '@main/core/fsutil'
 
 /**
- * OpenHands（原 Devin）扫描器。
+ * OpenHands（原 Devin）扫描器：扫 `~/.openhands`（`OPENHANDS_HOME` 可覆盖），
+ * 兼容旧版目录 `~/.open-devin`。
  *
- * 移植自 `ConversationClean/Scanners/CLIAgents/OpenHandsScanner.swift`。
- *
- * OpenHands 的会话可以有两种形态，**都在 `sessions/` 下**：
+ * 会话可以有两种形态，**都在 `sessions/` 下**：
  * · 目录（新版）：`sessions/<id>/{metadata.json, events.jsonl | events.json}`
  * · 单文件（旧版）：`sessions/<id>.json` 或 `sessions/<id>.jsonl`
  *
@@ -34,9 +33,9 @@ import { isInside } from '@main/core/fsutil'
  * 所以扫描分三步：先列 sessions，再回头把 logs / workspace 里能对上的文件挂到会话上，
  * 对不上的日志归成一条「系统日志」聚合项。
  *
- * ⚠️ 目录名包含判断（`baseName.contains(sid) || sid.contains(baseName)`）是 Swift 版的做法，
+ * ⚠️ 目录名关联用的是**双向包含判断**（`a.includes(b) || b.includes(a)`），
  * 存在把 `session-1` 匹配到 `session-10` 的可能。这里原样保留 —— 误挂的后果只是
- * 多删/少删一个日志文件，比「不照抄」引入行为差异安全。
+ * 多删/少删一个日志文件，比「收紧匹配」引入行为差异安全。
  */
 
 /** 项目改名后的新目录名：`.openhands` 为主，`.open-devin` 为兼容旧版。 */
@@ -59,7 +58,7 @@ function canonical(path: string): string {
   }
 }
 
-/** 文件 mtime；取不到回落到「现在」（Swift 的 `?? Date()`）。 */
+/** 文件 mtime；取不到回落到「现在」（宁时间不准，也不能让 item 没法排序）。 */
 function modifiedAt(path: string): Date {
   const ms = mtimeMs(path)
   return ms === undefined ? new Date() : new Date(ms)
@@ -92,7 +91,7 @@ function isSessionFile(path: string): boolean {
   return ext === '.json' || ext === '.jsonl'
 }
 
-/** 按 Swift 版的 key 顺序取第一个「非空字符串」字段并去空白。 */
+/** 按 key 列表的优先顺序取第一个「非空字符串」字段并去空白。 */
 function extractField(json: Record<string, unknown>, keys: readonly string[]): string | undefined {
   for (const key of keys) {
     const value = json[key]
@@ -134,7 +133,7 @@ function firstUserContent(event: Record<string, unknown>): string | undefined {
 
 /**
  * `events.jsonl` → `[首条用户输入, 事件数]`。
- * 只读**前 64KB** —— 标题一定在开头，而完整事件流动辄几十 MB（与 Swift 版同）。
+ * 只读**前 64KB** —— 标题一定在开头，而完整事件流动辄几十 MB。
  */
 function parseEventsJsonl(path: string): [string | undefined, number] {
   const events = readJsonLinesHead(path, 64 * 1024)
@@ -142,7 +141,7 @@ function parseEventsJsonl(path: string): [string | undefined, number] {
   let count = 0
   for (const raw of events) {
     const event = asRecord(raw)
-    if (event === null) continue // 非对象的行：Swift 也不计数
+    if (event === null) continue // 非对象的行不计入消息数
     count += 1
     if (firstUserPrompt === undefined) {
       firstUserPrompt = firstUserContent(event)
@@ -276,7 +275,7 @@ function namesMatch(a: string, b: string): boolean {
 
 export class OpenHandsScanner implements AgentScanner {
   readonly category = 'openHands' as const
-  /** 构造注入的原始路径（Swift 的 `customStorageURL`），`null` 表示用默认解析。 */
+  /** 构造注入的原始路径，`null` 表示用默认解析。 */
   private readonly custom: string | null
 
   constructor(options: ScannerOptions = {}) {
@@ -286,7 +285,7 @@ export class OpenHandsScanner implements AgentScanner {
   /**
    * `OPENHANDS_HOME` > `~/.openhands` > `~/.open-devin`。
    * 只有「两个默认目录都存在」时才二选一：装了新版但也留着旧目录时优先新版。
-   * 注意 Swift 版**只对注入路径做 realpath**，环境变量那一支是原样返回的。
+   * 注意这里**只对注入路径做 realpath**，环境变量那一支是原样返回的。
    */
   get storagePath(): string {
     if (this.custom !== null) return canonical(this.custom)
@@ -333,9 +332,11 @@ export class OpenHandsScanner implements AgentScanner {
   }
 
   /**
-   * 删除会话。与通用流程的差别只有一处：每条路径都要过
-   * `isSafeToDelete` —— 只允许删 `~/.openhands` / `~/.open-devin` 之内的东西，
-   * 防止 IPC 传进来的畸形 `associatedPaths` 伤到根目录之外。
+   * 删除会话。与通用流程 `deleteItemsWithPaths` 的差别只有一处：每条路径都要过
+   * `isSafeToDelete` —— 只允许删 `~/.openhands` / `~/.open-devin` 之内的东西。
+   * 不用通用原语的原因：这里的 `associatedPaths` 是从 `logs/` 与 `workspace/`
+   * **按名称模糊匹配**挂上去的，路径可信度低于其它扫描器直接枚举出来的路径，
+   * 多一道 `isInside` 护栏才防得住 IPC 传进来的畸形路径伤到根目录之外。
    */
   async delete(items: ConversationItem[]): Promise<number> {
     if (items.length === 0) return 0

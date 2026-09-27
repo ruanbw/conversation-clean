@@ -23,7 +23,7 @@ import { openReadOnly, openReadWrite } from '@main/core/vscdb'
 /**
  * Zed AI 扫描器。
  *
- * 移植自 `ConversationClean/Scanners/CLIAgents/ZedScanner.swift`。
+ * 数据根：`ZED_HOME` > `~/Library/Application Support/Zed`（测试可注入）。
  *
  * Zed 的数据是**三处分散**的，而且互相不知道对方的存在：
  *   1. `threads/threads.db` —— 正经的线程索引（SQLite，`threads` 表）
@@ -34,8 +34,9 @@ import { openReadOnly, openReadWrite } from '@main/core/vscdb'
  * 但 Zed 自己不会互相清理，所以扫描时**分开列**、删除时**合并回收**。
  *
  * ⚠️ `threads.db` 出现在每条 DB 线程的 `associatedPaths` 里，但它是**所有线程共用的索引文件**，
- * 删一条会话绝不能把它删掉。Swift 版用 `path != dbURL.path` 显式挡了这一刀，
- * 这里原样保留 —— 删掉它等于把剩下所有线程一起抹掉。
+ * 删一条会话绝不能把它删掉。`delete()` 因此**刻意绕开** `deleteItemsWithPaths`，
+ * 手动逐条筛掉 DB 路径 —— 走那个公共 helper 就会把 `threads.db` 一起删掉，
+ * 等于抹掉剩下所有线程的索引。
  */
 
 /** `associatedPaths` 里用来标记「这条会话在 threads.db 里有一行」的伪路径前缀。 */
@@ -43,7 +44,7 @@ const THREAD_MARKER = 'zed-thread:'
 /** `hang_traces` 被打包成单条会话时的固定 sessionId。 */
 const HANG_TRACES_ID = 'zed-hang-traces'
 
-/** `threads` 表里取用的列（Swift 版 `SELECT id, summary, updated_at, data_type, folder_paths, created_at, length(data)`）。 */
+/** `threads` 表里取用的列：`id, summary, updated_at, data_type, folder_paths, created_at, length(data)`。 */
 interface ThreadRow {
   id: unknown
   summary: unknown
@@ -59,8 +60,7 @@ function flatten(text: string, limit: number): string {
 }
 
 /**
- * `resourceValues(forKeys: .canonicalPathKey)` 的等价物。
- * 路径不存在时 Swift 会抛并落回 `standardized`（纯词法规范化，不解符号链接）。
+ * realpath 规范化；路径不存在时 realpath 会抛，此时退回**纯词法**规范化（不解符号链接）。
  */
 function canonical(path: string): string {
   try {
@@ -70,7 +70,7 @@ function canonical(path: string): string {
   }
 }
 
-/** `sqlite3_column_text` 的等价物：NULL → null，blob 按 UTF-8 解，其余转字符串。 */
+/** SQLite 文本列取值：NULL → null，blob 按 UTF-8 解，其余转字符串。 */
 function columnText(value: unknown): string | null {
   if (value === null || value === undefined) return null
   if (typeof value === 'string') return value
@@ -78,7 +78,7 @@ function columnText(value: unknown): string | null {
   return String(value)
 }
 
-/** 文件 mtime；取不到回落到「现在」（Swift 的 `?? Date()`）。 */
+/** 文件 mtime；取不到回落到「现在」（排序不至于把未知时间的会话塞到末尾）。 */
 function modifiedAt(path: string): Date {
   const ms = mtimeMs(path)
   return ms === undefined ? new Date() : new Date(ms)
@@ -356,8 +356,8 @@ export class ZedScanner implements AgentScanner {
    * 与绝大多数扫描器的「逐条删 associatedPaths」有一处**故意的不同**：
    * `threads.db` 在每条 DB 线程的 `associatedPaths` 里，但它是所有线程共用的索引文件，
    * 这里显式跳过它，只把该 sessionId 的行从库里删掉。
-   * Swift 版用 `hasPhysicalFile` 表达同一件事：只要这个会话根本没有物理文件
-   * （纯索引行），即便 associatedPaths 里没有 DB 路径也把行删掉。
+   * 判据是「这个会话根本没有物理文件」（纯索引行）：即便 `associatedPaths` 里
+   * 没有 DB 路径，只要物理文件全没删掉，就把索引行也删掉，否则界面上会留下一条空会话。
    */
   async delete(items: ConversationItem[]): Promise<number> {
     if (items.length === 0) return 0
@@ -395,7 +395,7 @@ export class ZedScanner implements AgentScanner {
   }
 
   /**
-   * 全清。Swift 版**不**走 `delete()`：索引行、目录、目录里的 json 分四步各自记账。
+   * 全清。**不**走 `delete()`：索引行、目录、目录里的 json 分四步各自记账。
    * `conversations/` 与 `hang_traces/` 整目录删掉后**重建**（Zed 正在运行时
    * 缺目录会报错），而 `threads/` 只删 json —— `threads.db` 要留在原地。
    */

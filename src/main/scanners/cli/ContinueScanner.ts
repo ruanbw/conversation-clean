@@ -22,27 +22,26 @@ import { parseIsoDate } from '@main/core/datetime'
 /**
  * Continue.dev（`~/.continue`）会话扫描器。
  *
- * 移植自 `ConversationClean/Scanners/CLIAgents/ContinueScanner.swift`，逐条对齐：
- *   · `storageURL`：`storagePath` > `CONTINUE_HOME` > `~/.continue`，再做一次 realpath 规范化
- *   · `scan()`：递归列 `sessions/` 下所有 `.json`（跳隐藏项），从 `history` 里
- *     第一条 `role == "user"`（或没有 role）的消息决定标题与摘要
- *   · `delete()`：删会话文件 + 同名目录，然后回收 `sessions/` 下的空目录
- *   · `cleanAll()`：scan + delete，再把 `index/` 与 `cache/` 整个清空（并重建空目录）
+ * 扫 `sessions/` 下所有 `.json`（跳隐藏项），每份 JSON 就是一条会话：
+ * `sessionId` / `title` / `workspaceDirectory` / `history` / `dateCreated`。
+ * 标题与摘要从 `history` 里第一条 `role == "user"`（或没有 role）的消息抽取。
+ * 删除时连同名目录一起删（`foo.json` 旁可能有 `foo/` 存附件），再回收 `sessions/` 下的空目录；
+ * `cleanAll` 额外把 `index/` 与 `cache/` 整个清空并重建空目录。
  *
- * 与 Swift 版本的已知偏差（都在下面逐处标注）：
- *   1. 递归枚举加了 12 层深度上限（Swift 的 `FileManager.enumerator` 没有上限）。
- *   2. `prefix(n)` 按 UTF-16 码元切，Swift 按字素簇切 —— 超长非 ASCII 摘要末尾可能多/少半个字。
+ * 两处刻意与其它扫描器不同：
+ *   1. 递归枚举加了 12 层深度上限 —— 用户目录里可能有符号链接环，无上限会把扫描挂死。
+ *   2. 标题 / 摘要按 UTF-16 码元切截断，超长非 ASCII 文本末尾可能多/少半个字。
  */
 
 type Dict = Record<string, unknown>
 
-/** Swift `String.components(separatedBy: .newlines)` 对应的字符集。 */
+/** 会被当作行分隔符的字符集（比 JS 的 `\n` / `\r` 多，包括 U+2028 / U+2029 等）。 */
 const NEWLINES = /[\n\r\u000b\u000c\u0085\u2028\u2029]/
 
-/** Swift 自定义 `DateFormatter` 的两种格式：`yyyy-MM-dd'T'HH:mm:ss.SSSZ` / `yyyy-MM-dd HH:mm:ss`。 */
+/** 除标准 ISO 之外，Continue 实际用过两种自定义时间格式：`yyyy-MM-dd'T'HH:mm:ss.SSSZ` / `yyyy-MM-dd HH:mm:ss`。 */
 const CUSTOM_DATE = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/
 
-/** Swift `Double(_:)` 认得的数字串。`Double("")` / `Double(" 1 ")` 是 nil，不能拿 `Number()` 顶。 */
+/** 数字串的形状：空串 / 带空格的串不算数字（`Number("")` 会得到 0），所以不能拿 `Number()` 顶。 */
 const NUMERIC = /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/
 
 export class ContinueScanner implements AgentScanner {
@@ -50,7 +49,7 @@ export class ContinueScanner implements AgentScanner {
   private readonly root: string
 
   constructor(options: ScannerOptions = {}) {
-    // Swift: `customStorageURL ?? CONTINUE_HOME ?? ~/.continue`，随后 `canonicalPath ?? standardized`。
+    // `storagePath` > `CONTINUE_HOME` > `~/.continue`，随后做一次 realpath 规范化。
     this.root = options.storagePath
       ? canonical(options.storagePath)
       : resolveStoragePath(['.continue'], { key: 'CONTINUE_HOME' })
@@ -75,7 +74,7 @@ export class ContinueScanner implements AgentScanner {
     const sessionFiles = findSessionFiles(sessionsDir)
     if (sessionFiles.length === 0) return []
 
-    // Swift 是 `withTaskGroup` 全并发；这里用有界并发，语义一致（末尾还要按 updatedAt 倒序排）。
+    // 有界并发解析；末尾还要按 updatedAt 倒序排，所以不能依赖完成顺序。
     const parsed = await mapLimit(sessionFiles, 16, (file) => this.parseSessionFile(file))
     return sortByUpdatedDesc(parsed.filter((item): item is ConversationItem => item !== null))
   }
@@ -103,7 +102,7 @@ export class ContinueScanner implements AgentScanner {
       try {
         mkdirSync(dir, { recursive: true })
       } catch {
-        // Swift 是 `try?`：重建失败不改变本次清理结果
+        // 重建失败不改变本次清理结果（目录给不回去也不能报错）
       }
     }
     return freed
@@ -183,7 +182,7 @@ export class ContinueScanner implements AgentScanner {
 function findSessionFiles(directory: string): string[] {
   const result: string[] = []
   const walk = (dir: string, depth: number): void => {
-    // Swift 的 `FileManager.enumerator` 没有深度上限；这里加一道防御（与 `fsutil` 同一口径）。
+    // 深度上限：用户目录里可能有符号链接环，无上限会把扫描挂死。
     if (depth > 12) return
     for (const entry of listDirents(dir)) {
       if (entry.name.startsWith('.')) continue
@@ -222,7 +221,7 @@ function asString(value: unknown): string | null {
   return typeof value === 'string' ? value : null
 }
 
-/** `as? Int`：Swift 只有在 JSON 数字是整数时才转换成功。 */
+/** 只接受整数：JSON 里写成 `1.5` 的数字不算消息数。 */
 function asInt(value: unknown): number | null {
   return typeof value === 'number' && Number.isInteger(value) ? value : null
 }
@@ -261,10 +260,10 @@ function firstLineOfTitle(prompt: string | null, sessionId: string): string {
 }
 
 /**
- * `dateCreated` 的四路兜底，与 Swift 逐条对应：
+ * `dateCreated` 的四路兜底：
  *   1. ISO 字符串 → `parseISO8601Date`（标准 ISO + 两种自定义格式）
  *   2. 数字字符串 → `> 1e12` 视作毫秒，否则视作秒。**没有** `> 0` 判断，
- *      所以 `"0"` 会得到 1970-01-01（Swift 的已知行为，照抄）
+ *      所以 `"0"` 会得到 1970-01-01 —— 已知的显示异常，改掉会让排序发生变化
  *   3. 数字 → `> 1e12` 毫秒 / `> 0` 秒 / 否则文件 mtime
  *   4. 其余一切（缺失、对象、数组）→ 文件 mtime，再不济 `new Date()`
  */
@@ -292,7 +291,7 @@ function resolveUpdatedDate(raw: unknown, mtime: number | undefined): Date {
   return fallback()
 }
 
-/** `ISODate.parse` 之外的两条自定义格式，JS 的 `Date` 构造器恰好都能吃下。 */
+/** 标准 ISO 之外的两条自定义格式，JS 的 `Date` 构造器恰好都能吃下。 */
 function parseContinueDate(value: string): Date | null {
   if (value.length === 0) return null
   const iso = parseIsoDate(value)

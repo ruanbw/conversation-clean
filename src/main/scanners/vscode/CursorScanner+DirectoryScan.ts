@@ -6,8 +6,6 @@ import { fileSize, listFiles, makeItem, mtimeMs, pathExists } from '@main/core/s
 /**
  * Cursor 的目录扫描兜底。
  *
- * 移植自 Swift 版 `Scanners/VSCodeFamily/CursorScanner+DirectoryScan.swift`。
- *
  * 这两条通路都是「只有文件、没有索引」的老布局，所以解析逻辑极简：
  * 文件名去掉扩展名就是 sessionId，体积与时间直接取文件本身，
  * 标题也只由 id 前 8 位拼出来 —— 没有正文可读，编也编不出标题。
@@ -16,7 +14,7 @@ import { fileSize, listFiles, makeItem, mtimeMs, pathExists } from '@main/core/s
  * 2. `~/.cursor/chats/*.json[l]`
  */
 
-/** 扩展 globalStorage 下会被扫的子目录（Swift 版的 `candidateSubdirs`）。 */
+/** 扩展 globalStorage 下会被扫的子目录。 */
 const EXTENSION_SUBDIRS = ['composer', 'chats', 'workspaces'] as const
 
 /** 这两个目录下 `.json` 与 `.jsonl` 都要。 */
@@ -81,7 +79,7 @@ function listAcceptedFiles(dirPath: string): string[] {
   return ACCEPTED_EXTENSIONS.flatMap((ext) => listFiles(dirPath, ext))
 }
 
-/** mtime；取不到（文件刚好被删）时退回现在，对齐 Swift 的 `?? Date()`。 */
+/** mtime；取不到（文件刚好被删）时退回现在。 */
 function fileDate(path: string): Date {
   const ms = mtimeMs(path)
   return ms !== undefined ? new Date(ms) : new Date()

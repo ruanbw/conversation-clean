@@ -84,7 +84,7 @@ interface SummaryRow {
   workspaceUris?: string
 }
 
-/** 造一份 `conversation_summaries.db`，表结构与 Swift 版测试里的一字不差。 */
+/** 造一份 `conversation_summaries.db`，表结构与 `conversation_summaries` 真实形态一致。 */
 function makeSummariesDb(dbPath: string, rows: SummaryRow[]): void {
   mkdirp(join(dbPath, '..'))
   const db = new DatabaseSync(dbPath)
@@ -255,7 +255,7 @@ function makeFixture(): Fixture {
 // MARK: - 用例
 
 describe('AntigravityScanner · mock 夹具', () => {
-  it('索引行 + brain 孤儿目录合并，字段按 Swift 版的兜底顺序解析', async () => {
+  it('索引行 + brain 孤儿目录合并，字段按兜底顺序解析', async () => {
     const fx = makeFixture()
     const scanner = new AntigravityScanner({ storagePath: fx.root })
 

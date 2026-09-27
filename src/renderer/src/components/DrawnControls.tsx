@@ -5,12 +5,9 @@ import { AgentGlyph } from './AgentGlyph'
 import styles from './DrawnControls.module.css'
 
 /**
- * DrawnControls —— 全应用的自绘控件库。
+ * DrawnControls —— 全应用的自绘控件库（按钮 / 图标 / 输入件 / 勾选框 / 开关等）。
  *
- * 移植自 `ConversationClean/Views/DrawnControls.swift`，外加
- * `SettingsView.swift` 里的 `DrawnSwitch`（系统 `Toggle` 的替代品）。
- *
- * 边界说明（Swift 版的原话，这里同样成立）：
+ * 边界说明（这一条决定了整个文件为什么长这样）：
  *   · 交互原语仍是原生 `<button>` / `<input>`。它们不是「系统控件外观」，
  *     只是布局与事件容器 —— 外观（高光、描边、圆角、hover、press）全在本文件
  *     自己的 CSS 里，系统外观一点不露。换成 `div onClick` 会同时失去键盘可达、
@@ -65,7 +62,7 @@ const ICON_PATHS: Record<string, string> = {
   // 收敛过来时发现语义对不上的有 7 处。当时的权宜之计是「拿最接近的现成字形顶上」，
   // 于是出现了「关于卡用 sparkle 代表 tray.2」「会话数用 docOnDoc 代表 #」这种错配 ——
   // 肉眼看得出是凑数。所以补齐真字形，而不是让错配留在代码里。
-  // 命名沿用 Swift 版的 SF Symbol 名，便于回查基准。
+  // 命名沿用系统图标集（SF Symbols）的名，便于回查基准。
   //
   // tray.2：托盘 —— 「关于」卡自身的 symbol，也是「全部会话」分类的字形。
   tray: 'M3 13h5l1.5 3h5L16 13h5M3 13l2.6-7.2A2 2 0 0 1 7.5 4.5h9a2 2 0 0 1 1.9 1.3L21 13v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5Z',
@@ -118,7 +115,7 @@ export function DrawnIcon({ name, size = 12, className, style }: DrawnIconProps)
 // MARK: - 按钮
 
 /**
- * 按钮视觉变体（对应 Swift 的 `DrawnButtonVariant`）。
+ * 按钮视觉变体。
  *
  * `flat` / `dangerQuiet` 无底色：工具栏图标与次要动作。
  * `dangerQuiet` 单独拆出来 —— 破坏性动作的图标不该和「设置」长得一样重，
@@ -137,7 +134,7 @@ export interface DrawnButtonProps {
   compact?: boolean
   /** 纯图标按钮：正方形 26px（compact 时 22px） */
   iconOnly?: boolean
-  /** 覆盖左右内边距（px）。Swift 版是 `horizontalPadding` 参数。 */
+  /** 覆盖左右内边距（px）。 */
   paddingX?: number
   /** tooltip，也是纯图标按钮的可访问名 */
   help?: string
@@ -148,8 +145,8 @@ export interface DrawnButtonProps {
 /**
  * 自绘按钮。hover 提亮、press 压暗、禁用降透明 —— 全部自己实现。
  *
- * 注意禁用态**只降 opacity 不换色**：Swift 版踩过的坑是
- * `.tint(.red) + .disabled` 在 macOS 上会渲染成粉红，禁用看着像可点。
+ * 注意禁用态**只降 opacity 不换色**：破坏性按钮（红）一旦在禁用时还换底色，
+ * 会读成「另一个可点的动作」，而不是「现在按不了」。
  */
 export function DrawnButton({
   variant = 'flat',
@@ -238,8 +235,8 @@ function CheckboxMark({ checked, mixed }: { checked: boolean; mixed: boolean }) 
  * 纯展示的勾选框（不接管事件）。
  *
  * 侧栏的「仅显示有数据」那一行整行可点，行内再嵌一个 `<button>` 是非法嵌套，
- * 浏览器会把 DOM 结构拆坏。所以行里画这个 —— 与 Swift 版在 Button 的 label 里
- * 放一个 `Image(systemName: "checkmark.square.fill")` 是同一件事。
+ * 浏览器会把 DOM 结构拆坏。所以行里画这个 —— 它只负责「看起来被勾上了」，
+ * 点哪都是点整行。
  */
 export function DrawnCheckboxBox({
   checked,
@@ -549,7 +546,7 @@ export interface DrawnSwitchProps {
  * iOS 式开关。系统 `Toggle` 的轨道渐变 + 高光在深色模式下是另一种蓝，
  * 和侧栏选中态摆在一起颜色对不上，这里整块重画。
  *
- * Swift 版是「纯绘制视图」——开关画在整行 Button 里，行才是可点单元。
+ * 开关是「纯绘制视图」—— 轨道与旋钮画在整行 Button 里，行才是可点单元。
  * 这里做成独立可点单元（设置页按行点击时用 `stopPropagation` 保持一致）。
  */
 export function DrawnSwitch({

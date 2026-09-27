@@ -22,9 +22,7 @@ import {
 /**
  * Cline 扫描器（Cline 与 Roo Code 的共同实现）。
  *
- * 源文件：`ConversationClean/Scanners/CLIAgents/ClineScanner.swift`。
- * `RooCodeScanner.swift` 在 Swift 里就是本类的子类，只覆写分类 / 环境变量 / 默认目录，
- * 这里同样用继承表达（见 `RooCodeScanner.ts`）。
+ * `RooCodeScanner` 继承本类，只覆写分类 / 环境变量 / 默认目录，扫描逻辑不重写。
  *
  * VS Code 扩展的数据布局（`CLINE_HOME` 可覆盖）：
  * ```
@@ -38,7 +36,7 @@ import {
  * ```
  */
 
-/** Swift `withTaskGroup` 的默认并发度（CPU 核心数）。 */
+/** 解析任务的并发度：取 CPU 核心数。 */
 const PARSE_CONCURRENCY = Math.max(1, cpus().length)
 
 interface TaskHistoryEntry {
@@ -50,7 +48,7 @@ interface TaskHistoryEntry {
 }
 
 export class ClineScanner implements AgentScanner {
-  /** `.cline` / `.rooCode`：`RooCodeScanner` 覆写它（Swift 版是 `override var category`）。 */
+  /** `.cline` / `.rooCode`：`RooCodeScanner` 覆写它。 */
   readonly category: 'cline' | 'rooCode' = 'cline'
 
   private readonly customStoragePath: string | undefined
@@ -170,7 +168,7 @@ export class ClineScanner implements AgentScanner {
     if (parsed === null) return map
 
     for (const entry of parsed) {
-      // Swift: `id` 可能是字符串，也可能是数字（`NSNumber.stringValue`）。
+      // `id` 可能是字符串，也可能是数字，两种都认（数字用 `String(...)` 归一）。
       const id = asIdString(entry.id)
       if (id === undefined) continue
       map.set(id, {
@@ -199,7 +197,7 @@ export class ClineScanner implements AgentScanner {
       return !excludingTaskIds.has(id)
     })
 
-    // Swift: `JSONSerialization(.prettyPrinted, .sortedKeys)`
+    // 键排序后缩进落盘，diff 友好
     writeTextAtomic(historyPath, stringifySortedJson(retained))
   }
 
@@ -338,7 +336,7 @@ export class ClineScanner implements AgentScanner {
 
     let updatedAt: Date
     if (latestTimestampMs !== undefined && latestTimestampMs > 0) {
-      // `ts` 已经是 epoch 毫秒（Swift 里是 `Date(timeIntervalSince1970: tsMs / 1000.0)`）
+      // `ts` 已经是 epoch 毫秒
       updatedAt = new Date(latestTimestampMs)
     } else {
       const mtime = mtimeMs(taskDirPath)
@@ -376,10 +374,10 @@ export class ClineScanner implements AgentScanner {
 // MARK: - 文本工具
 
 /**
- * 从正文里抠出工作目录。两条正则，与 Swift 版逐字一致：
+ * 从正文里抠出工作目录。两条正则：
  * 1. `Current Working Directory (/path/to/project) Files`
  * 2. `"cwd": "/path/to/project"`
- * 只扫前 10000 字符（Swift 的 `min(nsText.length, 10000)`）。
+ * 只扫前 10000 字符：工作目录声明总在消息开头，扫全量是纯浪费。
  */
 const CWD_PATTERNS = [/Current Working Directory \(([^)]+)\)/, /"cwd"\s*:\s*"([^"]+)"/]
 
@@ -397,7 +395,7 @@ function extractCwdFromText(text: string): string | null {
 
 type JsonRecord = Record<string, unknown>
 
-/** Swift 的 `canonicalPathKey`：`/var` → `/private/var`；解析失败就原样返回。 */
+/** 规范化符号链接别名（`/var` → `/private/var`）；解析失败就原样返回。 */
 function canonicalPath(path: string): string {
   try {
     return realpathSync(path)
@@ -411,8 +409,9 @@ function isRecord(value: unknown): value is JsonRecord {
 }
 
 /**
- * Swift `as? [[String: Any]]` 的等价物：数组里**有一个**元素不是字典，
- * 整份文件的类型转换就失败（整块逻辑跳过），所以这里整份返回 `null`。
+ * 数组里**有一个**元素不是字典就整份返回 `null`。
+ * Agent 正在写文件时可能读到半截结构，宁可整个任务放弃解析，
+ * 也不能把它当成空数组（那会让该任务在侧栏里凭空消失）。
  */
 function asRecordArray(value: unknown): JsonRecord[] | null {
   if (!Array.isArray(value)) return null
@@ -426,7 +425,7 @@ function asStringArray(value: unknown): string[] {
   return value as string[]
 }
 
-/** `id` 字段：字符串原样，数字转字符串（Swift 的 `NSNumber.stringValue`），其它一律跳过。 */
+/** `id` 字段：字符串原样，数字转字符串，其它一律跳过。 */
 function asIdString(value: unknown): string | undefined {
   if (typeof value === 'string') return value
   if (typeof value === 'number') return String(value)
@@ -444,11 +443,11 @@ function recreateDirectory(path: string): void {
   try {
     mkdirSync(path, { recursive: true })
   } catch {
-    /* Swift 是 `try?`，失败不影响后续步骤 */
+    /* 建目录失败不影响后续步骤（目录给不回去也不能报错） */
   }
 }
 
-/** Swift `Data.write(to:options:.atomic)`：先写临时文件再 rename。 */
+/** 原子写：先写临时文件再 rename（避免写一半被读到 / 截断原文件）。 */
 function writeTextAtomic(path: string, content: string): void {
   const tmp = `${path}.tmp`
   try {
@@ -463,7 +462,7 @@ function writeTextAtomic(path: string, content: string): void {
   }
 }
 
-/** `JSONSerialization.data(options: [.prettyPrinted, .sortedKeys])` 的等价物。 */
+/** 键排序后缩进落盘（`.prettyPrinted` + `.sortedKeys` 口径），diff 友好。 */
 function stringifySortedJson(value: unknown): string {
   return JSON.stringify(
     value,

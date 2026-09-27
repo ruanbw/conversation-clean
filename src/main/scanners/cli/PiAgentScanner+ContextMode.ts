@@ -7,7 +7,7 @@ import { listFiles, removeIfExists } from '@main/core/scanner'
 import { openReadWrite } from '@main/core/vscdb'
 
 /**
- * Pi Agent 的 context-mode 双层索引同步 —— 移植自 `PiAgentScanner+ContextMode.swift`。
+ * Pi Agent 的 context-mode 双层索引同步。
  *
  * ## 为什么删了会话文件还不够
  *
@@ -29,13 +29,13 @@ import { openReadWrite } from '@main/core/vscdb'
  * ## 为什么表名 / 列名都是「探测」出来的
  *
  * context-mode 迭代很快，同一个 `sessions/` 目录下可能同时存在新旧两种 schema，
- * 还有 fts5 自动生成的影子表。Swift 版因此不写死表清单，而是遍历 `sqlite_master`，
- * 对每张表用 `PRAGMA table_info` 找出归一化后等于 `sessionid` 的列再删。这里照抄。
+ * 还有 fts5 自动生成的影子表。因此不写死表清单，而是遍历 `sqlite_master`，
+ * 对每张表用 `PRAGMA table_info` 找出归一化后等于 `sessionid` 的列再删。
  */
 
 /** `sessions/*.db` 必须是正规索引库才允许「清空即删文件」。 */
 const SESSION_META_TABLE = 'session_meta'
-/** 收集子代理嵌套会话 `.jsonl` 的上限，与 Swift 的 `limit: Int = 128` 一致。 */
+/** 收集子代理嵌套会话 `.jsonl` 的上限：子代理可嵌套出大量会话，攒够 128 条就停。 */
 const JSONL_ENUMERATE_LIMIT = 128
 
 /**
@@ -49,8 +49,8 @@ export function contextModeSessionIdFor(sessionFilePath: string): string {
 /**
  * 递归收集目录下所有 `.jsonl`（子代理嵌套会话：`<sessionDir>/<uuid>/run-0/session.jsonl`）。
  *
- * 隐藏项跳过（对齐 Swift 的 `.skipsHiddenFiles`），攒够 `limit` 个就停。
- * 扩展名比较**大小写敏感**，与 Swift 的 `pathExtension == "jsonl"` 一致。
+ * 隐藏项跳过，攒够 `limit` 个就停。
+ * 扩展名比较**大小写敏感**：`x.JSONL` 不算数。
  */
 export function jsonlPathsUnder(
   directory: string,
@@ -135,7 +135,7 @@ function purgeContextModeDatabase(
 
   let emptiedDatabase = false
   try {
-    // Swift 的 `sqlite3_busy_timeout(db, 250)`：Pi 进程可能正持有这个库，等 250ms 再报错。
+    // 250ms 忙等：Pi 进程可能正持有这个库，不等一下就直接撞 SQLITE_BUSY。
     db.exec('PRAGMA busy_timeout = 250;')
     const tables = listTables(db)
     const deletedRows = tables.length > 0 ? deleteSessionRows(db, tables, sessionIds) : 0
@@ -194,7 +194,7 @@ function deleteSessionRows(
   tables: string[],
   sessionIds: ReadonlySet<string>
 ): number {
-  // 排序只为让 SQL 文本可复现（参数化绑定与顺序无关），Swift 那边也是 `sessionIds.sorted()`。
+  // 排序只为让 SQL 文本可复现（参数化绑定与顺序无关）。
   const orderedIds = [...sessionIds].sort()
   if (orderedIds.length === 0) return 0
   const placeholders = orderedIds.map(() => '?').join(',')
@@ -249,7 +249,7 @@ function purgeContextModeStatsFiles(
       } catch {
         continue
       }
-      // 命中判据与 Swift 一致：内容里出现任一 session_id **或**任一会话文件绝对路径。
+      // 命中判据：内容里出现任一 session_id **或**任一会话文件绝对路径。
       if (containsAny(text, sessionIds) || containsAny(text, sessionFilePaths)) {
         removeIfExists(entry)
       }
@@ -263,7 +263,7 @@ function purgeContextModeStatsFiles(
  * 列出目录下的 `.db` 文件。
  *
  * 不用 `listFiles(dir, '.db')`：那个原语把扩展名转成小写再比，
- * 而 Swift 的 `pathExtension == "db"` 是大小写敏感的 —— 这里保持一致。
+ * 这里刻意**大小写敏感**地比 `extname`。
  */
 function listDbFiles(dir: string): string[] {
   return listFiles(dir).filter((path) => extname(path) === '.db')

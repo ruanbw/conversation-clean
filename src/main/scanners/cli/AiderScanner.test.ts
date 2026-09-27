@@ -17,9 +17,9 @@ import { CleanPrefs } from '@main/core/scanner'
 import { AiderScanner } from './AiderScanner'
 
 /**
- * 移植自 `scripts/tests/AiderTests.swift` 的 `testMockAiderScanner`
- * 与 `testRealAiderScannerReadOnly`，并补上 Swift 测试没覆盖到的分支
- * （全局会话、深度/跳过目录、`.aider.conf.yml` 护栏、两个开关的正反两面）。
+ * Aider 扫描器用例：storagePath 的解析、scan 的字段抽取、delete 的护栏规则、
+ * cleanAll 的清理范围，以及末尾的只读实机用例。
+ * 其中还盖住了全局会话、深度/跳过目录、`.aider.conf.yml` 护栏与两个开关的正反两面。
  *
  * `HOME` 指向一个沙箱目录：Aider 的全局扫描与 `cleanAll` 都会去动 home 下的
  * `.aider.*` 文件，测试绝不能碰用户真实的 home，也绝不能把偏好写进
@@ -95,7 +95,7 @@ beforeEach(() => {
   CleanPrefs.patch({ ...DEFAULT_PREFS })
 })
 
-/** Swift `testMockAiderScanner` 的夹具：`projects/my-web-app` 里的 Aider 历史 + 配置文件 + 源码。 */
+/** 夹具：`projects/my-web-app` 里的 Aider 历史 + 配置文件 + 源码。 */
 interface MockRoot {
   root: string
   projDir: string
@@ -163,7 +163,7 @@ describe('AiderScanner.scan 项目级', () => {
     const items = await scanner.scan()
     expect(snapshotTree(root)).toEqual(before)
 
-    // 注入的存储目录本身有内容，所以 Swift 还会额外产出一条「全局」会话
+    // 注入的存储目录本身有内容，所以还会额外产出一条「全局」会话
     expect(items.map((item) => item.sessionId)).toContain('aider-global')
 
     const item = items.find((entry) => entry.projectPath === projDir)
@@ -321,18 +321,18 @@ describe('AiderScanner.delete', () => {
       associatedPaths: [chat, conf, source]
     }
     const freed = await scanner.delete([poisoned])
-    // 记账仍按 `sizeInBytes`（Swift 也是先记账再逐条过滤）
+    // 记账仍按 `sizeInBytes`（先记账再逐条过滤）
     expect(freed).toBe(poisoned.sizeInBytes)
     expect(existsSync(chat)).toBe(false)
     expect(existsSync(conf)).toBe(true)
     expect(existsSync(source)).toBe(true)
   })
 
-  it('已知怪癖：存储目录之内的任意文件名都算可删（Swift 的前缀比较，照抄）', async () => {
+  it('已知怪癖：存储目录之内的任意文件名都算可删（前缀比较而非路径分量比较）', async () => {
     const { root, projDir } = buildMockRoot()
-    // 项目目录就在注入的存储目录之下，所以 Swift 的「Inside ~/.aider 就安全」规则
+    // 项目目录就在注入的存储目录之下，所以「在存储目录之内就安全」这条规则
     // 会放行这里的普通源码文件 —— 真实运行时这些路径不会进 associatedPaths，
-    // 但这个规则本身的宽松性要照抄。
+    // 但这个规则本身的宽松性就是要钉住的。
     const notes = write(join(projDir, 'NOTES.md'), 'notes\n')
     const scanner = new AiderScanner({ storagePath: root })
     const item = (await scanner.scan()).find((entry) => entry.projectPath === projDir)!

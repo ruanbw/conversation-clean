@@ -5,10 +5,7 @@ import { DEFAULT_PREFS, type Prefs } from '@shared/types'
 import { sizeOfPath } from './fsutil'
 
 /**
- * 设置面板 4 个开关的**唯一**存储实现。
- *
- * 移植自 Swift 版 `CleanPrefs`（原实现读 `UserDefaults`；这里读 userData 下的 JSON）。
- * 键名与 Swift 版逐字一致，便于两版对照。
+ * 设置面板 4 个开关的**唯一**存储实现：userData 目录下一个 `preferences.json`。
  *
  * 两条约定：
  * 1. 每次读都走 `read()` 拿当前值并缓存，**不缓存成只读属性** ——
@@ -30,11 +27,11 @@ let cachePath: string | null = null
  *
  * 优先级：`CONVERSATION_CLEAN_DATA_DIR` 环境变量 > Electron 的 userData > `~/.conversation-clean`。
  *
- * 那个环境变量有两个用途：
+ * 这个环境变量有两个用途：
  * 1. **测试**：不设它的话，vitest 里 `app` 是 `undefined`，会走到最后一条兜底路径，
  *    把测试期间的偏好读写写进用户真实的 `~/.conversation-clean/preferences.json` ——
  *    测试污染用户配置，而且不同用例会互相干扰。测试在 `beforeAll` 里设一次即可，
- *    不需要 `vi.mock('electron')`（那会连带把整个模块的导入链都 mock 掉）。
+ *    不用 `vi.mock('electron')`（那会连带把整个模块的导入链都 mock 掉）。
  * 2. **便携安装**：绿色版 / U 盘版可以把配置放在自己旁边。
  */
 function resolveDataDir(): string {

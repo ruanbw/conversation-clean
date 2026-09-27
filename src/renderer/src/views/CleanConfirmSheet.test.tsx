@@ -8,7 +8,7 @@ import { DEFAULT_PREFS } from '@shared/types'
 import styles from './CleanConfirmSheet.module.css'
 
 /**
- * 清理前的二次确认弹层（对应 Swift `Views/CleanConfirmSheet.swift`）。
+ * 清理前的二次确认弹层。
  *
  * store 是模块级单例，所以每个用例都 `vi.resetModules()` 后**动态**重新 import
  * 组件与 store —— 拿到一对全新的、配对的实例，测试之间不会串状态。

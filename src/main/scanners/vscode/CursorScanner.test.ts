@@ -269,7 +269,7 @@ describe('CursorScanner', () => {
       expect([...times].sort((a, b) => b - a)).toEqual(times)
     })
 
-    it('同一个 id 同时存在于 jsonl 与索引时不合并（照抄 Swift 行为，界面上就是两条）', async () => {
+    it('同一个 id 同时存在于 jsonl 与索引时不合并（界面上就是两条）', async () => {
       const root = makeRoot()
       const wsDir = join(root, 'User', 'workspaceStorage', 'ws1')
       writeJsonlSession(join(wsDir, 'chatSessions', 'dupe.jsonl'), 'dupe', 1789000000000, 'from file')
@@ -472,7 +472,7 @@ describe('CursorScanner', () => {
     })
   })
 
-  describe('clearStateDatabase（Swift 版同样未被调用的旁路）', () => {
+  describe('clearStateDatabase（未被任何地方调用的旁路）', () => {
     it('只清两个聊天索引 key，与聊天无关的 key 与库文件都保留', () => {
       const root = makeRoot()
       const stateDb = join(root, 'User', 'workspaceStorage', 'ws1', 'state.vscdb')

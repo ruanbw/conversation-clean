@@ -1,15 +1,12 @@
 /**
  * `core/vscdb.ts` 的索引同步测试。
  *
- * 逐条移植自 Swift 版 `scripts/tests/VSCDBIndexSyncTests.swift`
- * （`testMockVSCDBIndexSync`）。Swift 版是**通过 `VSCodeChatScanner` 驱动**的，
- * 断言对象（8 个索引 key + `session-store.db` 两张表）一模一样；
- * 这里把驱动层换成直接调 `VSCDBHelper` 的 TS 对应物 ——
- * `VSCodeChatScanner` 属于 15 个扫描器之一，由对应子代理单独测试，
- * 本文件只锁 `vscdb.ts` 自己的行为。
+ * 覆盖 `state.vscdb` 的 8 个索引 key + Copilot `session-store.db` 的关系表：
+ * 删掉指定 sessionId 后逐个 key 断言，且未命中的会话必须完好。
  *
- * mock 库用 `node:sqlite` 的 `DatabaseSync` 现场造（Swift 版用 `sqlite3` C API），
- * 建表 / 插入的 SQL 与 Swift 版逐字一致。
+ * mock 库用 `node:sqlite` 的 `DatabaseSync` 现场造
+ * （建库 / 插入的 SQL 在 `src/test-support/sqliteFixtures.ts`）。
+ * VS Code 系扫描器本身由各自的文件测试覆盖，本文件只锁 `vscdb.ts` 的行为。
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -51,7 +48,7 @@ let root: string
 let stateDb: string
 let sessionStoreDb: string
 
-/** 8 个索引 key 的初始载荷，逐字复刻 Swift 版建库段落。 */
+/** 8 个索引 key 的初始载荷。 */
 function indexFixture(): Record<string, unknown> {
   const enc1 = b64(SID1)
   const enc2 = b64(SID2)
@@ -107,7 +104,6 @@ afterEach(() => {
 })
 
 // ---------------------------------------------------------------------------
-// Swift: "Executing Scan and Deletion with VSCDB Sync Verification"
 // 删掉 sid1 之后逐个 key 断言，sid2 必须完好。
 // ---------------------------------------------------------------------------
 
@@ -175,7 +171,7 @@ describe('removeChatSessions —— 8 个索引 key 的删除语义', () => {
     )?.entries).toEqual({})
     // 数组删空 → 整条 key 删掉（不留空数组幽灵）
     expect(readStateRaw(stateDb, 'interactive.sessions')).toBeNull()
-    // 两个 agentSessions 缓存都删空 → key 消失（**与 Swift 版不同，见报告**）
+    // 两个 agentSessions 缓存都删空 → key 消失（不留空数组幽灵）
     expect(readStateRaw(stateDb, 'agentSessions.state.cache')).toBeNull()
     expect(readStateRaw(stateDb, 'agentSessions.model.cache')).toBeNull()
     expect(readStateRaw(stateDb, 'composer.composerData')).toBeNull()
@@ -368,7 +364,7 @@ describe('clearAllChatSessions', () => {
     expect(stateKeys(stateDb)).toEqual([])
   })
 
-  it('只清白名单里的索引 key，settings.json 这类无关键保留（与 Swift 同口径）', () => {
+  it('只清白名单里的索引 key，settings.json 这类无关键保留', () => {
     const db = join(root, 'unrelated.vscdb')
     createStateVscdb(db, {
       'workbench.panel.chat': { activeSession: SID1 },

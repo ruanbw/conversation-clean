@@ -5,8 +5,16 @@ import { registerIpcHandlers } from './ipc'
 /**
  * Electron 主进程入口。
  *
- * 对应 Swift 版 `ConversationClean/ConversationCleanApp.swift` + `ContentView.swift` 的窗口配置：
- * 隐藏标题栏、红绿灯浮在自有背景上、窗口底色取设计系统的 `--bg`。
+ * 窗口配置上的四个决定：
+ * · `titleBarStyle: 'hiddenInset'` —— 顶部那条标题栏要自绘（品牌区 + 搜索框），
+ *   系统标题栏会和它双层重叠，所以整条藏掉，但保留 inset 的拖拽区。
+ * · `trafficLightPosition` —— 红黄绿浮在自绘背景上，必须从默认位置推下来
+ *   给品牌区让位，否则会压住自绘内容。
+ * · `sandbox: false` —— 必需项：electron-vite 在 `type: module` 下把 preload 编译成
+ *   ESM（`index.mjs`），ESM preload 在 sandbox 下拿不到 `require`，加载会直接失败。
+ *   代价是放宽了一点隔离，所以 `contextIsolation` / `nodeIntegration` 不能再退。
+ * · 外链一律走系统浏览器 —— 窗口永远不导航到外部地址（`setWindowOpenHandler`
+ *   拒绝 + `shell.openExternal`）。
  */
 
 /** 与 `src/renderer/src/styles/tokens.css` 的 `--bg` 保持一致。 */
@@ -23,14 +31,13 @@ function createWindow(): BrowserWindow {
     minHeight: 560,
     show: false,
     backgroundColor: dark ? WINDOW_BG_DARK : WINDOW_BG,
-    // 隐藏标题栏：红黄绿浮在自有背景上，与 Swift 版 hiddenTitleBar + 手搓三栏一致。
+    // 隐藏标题栏：红黄绿浮在自有背景上，顶部是自绘的。
     // trafficLightPosition 把三个按钮推到 78pt 处，给自绘品牌区让位。
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 16, y: 18 },
     // 侧栏要显示真实 app 图标与文件目录，禁止任何外链跳转。
     webPreferences: {
-      // electron-vite 在 `type: module` 下把 preload 编译成 ESM（`index.mjs`），
-      // ESM preload 需要 `sandbox: false` 才能工作 —— 两者必须同时改。
+      // 与文件头同款理由：ESM preload 需要 `sandbox: false`，两者必须同时改。
       preload: join(__dirname, '../preload/index.mjs'),
       contextIsolation: true,
       nodeIntegration: false,

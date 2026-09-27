@@ -7,13 +7,13 @@ import { sizeOfPath } from '@main/core/scanner'
 import { ClineScanner } from './ClineScanner'
 
 /**
- * ClineScanner 的移植验收用例。
+ * ClineScanner 验收用例：storagePath 的解析、scan 的字段抽取、delete 的索引同步、
+ * cleanAll 的清理范围。
  *
- * 验收标准来自 `scripts/tests/ClineTests.swift`（MockClineScan）：
- * 两个任务（一个带 checkpoints / task_metadata / api_conversation_history，一个只带 ui_messages）、
- * 标题与 cwd 的四层兜底、messageCount、associatedPaths（任务目录 + 快照目录）、体积求和，
- * 删除后 taskHistory.json 同步、重扫只剩一条、cleanAll 后清空；
- * 另外补上 Swift 用例没覆盖但端口必须保证的行为：两个开关的相反分支、cwd 正则、api 兜底。
+ * 盖住的行为：两个任务（一个带 checkpoints / task_metadata / api_conversation_history，
+ * 一个只带 ui_messages）、标题与 cwd 的四层兜底、messageCount、
+ * associatedPaths（任务目录 + 快照目录）、体积求和，删除后 taskHistory.json 同步、
+ * 重扫只剩一条、cleanAll 后清空；另外还钉住了两个开关的相反分支、cwd 正则与 api 兜底。
  *
  * 本文件自包含：`$HOME` 指向一次性临时目录，夹具全部在 `os.tmpdir()` 下现场造。
  */
@@ -55,7 +55,7 @@ function readText(path: string): string {
 const T1 = 'cline-task-001'
 const T2 = 'cline-task-002'
 
-/** 复刻 `ClineTests.swift` 的 Cline 夹具。 */
+/** 两个任务的 Cline 夹具。 */
 function buildClineFixture(root: string): void {
   const tasksDir = join(root, 'tasks')
   const checkpointsDir = join(root, 'checkpoints')
@@ -189,7 +189,7 @@ describe('ClineScanner · storagePath / isInstalled', () => {
   })
 })
 
-describe('ClineScanner · scan（对应 ClineTests.swift 的 MockClineScan）', () => {
+describe('ClineScanner · scan', () => {
   it('解析任务目录，标题 / cwd / 体积与 associatedPaths 对齐', async () => {
     const root = makeTempDir('cc-cline-scan-')
     buildClineFixture(root)

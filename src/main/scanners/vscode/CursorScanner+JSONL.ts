@@ -8,13 +8,10 @@ import type { CursorScanTarget } from './CursorScanner'
 /**
  * Cursor 的 `chatSessions/*.jsonl` 解析。
  *
- * 移植自 Swift 版 `Scanners/VSCodeFamily/CursorScanner+JSONL.swift` 的
- * `parseJsonlSession(target:)`。
- *
  * 会话文件是**增量日志**：`kind:0` 全量快照、`kind:1` 属性更新、`kind:2` 数组追加。
  * 任何一行解析失败都跳过 —— Agent 正在写文件时半截行是常态。
  *
- * ⚠️ 与 `VSCodeChatScanner` 的两处刻意的**不一致**（照抄 Swift，不是笔误）：
+ * ⚠️ 与 `VSCodeChatScanner` 的两处刻意的**不一致**（不是笔误）：
  * 1. 兜底标题是「Cursor 对话」而不是「GitHub Copilot 对话」；
  * 2. 少了「顶层 `requests` 数组」那一条兜底分支，所以非增量格式的老会话
  *    标题会一律落到兜底文案。
@@ -24,8 +21,8 @@ import type { CursorScanTarget } from './CursorScanner'
 const FALLBACK_TITLE = 'Cursor 对话'
 
 /**
- * 解析一条会话文件，失败（文件已消失 / 读不了）返回 `null`。
- * 与 Swift 的 `-> ConversationItem?` 一致：单条坏会话不该让整个分类消失。
+ * 解析一条会话文件，失败（文件已消失 / 读不了）返回 `null`：
+ * 单条坏会话不该让整个分类消失。
  */
 export function parseJsonlSession(target: CursorScanTarget): ConversationItem | null {
   if (!pathExists(target.filePath)) return null
@@ -181,14 +178,13 @@ function extractPromptText(req: Record<string, unknown>): string | null {
   return null
 }
 
-/** `components(separatedBy: .newlines).first` —— 取第一行。 */
+/** 取第一行。行分隔符含 `\n` `\r` `\r\n` 以及 U+0085 / U+2028 / U+2029。 */
 function firstLine(text: string): string {
-  // .newlines = \n \r \r\n 以及 U+0085 / U+2028 / U+2029
   const index = text.search(/\r\n|[\n\r\u0085\u2028\u2029]/)
   return index === -1 ? text : text.slice(0, index)
 }
 
-/** `trimmingCharacters(in: .whitespaces)` —— 只去空格/制表符，保留换行。 */
+/** 只去首尾的空格/制表符，保留换行。 */
 function trimSpaces(text: string): string {
   return text.replace(/^[^\S\r\n]+|[^\S\r\n]+$/g, '')
 }
@@ -211,7 +207,7 @@ function asNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
-/** Swift 的 `as? [[String: Any]]`：只要有一个元素不是字典，整个转换就失败。 */
+/** 收窄语义：只要有一个元素不是字典，整个转换就失败（不会跳过坏元素）。 */
 function asRecordArray(value: unknown): Record<string, unknown>[] | null {
   if (!Array.isArray(value)) return null
   const out: Record<string, unknown>[] = []

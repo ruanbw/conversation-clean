@@ -7,12 +7,12 @@ import { sizeOfPath } from '@main/core/scanner'
 import { CodexScanner } from './CodexScanner'
 
 /**
- * CodexScanner 的移植验收用例。
+ * CodexScanner 验收用例：storagePath 的解析、scan 的字段抽取、delete 的索引同步、
+ * cleanAll 的清理范围。
  *
- * 验收标准来自 `scripts/tests/CodexTests.swift`（MockCodexScan）：
- * 4 个会话（sessions 三层日期目录 + archived_sessions）、`session_index.jsonl` 索引匹配、
- * 标题 / 项目路径 / 体积 / associatedPaths / updatedAt 倒序，逐条对上；
- * 另外补上 Swift 用例没覆盖但端口必须保证的行为：删除后的索引同步与两个开关的相反分支。
+ * 盖住的行为：4 个会话（sessions 三层日期目录 + archived_sessions）、
+ * `session_index.jsonl` 索引匹配、标题 / 项目路径 / 体积 / associatedPaths / updatedAt 倒序；
+ * 另外还钉住了删除后的索引同步与两个开关的相反分支。
  *
  * 本文件自包含：`$HOME` 指向一次性临时目录（prefs 与 `~/.codex-global-state.json`
  * 都写到那里），夹具全部在 `os.tmpdir()` 下现场造，不依赖任何其它测试文件。
@@ -56,13 +56,13 @@ function readJsonFile(path: string): Record<string, unknown> {
   return JSON.parse(readText(path)) as Record<string, unknown>
 }
 
-// Swift 夹具的四个会话
+// 夹具里的四个会话
 const SID1 = 'session-codex-001'
 const SID2 = 'session-codex-002'
 const SID3 = 'session-codex-003'
 const SID4 = 'session-codex-archived'
 
-/** 复刻 `CodexTests.swift` 的 `~/.codex` 夹具。 */
+/** 搭出完整的 `~/.codex` 夹具。 */
 function buildCodexFixture(root: string): void {
   const day1 = join(root, 'sessions', '2026', '09', '20')
   const day2 = join(root, 'sessions', '2026', '09', '25')
@@ -98,7 +98,7 @@ function buildCodexFixture(root: string): void {
     '{"role":"user","content":"Initial project scaffolding"}\n'
   )
 
-  // 隐藏文件与非 .jsonl 文件都不该被枚举到（Swift 的 `.skipsHiddenFiles` + 扩展名守卫）
+  // 隐藏文件与非 .jsonl 文件都不该被枚举到（隐藏文件守卫 + 扩展名守卫）
   const decoyDay = join(root, 'sessions', '2026', '09', '21')
   makeDir(decoyDay)
   writeFixture(join(decoyDay, '.hidden.jsonl'), '{"role":"user","content":"hidden"}\n')
@@ -164,7 +164,7 @@ describe('CodexScanner · storagePath / isInstalled', () => {
   })
 })
 
-describe('CodexScanner · scan（对应 CodexTests.swift 的 MockCodexScan）', () => {
+describe('CodexScanner · scan', () => {
   it('枚举 sessions 与 archived_sessions，索引命中标题 / cwd / 时间', async () => {
     const root = makeTempDir('cc-codex-scan-')
     buildCodexFixture(root)
@@ -378,7 +378,7 @@ describe('CodexScanner · cleanAll', () => {
     expect(existsSync(join(root, 'cache'))).toBe(false)
     expect(existsSync(join(root, 'tmp'))).toBe(false)
     expect(existsSync(join(root, 'sessions', '2026', '09', '20'))).toBe(false)
-    // 根目录本身不进回收列表（Swift 的 cleanEmptyDirectories 只处理子目录）
+    // 根目录本身不进回收列表（cleanEmptyDirectories 只处理子目录）
     expect(existsSync(join(root, 'archived_sessions', '2026', '08', '15'))).toBe(false)
 
     const state = readJsonFile(join(FAKE_HOME, '.codex-global-state.json'))

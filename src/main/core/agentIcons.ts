@@ -7,10 +7,7 @@ import { CATEGORY_APP_BUNDLES, SCANNER_CATEGORIES, type AgentCategory } from '@s
 /**
  * Agent 图标解析：优先用**产品自己的 app 图标**，找不到才回退自绘字形。
  *
- * 移植自 Swift 版 `Views/AgentIconView.swift` 的 `enum AgentIcon`（那里用
- * `NSWorkspace.shared.icon(forFile:)`）。Electron 侧的等价物是
- * `nativeImage.createFromPath()` + `toDataURL()` —— 直接把图标编码成 dataURL 交给渲染进程，
- * 渲染进程那边就完全不需要碰文件系统。
+ * 图标由主进程读盘后编码成 dataURL 交给渲染进程，渲染进程那边完全不需要碰文件系统。
  *
  * 纯 CLI（Codex / Aider / Pi Agent）与 VS Code 扩展（Cline / Roo / Continue）
  * 本身没有独立 app 图标，这类返回 `null`，由 UI 回退到 1.6px 线稿字形。

@@ -1,15 +1,22 @@
 /**
  * `core/datetime.ts` 的测试。
  *
- * 移植自 Swift 版 `ConversationClean/Core/DateParsing.swift`：
- * 那里是一个共享的 `ISO8601DateFormatter`（两种配置：带/不带小数秒），
- * 对应这里 `FRACTIONAL` / `PLAIN` 两条正则 + `fromEpoch`。
+ * 这里钉的是**形状判断的边界**，不是“某个时间戳算对不对”（那由 `Date` 自己负责）。
+ * `parseIsoDate` 先用两条正则（`FRACTIONAL` / `PLAIN`）判形状，判不过就一律 `null`，
+ * 交由调用方改走 `fromEpoch` / 文件 mtime。所以本文件锁三件事：
  *
- * 锁的行为：
- * 1. 带小数秒 / 不带小数秒 / 空格分隔 / 时区偏移都能吃；
- * 2. 形状不认识的（epoch 毫秒、epoch 秒、epoch 字符串）返回 `null`，
- *    由调用方改走 `fromEpoch` / 文件 mtime；
- * 3. `parseTimestamp` 是三者的统一入口，优先级 ISO → epoch → mtime。
+ * 1. **认得的形状全要吃**：带 / 不带小数秒、`T` / 空格分隔、`Z` / 无时区后缀（按本地时间）、
+ *    `±HH:MM` / 紧凑 `±HHMM`、小数秒位数不限。
+ * 2. **形状不认的一定返回 `null`**：epoch 毫秒、epoch 秒、它们的字符串形式、
+ *    纯日期、缺秒、形状对但值非法（`2026-13-45T99:99:99Z`）、以及非字符串。
+ *    这里的正则一旦放得太宽，任意脏数据就会被当成年份 1 / 1970 之类的假时间，
+ *    侧栏的排序会整体错乱且很难排查。
+ * 3. **`parseTimestamp` 的优先级**固定为 ISO → epoch → 文件 mtime → `null`，
+ *    且 ISO 有效时**必须**忽略 mtime。
+ *
+ * 第 1 条里“带小数秒 + 数字时区偏移”那条是踩坑回归：形状正则原先只写了 `Z?`，
+ * 把带 `±HH:MM` 的时间直接挡在外面，代价是整条会话的 `updatedAt` 丢失。
+ * 放宽正则时必须同时盯紧第 2 条，否则就是把 bug 换了个方向。
  */
 
 import { describe, expect, it } from 'vitest'
@@ -42,7 +49,7 @@ describe('parseIsoDate —— 不带小数秒 / 空格分隔 / 时区偏移', ()
     expect(d?.getHours()).toBe(19)
   })
 
-  it('空格分隔（Swift 的 DateFormatter 也吃）', () => {
+  it('空格分隔（部分 Agent 写出的就是这种形状）', () => {
     expect(parseIsoDate('2026-09-26 19:54:02Z')?.toISOString()).toBe('2026-09-26T19:54:02.000Z')
   })
 
@@ -57,9 +64,8 @@ describe('parseIsoDate —— 不带小数秒 / 空格分隔 / 时区偏移', ()
     expect(parseIsoDate('2026-09-26T19:54:02-05:00')?.toISOString()).toBe('2026-09-27T00:54:02.000Z')
   })
 
-  it('带小数秒 + 数字时区偏移：应与 Swift 的 ISO8601DateFormatter 一致地接受', () => {
-    // Swift 用 `ISO8601DateFormatter([.withInternetDateTime, .withFractionalSeconds])`，
-    // `.withInternetDateTime` 自带 ±HH:MM，所以带偏移的时间戳是**接受**的。
+  it('带小数秒 + 数字时区偏移：必须接受', () => {
+    // 带小数秒的正则也得认 `±HH:MM` / 紧凑 `±HHMM`。
     // 第一版 TS 的 `FRACTIONAL` 正则只写了 `Z?`，会把这类直接挡掉，
     // 代价是整个会话的 updatedAt 丢失 —— 已修（见 `datetime.ts` 的正则注释）。
     const parsed = parseIsoDate('2026-09-26T19:54:02.500+08:00')

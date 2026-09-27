@@ -8,17 +8,17 @@ import { useCleanActions, useCleanState } from '../state/cleanStore'
 import styles from './SettingsView.module.css'
 
 /**
- * 设置面板。移植自 Swift 版 `Views/SettingsView.swift`。
+ * 设置面板。
  *
- * 与主窗口同一套视觉（四级表面梯 / 1px 发丝线 / 靛蓝强调 / 8pt 圆角），
+ * 与主窗口同一套视觉（四级表面梯 / 1px 发丝线 / 靛蓝强调 / 8px 圆角），
  * 整页自绘：左侧导航栏 + 右侧分组卡片。
  *
- * 换掉的两处系统外观：
- *   ① 系统 `Form(.grouped)` —— 它自带 inset 分组底与材质，深色下是另一块灰；
- *   ② 系统 `Toggle` —— macOS 的开关是系统蓝渐变 + 高光，和侧栏选中态的靛蓝
- *      不是同一种蓝，两处一屏出现时颜色对不上。改为手绘 iOS 式开关。
+ * 分组与开关都自己画的原因：平台开关的轨道是系统蓝渐变 + 高光，和侧栏选中态的
+ * 靛蓝不是同一种蓝，两处同屏时颜色对不上；平台分组列表自带 inset 底与材质，
+ * 深色下会变成另一块灰。
  *
- * 业务侧一个字没动：4 个 prefs 的键名（服务层在读，改了就漂）、
+ * 15 款**全部**列出，未安装的置灰而不隐藏：这一页是功能清单，装没装是运行时的事。
+ * 业务侧一个字没动：4 个设置开关的落盘键名（服务层在读，改名等于丢用户设置）、
  * 15 款 Agent 的固定顺序、以及安装状态只认 `AgentInfo.isInstalled`
  * （早期那份把 4 款钉死成「未发现」的硬编码名单已删除，不能再回来）。
  *
@@ -26,7 +26,7 @@ import styles from './SettingsView.module.css'
  * 同一套 1.6px 描边字形），本文件不再内联第二份 SVG。
  */
 
-/** 15 款 Agent 的视觉顺序。`AgentScanService.scanners` 的注册顺序不同，这里排一次。 */
+/** 15 款 Agent 的视觉顺序。`main/scanners/registry.ts` 的注册顺序不同，这里排一次。 */
 const SETTINGS_AGENT_ORDER: readonly AgentCategory[] = [
   'claudeCode',
   'codex',
@@ -67,7 +67,7 @@ const TAB_META: Record<SettingsTab, { title: string; hint: string }> = {
   about: { title: '关于', hint: '会话扫描与安全清理' }
 }
 
-/** 页签字形。Swift 版是 `gearshape` / `folder` / `info.circle`，一一对应。 */
+/** 页签字形：通用（齿轮） / 路径（文件夹） / 关于（信息）。 */
 const TAB_ICON: Record<SettingsTab, string> = {
   general: 'gear',
   paths: 'folder',

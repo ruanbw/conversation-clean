@@ -16,20 +16,19 @@ import { OverviewView } from './OverviewView'
 import styles from './DetailView.module.css'
 
 /**
- * 详情栏。移植自 Swift 版 `Views/DetailView.swift`。
+ * 详情栏。
  *
  * 上下文切换：
  *   无选中 → OverviewView（占用大户 Top5 + Agent 分布）
  *   有选中 → 会话元数据 + 关联文件 + 操作
  *
- * 焦点由 `item` 驱动（App.tsx 用 `cleanStore.getSelectedConversation()` 取），
- * 不再用 Swift 版的 `.ccFocusConversation` 通知；会话被删后 `item` 自动变 null，
- * 视图侧不需要写任何同步代码。
+ * 焦点只有一份：`item` 由 App.tsx 用 `cleanStore.getSelectedConversation()` 现取，
+ * 会话被删后自动变 null，不需要跨模块的焦点通知，视图侧也不必写任何同步代码。
  *
- * 视觉改造（已定稿，照抄自 Swift 版的注释）：
+ * 视觉层级（已定稿）：
  *   ① 底色 `var(--bg)`：三栏此前同色，详情栏是三栏里最「沉」的一层。
- *   ② 64pt 巨型图标 + 20pt 粗体标题 → 28pt 图标 + 15pt 标题，省下的竖向预算
- *      给「体积读数」—— 这是个清理占空间数据的工具，体积是第一视觉层级。
+ *   ② 标题行只留图标与标题，省下的竖向预算全给「体积读数」—— 这是个清理
+ *      占空间数据的工具，体积数字的视觉重量高于标题。
  *   ③ 元数据不用 CSS Grid：标签列钉死 58px 右对齐，行间加发丝线，扫读时眼睛能竖着走。
  *   ④ 操作按钮全部自绘：次要动作 ghost，删除 danger 实心红。
  *
@@ -115,9 +114,8 @@ export function DetailView({ item }: DetailViewProps) {
     { id: 'files', label: '关联文件', value: String(paths.length), kind: 'num' },
     { id: 'updated', label: '最后更新', value: formatFullDate(new Date(item.updatedAt)), kind: 'plain' },
     { id: 'branch', label: 'Git 分支', value: item.gitBranch ?? '', kind: 'mono' },
-    // 「项目路径」给**全路径**：Swift 版是 `item.displayProjectPath` 直接进 `MetaRow`，
-    // 长路径在任意字符处折行、不截断（`pathTail` 缩写只用于会话列表行）。
-    // 移植期曾顺手改成 `pathTail` + `title` 兜底，已按基准改回。
+    // 「项目路径」给**全路径**：长路径在任意字符处折行、不截断，悬停 `title` 兜底。
+    // `pathTail` 缩写只用于会话列表行 —— 两处不要互相「统一」。
     { id: 'project', label: '项目路径', value: projectPath, kind: 'mono', title: projectPath },
     { id: 'store', label: '存储路径', value: storagePath, kind: 'mono' },
     { id: 'session', label: '会话 ID', value: item.sessionId, kind: 'mono' }
@@ -283,7 +281,6 @@ export function DetailView({ item }: DetailViewProps) {
 
 /**
  * 一行元数据。`kind` 决定值的排版：路径 / ID 走等宽，数字走 tabular-nums，其余走正文。
- * 与 Swift 版 `private struct MetaRow` 一一对应。
  */
 interface MetaRow {
   id: string

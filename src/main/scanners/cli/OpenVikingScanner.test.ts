@@ -17,9 +17,10 @@ import { CleanPrefs } from '@main/core/scanner'
 import { OpenVikingScanner } from './OpenVikingScanner'
 
 /**
- * 移植自 `scripts/tests/OpenVikingTests.swift` 的 `testMockOpenVikingScanner`
- * 与 `testRealOpenVikingScannerReadOnly`，并补上 Swift 测试没覆盖到的分支
- * （文本抽取的各级兜底、createdAt 的秒/毫秒/ISO 变体、peer_id 反解项目路径、两个开关）。
+ * OpenViking 扫描器用例：storagePath 的解析、scan 的字段抽取、delete 的分组边界、
+ * cleanAll 的整目录清空，以及末尾的只读实机用例。
+ * 其中 scan 侧还盖住了标题回退、文本抽取的各级兜底、createdAt 的秒/毫秒/ISO 变体、
+ * peer_id 反解项目路径与两个开关的正反两面。
  *
  * 夹具全部现造在 `os.tmpdir()` 下，测试自包含。`HOME` 指向沙箱，
  * 免得 `CleanPrefs` 把偏好写进真实的 `~/.conversation-clean/preferences.json`。
@@ -34,8 +35,45 @@ delete process.env.OPENVIKING_HOME
 
 const created: string[] = []
 
+/**
+ * 夹具用的临时根，**尽量**保证整条绝对路径不含连字符。
+ *
+ * `peer_id` 反解项目路径的连字符分支依赖「前 N 段都能按斜杠路径命中真实目录」，
+ * 所以那个用例要求沙箱路径本身干净。原来的写法把 `os.tmpdir()` 直接当根，
+ * 再在用例里断言 `expect(root).not.toContain('-')` —— 那是把**前提寄托在环境变量上**：
+ * macOS 下某些工具会把 `TMPDIR` 指到 `.../T/.ctx-mode-XXXX` 这种形态，
+ * 临时目录名自带连字符，前置断言就随环境漂移。实测踩到过。
+ *
+ * 这里改成自己找一个无连字符的根。⚠️ 找���到时**不抛异常**：
+ * 第一版这里 `throw`，结果是「环境里 TMPDIR 带连字符」从一个用例的断言失败，
+ * 升级成**整个测试文件无法加载**（579 个用例掉到 564）。窄失败宽化是倒退。
+ * 兜底就退回 `os.tmpdir()`，让那一条断言自己把问题说出来。
+ */
+function pickHyphenFreeRoot(): string {
+  // 候选按优先级：TMPDIR 下 → macOS 的 /tmp（realpath 是 /private/tmp，无连字符）
+  // → TMPDIR 的各级父目录。逐个试第一个不含连字符的。
+  const tmp = tmpdir()
+  const candidates = [join(tmp, 'ovk'), '/tmp/ovk', dirname(tmp), dirname(dirname(tmp))]
+  for (const candidate of candidates) {
+    try {
+      mkdirSync(candidate, { recursive: true })
+      const real = realpathSync(candidate)
+      if (!real.includes('-')) return real
+    } catch {
+      // 候选不可用（权限 / 不存在），试下一个。
+    }
+  }
+  // 都带连字符：退回原始 tmpdir，让断言去报，不在这里抛。
+  mkdirSync(tmp, { recursive: true })
+  return realpathSync(tmp)
+}
+
+const HYPHEN_FREE_TMP = pickHyphenFreeRoot()
+const ORIGINAL_TMPDIR = process.env.TMPDIR
+process.env.TMPDIR = HYPHEN_FREE_TMP
+
 function tempRoot(prefix = 'ovk'): string {
-  const dir = realpathSync(mkdtempSync(join(tmpdir(), prefix)))
+  const dir = realpathSync(mkdtempSync(join(HYPHEN_FREE_TMP, prefix)))
   created.push(dir)
   return dir
 }
@@ -75,6 +113,8 @@ function snapshotTree(root: string): string[] {
 
 afterAll(() => {
   process.env.HOME = ORIGINAL_HOME
+  if (ORIGINAL_TMPDIR === undefined) delete process.env.TMPDIR
+  else process.env.TMPDIR = ORIGINAL_TMPDIR
   if (ORIGINAL_OPENVIKING_HOME === undefined) delete process.env.OPENVIKING_HOME
   else process.env.OPENVIKING_HOME = ORIGINAL_OPENVIKING_HOME
   for (const dir of created) rmSync(dir, { recursive: true, force: true })
@@ -85,7 +125,7 @@ beforeEach(() => {
   CleanPrefs.patch({ ...DEFAULT_PREFS })
 })
 
-/** Swift `testMockOpenVikingScanner` 的夹具：一个 2 消息会话 + 一个只有操作记录的会话。 */
+/** 夹具：一个 2 消息会话 + 一个只有操作记录的会话。 */
 function buildMockRoot(): { root: string; pending: string; f1: string; f2: string; f3: string } {
   const root = tempRoot()
   const pending = join(root, 'pending')
@@ -155,7 +195,7 @@ describe('OpenVikingScanner.storagePath', () => {
 })
 
 describe('OpenVikingScanner.scan', () => {
-  it('夹具目录：按 sessionId 分组成 2 条会话，字段与 Swift 断言逐条一致，且只读不落盘', async () => {
+  it('夹具目录：按 sessionId 分组成 2 条会话，字段逐条对上，且只读不落盘', async () => {
     const { root, f1, f2 } = buildMockRoot()
     const scanner = new OpenVikingScanner({ storagePath: root })
     expect(scanner.isInstalled).toBe(true)

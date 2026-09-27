@@ -27,7 +27,7 @@ import { VSCodeChatScanner } from '@main/scanners/vscode/VSCodeChatScanner'
  * 用 `node:sqlite` 现建，不依赖任何其它测试文件。
  */
 
-/** 两条夹具会话的 id，与 `scripts/tests/VSCDBIndexSyncTests.swift` 保持一致便于对照。 */
+/** 两条夹具会话的 id。与 `vscdb.test.ts` 的标准载荷刻意取同值，便于交叉对照。 */
 const SID1 = 'vsc-sync-001'
 const SID2 = 'vsc-sync-002'
 

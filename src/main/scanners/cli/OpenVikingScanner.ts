@@ -23,16 +23,21 @@ import { parseIsoDate } from '@main/core/datetime'
 /**
  * OpenViking（`~/.openviking`）扫描器。
  *
- * 移植自 `ConversationClean/Scanners/CLIAgents/OpenVikingScanner.swift`，逐条对齐：
- *   · `storageURL`：`storagePath` > `OPENVIKING_HOME` > `~/.openviking`，realpath 规范化
- *   · `scan()`：`pending/` 下每个 `.json` 是**一条待处理消息**（不是一条会话），
- *     按 `sessionId` 分组 → 一个会话 = 一组文件；标题取时间最早的 user 消息
- *   · `delete()`：删该会话的全部分组文件，然后尝试回收 `pending/`
- *   · `cleanAll()`：Swift **不是** scan+delete，而是直接整个清空 `pending/`（并重建空目录）
+ * 磁盘形态与其它扫描器不同：`pending/` 下每个 `.json` 是**一条待处理消息**（不是一条会话），
+ * 按 `sessionId` 分组后一个会话 = 一组文件；标题取时间最早的 user 消息。
+ * 删除就是删该会话的全部分组文件，再尝试回收 `pending/`。
  *
- * 与 Swift 版本的已知偏差：
- *   1. `createdAt` 的阈值与 Continue 不同（`> 1e12` 毫秒 / `> 1e9` 秒），照抄 Swift。
- *   2. `prefix(n)` 按 UTF-16 码元切，Swift 按字素簇切。
+ * 三处刻意不统一：
+ *   1. `cleanAll` **不走** scan+delete，而是直接整个清空 `pending/`（并重建空目录）。
+ *      两个理由，第二个才是主要的：
+ *      · `scan()` 会把 `sessionId` 为空的文件归到 `''` 组、随后被
+ *        `if (sessionId.length === 0) continue` 跳过，于是它们**永远不会成为
+ *        `ConversationItem`** —— `delete()` 够不着这些文件，scan+delete 删不干净。
+ *      · 「清空本分类」的语义本就是「把这个目录抹干净」，包括扫不出来的那些。
+ *        逐条删反而会在目录里留下扫不出来的残留。
+ *   2. `createdAt` 的秒/毫秒判定比其它扫描器严：只有 `> 1e9` 的值才当秒（其余直接回落文件
+ *      mtime）。早期版本会写下 1e9 附近的秒级时间戳，阈值抬高到 1e12 会把它们误判成毫秒。
+ *   3. 标题 / 摘要按 UTF-16 码元切截断，超长非 ASCII 文本末尾可能多/少半个字。
  */
 
 type Dict = Record<string, unknown>
@@ -54,7 +59,7 @@ export class OpenVikingScanner implements AgentScanner {
   private readonly root: string
 
   constructor(options: ScannerOptions = {}) {
-    // Swift: `customStorageURL ?? OPENVIKING_HOME ?? ~/.openviking`，随后 `canonicalPath ?? standardized`。
+    // `storagePath` > `OPENVIKING_HOME` > `~/.openviking`，随后做一次 realpath 规范化。
     this.root = options.storagePath
       ? canonical(options.storagePath)
       : resolveStoragePath(['.openviking'], { key: 'OPENVIKING_HOME' })
@@ -76,16 +81,16 @@ export class OpenVikingScanner implements AgentScanner {
     const pendingDir = join(this.root, 'pending')
     if (!pathExists(pendingDir)) return []
 
-    // Swift: `contentsOfDirectory(options: .skipsHiddenFiles)` 后按扩展名过滤
+    // 跳过隐藏项后按扩展名过滤
     const jsonFiles = listFiles(pendingDir, '.json')
     if (jsonFiles.length === 0) return []
 
-    // Swift: `withTaskGroup` 并发解析
+    // 有界并发解析
     const records = await mapLimit(jsonFiles, 16, (file) => parsePendingFile(file))
     const usable = records.filter((record): record is PendingRecord => record !== null)
     if (usable.length === 0) return []
 
-    // 按 sessionId 分组（Swift 用 `Dictionary(grouping:)`）
+    // 按 sessionId 分组
     const grouped = new Map<string, PendingRecord[]>()
     for (const record of usable) {
       const bucket = grouped.get(record.sessionId)
@@ -161,7 +166,7 @@ export class OpenVikingScanner implements AgentScanner {
   async cleanAll(): Promise<number> {
     if (!this.isInstalled) return 0
 
-    // Swift 的 cleanAll 不走 scan+delete：`pending/` 整个删掉再重建空目录。
+    // cleanAll 不走 scan+delete：`pending/` 整个删掉再重建空目录。
     let freed = 0
     const pendingDir = join(this.root, 'pending')
     if (pathExists(pendingDir)) {
@@ -170,7 +175,7 @@ export class OpenVikingScanner implements AgentScanner {
       try {
         mkdirSync(pendingDir, { recursive: true })
       } catch {
-        // Swift 是 `try?`：重建失败不改变本次清理结果
+        // 重建失败不改变本次清理结果（目录给不回去也不能报错）
       }
     }
     return freed
@@ -191,7 +196,9 @@ function parsePendingFile(path: string): PendingRecord | null {
   let createdAt: number | null = null
   const raw = json['createdAt']
   if (typeof raw === 'number') {
-    // 毫秒原值 / 秒（×1000 换成 JS 的毫秒制）。阈值与其它扫描器不同，照抄 Swift。
+    // 毫秒原值 / 秒（×1000 换成 JS 的毫秒制）。秒的下限是 1e9 而非 0：
+    // 早期版本会写 1e9 附近的秒级时间戳，判成毫秒会得到 1970 年；
+    // 小于 1e9 的值直接不要（`createdAt` 留 null，回落到文件 mtime）。
     if (raw > 1_000_000_000_000) createdAt = raw
     else if (raw > 1_000_000_000) createdAt = raw * 1000
   } else if (typeof raw === 'string') {
@@ -226,7 +233,7 @@ function timeOf(record: PendingRecord): number {
 }
 
 /**
- * 从 `payload` 里挖出可读文本，顺序照抄 Swift：
+ * 从 `payload` 里挖出可读文本，顺序（行为如此，勿调换）：
  * `parts[].text`（先只认 `type == "text"`，再退到任意 `text`）→ `payload.text` → `content` → `prompt`。
  */
 function extractText(payload: Dict | null): string | null {
@@ -301,7 +308,7 @@ function nonEmpty(value: string | null): string | null {
   return value !== null && value.length > 0 ? value : null
 }
 
-/** Swift `replacingOccurrences(of: "\n", with: " ")`：只换 `\n`，不动 `\r`。 */
+/** 只换 `\n`，不动 `\r`。 */
 function oneLine(text: string): string {
   return text.replaceAll('\n', ' ')
 }

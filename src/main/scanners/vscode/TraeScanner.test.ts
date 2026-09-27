@@ -246,7 +246,7 @@ function makeBareFixture(): { root: string; chatSessionsDir: string; sessionFile
 // MARK: - 用例
 
 describe('TraeScanner · mock 夹具', () => {
-  it('工作区会话 + 空窗口会话合并，字段按 Swift 版的兜底顺序解析', async () => {
+  it('工作区会话 + 空窗口会话合并，字段按兜底顺序解析', async () => {
     const fx = makeFixture()
     const scanner = new TraeScanner({ storagePath: fx.root })
 
@@ -392,7 +392,7 @@ describe('TraeScanner · mock 夹具', () => {
     expect(freed).toBe(empty.sizeInBytes)
     expect(exists(join(fx.emptyWindowDir, 'trae-empty-002.jsonl'))).toBe(false)
     // globalStorage 库里唯一那条就是它：索引 key 清空成 `entries:{}` 后仍然保留，
-    // 其余 7 个 key 整条消失（与 Swift 版 `removeValue` + UPDATE 的行为一致）
+    // 其余 7 个 key 整条消失（`removeValue` + UPDATE 的结果）
     const index = JSON.parse(readStateDbItem(fx.globalStateDbPath, 'chat.ChatSessionStore.index') as string)
     expect(index.entries).toEqual({})
     expect(stateDbRowCount(fx.globalStateDbPath)).toBe(1)

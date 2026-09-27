@@ -27,22 +27,19 @@ import {
 } from '@main/core/scanner'
 
 /**
- * Aider 扫描器。
+ * Aider 扫描器：扫 `~/.aider`（`AIDER_HOME` 可覆盖）以及 home 下的全局历史文件。
  *
- * 移植自 `ConversationClean/Scanners/CLIAgents/AiderScanner.swift`，逐条对齐：
- *   · `storageURL`：`storagePath` > `AIDER_HOME` > `~/.aider`，realpath 规范化。
- *     `isInstalled` 额外认 home 下的 4 个指示文件与任意 `.aider*` 条目
- *   · `scan()`：一条「全局」会话（`~/.aider` + home 下的 3 个全局文件）
- *     + `~/projects` 深度 3 以内的项目级会话（每个命中的目录一条）
- *   · `delete()`：每条路径先过 `isSafeToDelete` 护栏 —— `.aider.conf.yml` 永不删，
- *     且只删 `~/.aider` 之内或 Aider 自己的三个文件名
- *   · `cleanAll()`：scan + delete，再整个删掉 `~/.aider`（并重建空目录）
- *     与 home 下遗留的 3 个全局文件
+ * 产出两类条目：
+ *   · 一条「全局」会话：`~/.aider` 目录 + home 下的 3 个全局文件
+ *     （`.aider.chat.history.md` / `.aider.input.history` / `.aider.tags.cache.v3`）
+ *   · `~/projects`（注入路径时是 `<custom>/projects`）深度 3 以内的项目级会话，
+ *     每个含 Aider 历史文件的目录一条
  *
- * 与 Swift 版本的已知偏差：
- *   1. `sessionId` 里的短哈希改用确定性 FNV-1a —— Swift 的 `String.hashValue` 每次进程
- *      启动都换种子，同一个项目两次扫描的 `sessionId` 不一样，删除时无法按 id 定位。
- *   2. 目录深度上限 3、跳过目录清单、`.aider.conf.yml` 保护均照抄 Swift。
+ * `isInstalled` 比一般扫描器宽松：除了 `~/.aider` 目录，home 下的 4 个指示文件
+ * （含 `.aider.conf.yml`）与任意 `.aider*` 条目都算装过。
+ *
+ * `sessionId` 里的短哈希用**确定性 FNV-1a**（见 `shortHash`），
+ * 不用带进程随机种子的哈希 —— 否则两次启动间同一个项目的 id 会漂移，删除时无法按 id 定位。
  */
 
 /** 命中即认为该目录有 Aider 历史的文件名。 */
@@ -54,7 +51,7 @@ const TAGS_CACHE_V3 = '.aider.tags.cache.v3'
 /** home 下的全局历史 / 缓存文件（`.aider.conf.yml` 故意不在其中：它是配置，永不删）。 */
 const GLOBAL_FILES = [CHAT_HISTORY, INPUT_HISTORY, TAGS_CACHE_V3]
 
-/** 项目级枚举时跳过的目录，照抄 Swift。 */
+/** 项目级枚举时跳过的目录：构建产物与包管理目录，深扫进去全是噪声且极慢。 */
 const SKIP_DIRS = new Set([
   '.git',
   '.svn',
@@ -77,8 +74,8 @@ const SKIP_DIRS = new Set([
 ])
 
 /**
- * Swift `trimmingCharacters(in: .whitespaces)` 的字符集：空格 / 制表 / Unicode 空格分隔符，
- * **不含** `\n` `\r` `\v` `\f`，所以不能拿 JS 的 `String.trim()` 顶。
+ * 只去空格 / 制表 / Unicode 空格分隔符，**不含** `\n` `\r` `\v` `\f`，
+ * 所以不能拿 JS 的 `String.trim()` 顶。
  */
 const SPACE_RUN = /^[\t \u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]+|[\t \u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]+$/g
 
@@ -89,7 +86,7 @@ export class AiderScanner implements AgentScanner {
 
   constructor(options: ScannerOptions = {}) {
     this.custom = options.storagePath ?? null
-    // Swift: `customStorageURL ?? AIDER_HOME ?? ~/.aider`，随后 `canonicalPath ?? standardized`。
+    // `storagePath` > `AIDER_HOME` > `~/.aider`，随后做一次 realpath 规范化。
     this.root =
       this.custom !== null ? canonical(this.custom) : resolveStoragePath(['.aider'], { key: 'AIDER_HOME' })
   }
@@ -136,9 +133,9 @@ export class AiderScanner implements AgentScanner {
   async delete(items: ConversationItem[]): Promise<number> {
     if (items.length === 0) return 0
 
-    // Swift 在每条路径上有一道 `isSafeToDelete` 护栏，而公共原语 `deleteItemsWithPaths`
-    // 不该带上 Aider 私有语义，所以先在 items 上预筛一遍再交给它。
-    // 预筛只决定「删哪些路径」，`sizeInBytes` 原样保留，记账口径与 Swift 一致。
+    // 每条路径要过一道 Aider 私有的 `isSafeToDelete` 护栏，而公共原语 `deleteItemsWithPaths`
+    // 不该带上这个语义，所以先在 items 上预筛一遍再交给它。
+    // 预筛只决定「删哪些路径」，`sizeInBytes` 原样保留，记账口径不变。
     const guarded = items.map((item) => {
       const safe = item.associatedPaths.filter((path) => this.isSafeToDelete(path))
       return safe.length === item.associatedPaths.length ? item : { ...item, associatedPaths: safe }
@@ -158,7 +155,7 @@ export class AiderScanner implements AgentScanner {
         try {
           mkdirSync(this.root, { recursive: true })
         } catch {
-          // Swift 是 `try?`：重建失败不改变本次清理结果
+          // 重建失败不改变本次清理结果（目录给不回去也不能报错）
         }
       }
     }
@@ -186,7 +183,8 @@ export class AiderScanner implements AgentScanner {
   private isSafeToDelete(path: string): boolean {
     const name = basename(path)
     if (name === '.aider.conf.yml') return false
-    // Swift 是字符串前缀比较（不是路径分量比较），`~/.aider-backup/x` 也会被判成安全。
+    // 字符串前缀比较（不是路径分量比较）：`~/.aider-backup/x` 也会被判成安全。
+    // Aider 自己不会建这种目录，当年的实现就是这么比的，保持不变避免行为漂移。
     if (path.startsWith(this.root)) return true
     return name === CHAT_HISTORY || name === INPUT_HISTORY || name.startsWith(TAGS_CACHE_PREFIX)
   }
@@ -245,7 +243,7 @@ function scanGlobalAider(root: string): ConversationItem | null {
   }
 
   // 3. home 下其它版本号的 tags 缓存（`.aider.tags.cache.v4` …）。
-  //    Swift 这一支不更新 `latest`、也不判空目录大小，照抄。
+  //    这一支不更新 `latest`、也不判空目录大小，行为如此。
   for (const entry of listNames(home)) {
     if (!entry.startsWith(`${TAGS_CACHE_PREFIX}.`) || entry === TAGS_CACHE_V3) continue
     const path = join(home, entry)
@@ -285,7 +283,7 @@ function findAiderProjectDirectories(root: string, maxDepth: number): string[] {
     const current = queue.shift() as { url: string; depth: number }
     if (current.depth > maxDepth) continue
 
-    // Swift 用 `options: []`，即**包含**隐藏项，再靠下面的名字过滤跳过。
+    // 隐藏项也要列（`node_modules` 等已在 `SKIP_DIRS` 里按名字过滤掉）。
     const entries = listDirents(current.url)
 
     let hasAider = false
@@ -299,7 +297,7 @@ function findAiderProjectDirectories(root: string, maxDepth: number): string[] {
 
     for (const entry of entries) {
       if (SKIP_DIRS.has(entry.name) || entry.name.startsWith('.')) continue
-      // Swift 的 `fileExists(atPath:isDirectory:)` 跟随软链，而 `Dirent.isDirectory()` 不跟。
+      // 软链也算目录候选：`isDirectory()` 不跟随软链，得单独把软链接进来再实地确认。
       if (!entry.isDirectory() && !entry.isSymbolicLink()) continue
       const child = join(current.url, entry.name)
       if (!isDirectory(child)) continue
@@ -347,7 +345,12 @@ function parseProjectAider(projectDir: string): ConversationItem | null {
     if (content !== null) {
       const lines = content.split('\n').filter((line) => !isBlank(line))
       messageCount += Math.max(1, lines.length)
-      // Swift 取的是**原始**行（没 trim），照抄。
+      // ⚠️ 这里取的是**原始**行而不是 `trimSpaces(lines[0])`，
+      //    所以缩进行（Markdown 列表项、引用块）的缩进会留在摘要开头。
+      //    两行之上的 `isBlank` 用的正是 `trimSpaces`，同一函数里两种写法不一致，
+      //    而「保留缩进」在这里没有任何下游用途 —— 初步判断是疏漏而不是设计。
+      //    但没有测试钉住缩进行这个场景，改动前先补一个用例确认期望值。
+      //    （见 docs/known-issues.md「待定夺」一节）
       if (firstPrompt === null && lines.length > 0) firstPrompt = lines[0]
     }
   }
@@ -386,7 +389,7 @@ function parseProjectAider(projectDir: string): ConversationItem | null {
 
 /**
  * 解析 `.aider.chat.history.md`：只读前 64KB，统计 `#### ` 与 `> `（排除 `> /`）开头的行，
- * 第一条就是首个 prompt。文件大于 64KB 时按剩余体积粗估再补几条（Swift 的算法）。
+ * 第一条就是首个 prompt。文件大于 64KB 时按剩余体积粗估再补几条。
  */
 function parseChatHistory(path: string): { firstPrompt: string | null; messageCount: number } {
   const head = readHead(path, 64 * 1024)
@@ -489,12 +492,15 @@ function countNonBlankLines(content: string): number {
   return count
 }
 
-/** Swift `replacingOccurrences(of: "\n", with: " ")`：只换 `\n`，不动 `\r`。 */
+/** 只换 `\n`，不动 `\r`。 */
 function oneLine(text: string): string {
   return text.replaceAll('\n', ' ')
 }
 
-/** 确定性 32 位 FNV-1a，取十进制前 6 位（Swift 取 `abs(hashValue)` 的前 6 位）。 */
+/**
+ * 确定性 32 位 FNV-1a，取十进制前 6 位。
+ * 必须是确定性的：`sessionId` 跨进程稳定是删除能按 id 定位的前提。
+ */
 function shortHash(path: string): string {
   let hash = 0x811c9dc5
   for (let i = 0; i < path.length; i += 1) {

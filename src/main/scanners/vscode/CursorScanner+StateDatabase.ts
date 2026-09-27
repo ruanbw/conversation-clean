@@ -9,15 +9,13 @@ import { openReadWrite, openReadOnly, removeComposers } from '@main/core/vscdb'
 /**
  * Cursor 的 `state.vscdb` 索引读写。
  *
- * 移植自 Swift 版 `Scanners/VSCodeFamily/CursorScanner+StateDatabase.swift`。
- *
  * Cursor 有两代会话存储：
  * · 新版 —— 正文在 `chatSessions/<sid>.jsonl`，索引里只有摘要
  * · 旧版 —— **正文全在索引里**：`composer.composerData` 的 `allComposers`
  *   与 `workbench.panel.aichat.view.aichat.chatdata` 的 `tabs`
  *
  * 旧版的会话没有独立文件，所以扫描阶段必须读索引才能把它们列出来；
- * 代价是 `sizeInBytes` 只能按「库大小 ÷ 条目数」摊派（Swift 版就这么干）。
+ * 代价是 `sizeInBytes` 只能按「库大小 ÷ 条目数」摊派。
  *
  * ## 只读纪律
  *
@@ -69,7 +67,7 @@ export function parseStateDatabase(dbPath: string, projectPath: string | null): 
     }
   }
 
-  // 兜底：Swift 版给「测试夹具 / 早期版本」留了一条「state.vscdb 其实是纯 JSON」的通路。
+  // 兜底：「测试夹具 / 早期版本」下 state.vscdb 其实是纯 JSON，不是 SQLite。
   // 只在「确实是 SQLite 文件」时跳过这条兜底 —— 否则一次 50MB 的二进制读取纯属白费。
   if (items.length === 0 && !isSqliteFile(dbPath)) {
     let text: string
@@ -88,7 +86,7 @@ export function parseStateDatabase(dbPath: string, projectPath: string | null): 
  * 从 `state.vscdb` 删掉给定 composer。
  *
  * 走 `core/vscdb` 的 `removeComposers`（等价于 `removeChatSessions`，
- * 同一整套索引 key 清理器）；随后额外处理 Swift 版支持的「纯 JSON 夹具」形态：
+ * 同一整套索引 key 清理器）；随后额外处理「纯 JSON 夹具」形态：
  * `allComposers` 被删空就整个删掉文件，否则把改写后的 JSON 原子写回。
  */
 export function deleteComposersFromStateDb(dbPath: string, sessionIds: Set<string>): void {
@@ -118,8 +116,9 @@ export function deleteComposersFromStateDb(dbPath: string, sessionIds: Set<strin
  * 清空一个 `state.vscdb` 的聊天数据（两个索引 key），并 `VACUUM` 缩文件。
  * 打不开或表结构不对时退化为「删掉整个库文件」。
  *
- * ⚠️ Swift 版同样**没有在任何地方调用**这个方法（`cleanAll()` 走的是
- * `VSCDBHelper.clearAllChatSessions`）。这里原样保留以维持文件对照。
+ * ⚠️ **未被任何地方调用的旁路**：`cleanAll()` 走的是 `core/vscdb` 的
+ * `clearAllChatSessions`，不是这里。保留是为了说明「清空一个库」另有实现，
+ * 不要误以为它已经接进了清理流程。
  */
 export function clearStateDatabaseChatData(dbPath: string): void {
   const db = openReadWrite(dbPath)
@@ -133,7 +132,7 @@ export function clearStateDatabaseChatData(dbPath: string): void {
     )
     db.exec('VACUUM;')
   } catch {
-    // 表结构不对：Swift 版此时删掉整个文件，这里照抄
+    // 表结构不对：退化到删掉整个库文件
     removeIfExists(dbPath)
   } finally {
     db.close()
@@ -250,7 +249,7 @@ function parseAiChatDataString(
 
 // MARK: - 小工具
 
-/** Cursor 有时写秒、有时写毫秒；1e12 是分界线（对齐 Swift 的 `> 1_000_000_000_000`）。 */
+/** Cursor 有时写秒、有时写毫秒；1e12 是分界线。 */
 function epochSeconds(value: number): number {
   return value > 1e12 ? value / 1000 : value
 }
@@ -282,7 +281,7 @@ function readTextOrEmpty(path: string): string {
   }
 }
 
-/** Swift 的 `Data.write(options: .atomic)`：先写临时文件再 rename，断电不会留半截 JSON。 */
+/** 原子写：先写临时文件再 rename，断电不会留半截 JSON。 */
 function writeJsonAtomically(path: string, value: unknown): void {
   const tmp = `${path}.tmp`
   try {
@@ -293,7 +292,7 @@ function writeJsonAtomically(path: string, value: unknown): void {
   }
 }
 
-/** `components(separatedBy: .newlines).first` —— 取第一行。 */
+/** 取第一行。行分隔符含 `\n` `\r` `\r\n` 以及 U+0085 / U+2028 / U+2029。 */
 function firstLine(text: string): string {
   const index = text.search(/\r\n|[\n\r\u0085\u2028\u2029]/)
   return index === -1 ? text : text.slice(0, index)
@@ -313,7 +312,7 @@ function asNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
-/** Swift 的 `as? [[String: Any]]`：只要有一个元素不是字典，整个转换就失败。 */
+/** 收窄语义：只要有一个元素不是字典，整个转换就失败（不会跳过坏元素）。 */
 function asRecordArray(value: unknown): Record<string, unknown>[] | null {
   if (!Array.isArray(value)) return null
   const out: Record<string, unknown>[] = []

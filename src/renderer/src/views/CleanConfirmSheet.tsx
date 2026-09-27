@@ -9,9 +9,7 @@ import { DrawnIcon } from '@renderer/components/DrawnControls'
 import styles from './CleanConfirmSheet.module.css'
 
 /**
- * 清理前的二次确认弹层。
- *
- * 移植自 Swift 版 `ConversationClean/Views/CleanConfirmSheet.swift`（1001 行）。
+ * 清理前的二次确认弹层。分区顺序、每个数字的口径、哪些是估算，理由都写在下面 ——
  * 逐块对应关系（原型 `docs/prototype.html` 的 `#scrim > .sheet`）：
  *
  *   ① 头部           .sheet-h
@@ -26,21 +24,19 @@ import styles from './CleanConfirmSheet.module.css'
  * 三条取消路径 —— 遮罩 / Esc / 「取消」—— 都只调 `cleanStore.cancelClean()`：
  * 只收起面板，不碰任何数据。
  *
- * **目标集合的钉法**（与 Swift 版的关键差异，见最终报告）：
- * Swift 的 `targets = estimateTargets(for: cleanTarget)` 读的是**活的**
- * `filteredConversations`，面板开着时切分类会连目标集合一起改 ——
+ * **目标集合的钉法**：面板显示的目标必须是「打开那一刻」的那一批，不能是活的
+ * `filteredConversations` —— 否则面板开着时切一下分类，
  * 面板上写着的条数与「确认清除」实际删掉的会不是同一批。
  * 这里把 `selectedCategory` 换成 `state.estimateCategory`（打开那一刻的分类）再喂给
  * `cleanStore.getCleanTargets()`：口径仍然是 store 的 selector，不重算，
- * 但语义钉住了。搜索词与 Swift 版保持一致（仍然实时）。
+ * 但语义钉住了。搜索词则保持实时（它只缩小可见范围，不改清理范围）。
  *
  * **数据来源的已知缺口**：`.cap` / `.cap-d` 依赖真实卷容量。
  * 渲染进程读不到 fs，需要主进程加一个卷信息 IPC 通道；
- * 通道没到位时 `readVolumeInfo()` 返回 null，`.cap` 整块不渲染 ——
- * 与 Swift 版「拿不到真实卷信息就整块不渲染」是同一条分支。
+ * 通道没到位时 `readVolumeInfo()` 返回 null，`.cap` 整块不渲染。
  */
 
-// MARK: - 常量（对应 Swift 版的 static let）
+// MARK: - 常量
 
 /**
  * 第二层索引行（Pi 的 context-mode SQLite、VS Code 家族的 state.vscdb）
@@ -52,7 +48,7 @@ const IDX_PER = 34 * 1024
 /** 空间构成最多列 5 个 Agent，多出来的并成「其余 N 个会话」。 */
 const MAIN_MAX = 5
 
-/** GB 换算用。Swift 版 `fmtVol` 是固定两位的 `%.2f GB`，与 `formatBytes` 的口径不同。 */
+/** GB 换算用。固定两位的 `%.2f GB`，与 `formatBytes` 的口径不同。 */
 const BYTES_PER_GB = 1024 * 1024 * 1024
 
 const TITLE_ID = 'clean-confirm-sheet-title'
@@ -76,7 +72,7 @@ function distColor(colorIndex: number): string {
 
 /**
  * 这些 Agent 除了主会话文件还维护第二层索引载体，清理时会连索引行一起删。
- * 名字取载体的末段（原型 `mid()`）。与 Swift 版 `indexLayer(for:)` 逐条对应。
+ * 名字取载体的末段（原型 `mid()`）。
  */
 const INDEX_LAYERS: Partial<Record<AgentCategory, string>> = {
   piAgent: 'context-mode',
@@ -105,7 +101,7 @@ interface VolumeInfo {
  *
  * 🔴 已知缺口：渲染进程没有 fs，也没有对应的 IPC 通道
  * （`src/shared/types.ts` 的 `RendererApi` / `src/main/ipc.ts` 里都还没有卷信息）。
- * 这里按**可选方法**探测：通道补上之前返回 null，走 Swift 版同一条「不渲染」分支；
+ * 这里按**可选方法**探测：通道补上之前返回 null，走「拿不到就不渲染」这条分支；
  * 通道补上之后这一行不用改，`.cap` 两节自动回来。
  */
 async function readVolumeInfo(): Promise<VolumeInfo | null> {
@@ -113,7 +109,7 @@ async function readVolumeInfo(): Promise<VolumeInfo | null> {
   if (typeof bridge?.getVolumeInfo !== 'function') return null
   try {
     const info = await bridge.getVolumeInfo()
-    // 与 Swift 版同一道闸：数值不合理就不画这一节，
+    // 同一道闸：数值不合理就不画这一节，
     // 宁可少一节，也不能拿假分母编出一个占比。
     if (!info || !(info.capacity > 0) || !(info.used > 0)) return null
     return { ...info, mountPath: info.mountPath ?? null }
@@ -160,7 +156,7 @@ interface Estimate {
 }
 
 /**
- * 面板的全部数字一次算完（对应 Swift 版「先算好，避免 body 里反复 reduce」）。
+ * 面板的全部数字一次算完（先算好，避免渲染函数里反复 reduce）。
  *
  * 纯函数：输入是 store 快照，输出是面板上要显示的一切。
  * 分类已经由调用方钉成 `estimateCategory`。
@@ -300,7 +296,7 @@ function ratioOf(bytes: number, basis: number): number {
   return basis > 0 ? (bytes / basis) * 100 : 0
 }
 
-/** 说明句里要加粗的数字。Swift 版是 `Text.figureEmphasis`。 */
+/** 说明句里要加粗的数字。 */
 type Part = string | { fig: string }
 
 function parts(list: readonly Part[]): ReactNode[] {
@@ -451,7 +447,7 @@ function LevelBadge({ text, isOK }: LevelBadgeProps) {
  * 弹层里用到的两个系统符号（`exclamationmark.triangle` / `info.circle`）**已收敛到
  * `DrawnControls` 的 `DrawnIcon`**（`exclamationTriangle` / `info`）。
  *
- * 最初这里是就地自绘的两份 SVG —— 那是移植时 `DrawnControls` 还没落地、
+ * 最初这里是就地自绘的两份 SVG —— 那是 `DrawnControls` 还没落地、
  * import 它会让 typecheck 变红的权宜之计。集成阶段统一收回了图标库，
  * 本文件不再持有任何自绘 `<svg>`。统一 1.6px 线性描边、继承 `currentColor`。
  */
@@ -494,7 +490,7 @@ export default function CleanConfirmSheet(): ReactNode {
   const canConfirm = count > 0 && !isCleaning
 
   /**
-   * 卷信息整弹只读一次 —— 与 Swift 版 `@State` 初值只在弹层创建时生效一致。
+   * 卷信息整弹只读一次 —— 它的初值只在弹层创建时生效。
    */
   useEffect(() => {
     if (!open) {
@@ -515,8 +511,8 @@ export default function CleanConfirmSheet(): ReactNode {
   /**
    * 滚动区在 `estimateToken` 变化时回到顶部。
    *
-   * Swift 版是 `estimateToken` 的存在理由：目标一变就重建滚动状态，
-   * 否则每次重绘都新建 ScrollView、把滚动位置弹回顶部。
+   * `estimateToken` 存在的理由：目标一变就重建滚动状态，
+   * 否则每次重绘都新建滚动容器、把滚动位置弹回顶部。
    * 这里不把滚动位置写进 state（那会在每次重绘时新建 DOM 状态），
    * 只在 token 真的变了的那一刻归零。
    */
@@ -531,8 +527,7 @@ export default function CleanConfirmSheet(): ReactNode {
   }, [open])
 
   /**
-   * 键盘：Esc 取消（对应 Swift 的 `.keyboardShortcut(.cancelAction)`），
-   * Enter / ⌘Enter 确认（对应 `.keyboardShortcut(.defaultAction)`）。
+   * 键盘：Esc 取消，Enter / ⌘Enter 确认。
    *
    * 焦点在按钮上时按 Enter 由浏览器自己派发 click，这里让开，
    * 免得一次按键触发两次 `executeClean`。

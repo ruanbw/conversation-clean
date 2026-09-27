@@ -12,24 +12,24 @@ import {
 } from '@main/core/scanner'
 
 /**
- * Pi Agent 会话解析 —— 移植自 `PiAgentScanner+Parsing.swift`。
+ * Pi Agent 会话解析。
  *
  * 两条线：
  * 1. `preIndexTasks()`：**预索引** `~/.pi/tasks` 下的任务产物目录，供解析会话时关联子代理产物；
  * 2. `parseSession()`：读一个 `<projectDir>/<timestamp>_<sid>.jsonl`，
  *    从头部 512KB 里解出 sessionId / cwd / 首条用户提问 / 消息数，再拼出 `associatedPaths`。
  *
- * 这里的**每一条兜底顺序都与 Swift 版逐条对齐**，不要顺手改：
+ * 下面是各字段的**兜底顺序**，调换顺序会连带改掉标题 / 摘要 / 项目路径 / 消息数的取值：
  * 标题（首条用户提问 → `Pi 会话 <前 8 位>`）、摘要（提问 → `项目: <cwd>`）、
  * 项目路径（jsonl 的 `cwd` → 目录名 `--a-b--` 反解成 `/a/b`）、
  * 消息数（`type=="message"` 行数 → 至少 1）。
  */
 
-/** 头部预读上限。Swift 版是 `readData(ofLength: 512 * 1024)`。 */
+/** 头部预读上限：只解前 512KB 里的元信息，超出的部分仅用来数行数。 */
 const HEADER_BYTES = 512 * 1024
-/** 大文件续读的块大小，与 Swift 的 `autoreleasepool` 循环一致。 */
+/** 超出头部后继续续读的块大小（256KB 一块读到文件尾），同样只用来数换行。 */
 const CHUNK_BYTES = 256 * 1024
-/** 任务目录名前缀长度（一个 UUID 的长度），与 Swift 的 `dirName.count >= 36` 对应。 */
+/** 任务目录名前缀长度（一个 UUID 的长度）：短于此长度的目录名直接跳过。 */
 const TASK_DIR_PREFIX_LENGTH = 36
 
 /** 扫描阶段枚举出来的一条待解析会话文件。 */
@@ -55,7 +55,7 @@ export interface TaskArtifacts {
 /**
  * 预索引 `~/.pi/tasks` 下的任务产物目录，供 `parseSession` 关联子代理产物。
  *
- * Swift 的匹配规则照抄：目录名至少 36 位，取前 36 位当 key，
+ * 匹配规则：目录名至少 36 位，取前 36 位当 key，
  * 目录名**恰好等于**该前缀或以 `<前缀>-` 开头才算命中（`0102ab…-99999` 这种）。
  * 按 `sizeOfPath` 逐个统计，目录顺序由 `readdirSync` 决定，不做排序。
  */
@@ -64,7 +64,7 @@ export function preIndexTasks(tasksDir: string): TaskArtifacts {
     pathsBySessionId: new Map(),
     sizeBySessionId: new Map()
   }
-  // `listDirectories` 自身过滤了隐藏项与文件，等价于 Swift 的 `contentsOfDirectory(.skipsHiddenFiles)` + `isDirectory` 判断。
+  // `listDirectories` 自身已过滤掉隐藏项与文件，直接用它的结果即可。
   for (const name of listDirectories(tasksDir)) {
     if (name.length < TASK_DIR_PREFIX_LENGTH) continue
     const prefix = name.slice(0, TASK_DIR_PREFIX_LENGTH)
@@ -82,15 +82,14 @@ export function preIndexTasks(tasksDir: string): TaskArtifacts {
 /**
  * 解析一条会话文件，返回一条 `ConversationItem`。
  *
- * 与 Swift 版的差异只有一处：Swift 是 `withTaskGroup` 里的同步闭包，
- * 这里是同步函数，由主类的 `mapLimit` 负责并发。
+ * 同步函数，自己不开并发：由主类的 `mapLimit` 统一限流。
  */
 export function parseSession(
   target: SessionTarget,
   taskArtifacts: TaskArtifacts
 ): ConversationItem {
   const stats = statOf(target.filePath)
-  // Swift: `fileAttrs[.size] ?? FileSizeHelper.sizeOf(path:)` —— 属性取不到就退化成递归求体积。
+  // stat 拿不到时退化成递归求体积。
   const mainFileSize = stats ? stats.size : sizeOfPath(target.filePath)
 
   let detectedSessionId = target.fileSessionId
@@ -114,7 +113,7 @@ export function parseSession(
         const cwd = json['cwd']
         if (typeof cwd === 'string' && cwd.length > 0) detectedCwd = cwd
         const ts = json['timestamp']
-        // Swift 这里是无条件赋值（解析失败会把已有值抹成 nil），照抄。
+        // 已知粗糙点：这里是无条件赋值，解析失败会把已有值抹成 null。
         if (typeof ts === 'string') detectedTimestamp = parseIsoDate(ts)
       } else if (type === 'message') {
         messageCount += 1
@@ -127,8 +126,8 @@ export function parseSession(
         }
       }
     }
-    // Swift: 文件大于 512KB 时，从文件句柄当前位置继续流式数换行并**加到 messageCount** 上。
-    // 这是一处已知的粗糙近似（把「行数」当成「消息数」），按移植铁律照抄。
+    // 文件大于 512KB 时，续读数到的换行数**加到 messageCount** 上 ——
+    // 一处已知的粗糙近似（把「行数」当成「消息数」）。
     messageCount += head.trailingNewlines
   }
 
@@ -144,7 +143,7 @@ export function parseSession(
     }
   }
 
-  // Swift: `fileAttrs[.modificationDate] ?? detectedTimestamp ?? Date()`
+  // 文件 mtime 优先，取不到才退回会话头里的 timestamp，再兜底当前时间。
   const mtime = stats ? stats.mtimeMs : undefined
   const modDate =
     mtime !== undefined ? new Date(mtime) : (detectedTimestamp ?? new Date())
@@ -188,7 +187,7 @@ export function parseSession(
   }
 
   // 3b. 文件名里的 id 与会话头里的 id 不一致时，文件名的那个也再匹配一次
-  //     （逐个 `sizeOfPath` 累加，不走 sizeBySessionId，与 Swift 一致）。
+  //     （逐个 `sizeOfPath` 累加，不走 sizeBySessionId）。
   if (target.fileSessionId !== detectedSessionId) {
     const fileTaskPaths = taskArtifacts.pathsBySessionId.get(target.fileSessionId)
     if (fileTaskPaths) {
@@ -227,7 +226,7 @@ function statOf(path: string): Stats | null {
 
 /**
  * 读会话文件的头部，并顺带数出「头部之外」的换行数。
- * 打不开文件时返回 `null`（Swift 的 `try? FileHandle(forReadingFrom:)` 同样是整段跳过）。
+ * 打不开文件时返回 `null` —— 整段跳过，不向上抛。
  */
 function readHead(
   filePath: string,
@@ -246,7 +245,7 @@ function readHead(
 
     let trailingNewlines = 0
     if (mainFileSize > HEADER_BYTES) {
-      // Swift 从文件句柄的当前位置（= 512KB 处）继续 256KB 一块地读空为止。
+      // 从头部末尾（= 512KB 处）起 256KB 一块地读到文件尾为止。
       const chunk = Buffer.alloc(CHUNK_BYTES)
       let position = bytesRead
       for (;;) {
@@ -275,8 +274,7 @@ function readHead(
 }
 
 /**
- * 逐行切分，等价于 Swift 的 `String.enumerateLines`：
- * 以换行符切分、**不产生**末尾空行（`"a\n"` 只有一行）。
+ * 逐行切分：以换行符切分、**不产生**末尾空行（`"a\n"` 只有一行）。
  */
 function enumerateLines(text: string): string[] {
   if (text.length === 0) return []
@@ -291,7 +289,7 @@ function extractText(content: unknown): string | null {
     const trimmed = content.trim()
     return trimmed.length === 0 ? null : trimmed
   }
-  // Swift 的 `content as? [[String: Any]]` 要求**每个**元素都是字典，混进别的类型就整体落空。
+  // 内容块数组要求**每个**元素都是对象，混进别的类型就整体落空。
   if (Array.isArray(content) && content.every(isRecord)) {
     const texts: string[] = []
     for (const item of content as Record<string, unknown>[]) {
@@ -305,7 +303,7 @@ function extractText(content: unknown): string | null {
   return null
 }
 
-/** 取前 `limit` 个字符并把换行换成空格（Swift：`prefix(n).replacingOccurrences(of: "\n", with: " ")`）。 */
+/** 取前 `limit` 个字符并把换行换成空格。 */
 function flattenNewlines(text: string, limit: number): string {
   return truncate(text, limit).replace(/\n/g, ' ')
 }
@@ -319,7 +317,7 @@ function parseJsonObject(line: string): Record<string, unknown> | null {
     const value: unknown = JSON.parse(line)
     return isRecord(value) ? value : null
   } catch {
-    // 截断的末行 / 半行写入，Swift 那边同样是 `try?` 落空后 `return`。
+    // 截断的末行 / 半行写入直接跳过。
     return null
   }
 }

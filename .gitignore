@@ -1,40 +1,28 @@
-# Xcode
-## User settings
-xcuserdata/
-*.xcuserstate
-*.xcuserdatad
-
-## Build generated
-build/
-DerivedData/
-*.hmap
-*.ipa
-*.dSYM.zip
-*.dSYM
-
-## Various cache & temporary files
-*.moved-aside
-*.xccheckout
-*.xcscmblueprint
-
-# Swift Package Manager
-.build/
-Packages/
-.swiftpm/xcode/
-
 # macOS
 .DS_Store
 .AppleDouble
 .LSOverride
-Icon
 ._*
 .Spotlight-V100
 .Trashes
 
-# App sandbox / runtime files
-*.mode1v3
-*.mode2v3
-*.perspectivev3
+# 依赖与构建产物
+node_modules/
+# electron-vite 三段产物（main / preload / renderer）
+out/
+# electron-builder 打包产物
+release/
+dist/
+*.tsbuildinfo
+.vite/
+
+# ⚠️ build/ 刻意**不**忽略。
+# 它是 electron-builder 的静态资源目录（icon.icns / icon.png），
+# electron-builder.yml 里 `buildResources: build` 指着它。
+# 曾经被旧版 Xcode 段的 `build/` 规则挡在版本库外 —— 结果是 clone 出来的仓库
+# 拿不到图标，打出来的 App 没有图标。本地能跑是因为文件在磁盘上，只有 CI 会炸。
+# 如果以后往 build/ 里放生成物，记得改成「build/*」+「!build/icon.*」，
+# **不要**写成「build/」（git 不会进入被忽略的目录，否定规则会失效）。
 
 # Pi agent 后台任务输出
 .pi/tasks/
@@ -42,16 +30,8 @@ Icon
 # Serena MCP 本地状态
 .serena/
 
-# Git worktrees (SDD isolated workspace)
+# Git worktrees（隔离工作区）
 .worktrees/
-
-# Node / Electron (TS 重构)
-node_modules/
-out/
-release/
-dist/
-*.tsbuildinfo
-.vite/
 
 # 端口期的临时产物
 out-dbg/

@@ -25,15 +25,12 @@ import { scanCursorExtensionStorage, scanDotCursorDirectory } from './CursorScan
 /**
  * Cursor 会话扫描器。
  *
- * 移植自 Swift 版 `Scanners/VSCodeFamily/CursorScanner.swift`。
- * Swift 把主类拆成了三个 extension，本目录按同样的 1:1 对应拆成三个模块：
+ * 扫描分三个来源，对应三个模块：
+ * 1. `CursorScanner+JSONL.ts` —— `chatSessions/*.jsonl` 会话正文
+ * 2. `CursorScanner+StateDatabase.ts` —— `state.vscdb` 索引
+ * 3. `CursorScanner+DirectoryScan.ts` —— `globalStorage/cursor.cursor/` 与 `~/.cursor/` 兜底扫描
  *
- * | 本文件 | Swift 源 | 职责 |
- * |---|---|---|
- * | `CursorScanner.ts`            | `CursorScanner.swift`              | 存储路径解析 / scan / delete / cleanAll |
- * | `CursorScanner+JSONL.ts`      | `CursorScanner+JSONL.swift`        | `chatSessions/*.jsonl` 解析 |
- * | `CursorScanner+StateDatabase.ts` | `CursorScanner+StateDatabase.swift` | `state.vscdb` 索引解析与清理 |
- * | `CursorScanner+DirectoryScan.ts` | `CursorScanner+DirectoryScan.swift` | `globalStorage/cursor.cursor/` 与 `~/.cursor/` 兜底扫描 |
+ * 本文件只负责存储路径解析，以及 scan / delete / cleanAll 的编排与删除。
  *
  * ## 三个数据来源
  *
@@ -43,12 +40,14 @@ import { scanCursorExtensionStorage, scanDotCursorDirectory } from './CursorScan
  * 3. `User/globalStorage/cursor.cursor/{composer,chats,workspaces}/*.json` 与 `~/.cursor/chats/*.json`
  *    —— 目录扫描兜底
  *
- * 注意第 1、2 两个来源之间**没有去重**（照抄 Swift）：同一个 id 若两边都有，
- * 界面上就是两条。`state.vscdb` 里的条目 `associatedPaths` 只有库文件自身，
+ * 注意第 1、2 两个来源之间**没有去重**：同一个 id 若两边都有，界面上就是两条。
+ * 两条 id 不在同一个 id 空间（jsonl 的 `sessionId` 与索引里的 composerId / tab id
+ * 是两套独立生成的命名），强行匹配会误合并到另一条会话上。
+ * `state.vscdb` 里的条目 `associatedPaths` 只有库文件自身，
  * 所以删索引条目不会误删同名 jsonl —— 这一点由 `delete()` 区分 `.vscdb` 路径来保证。
  */
 
-/** 一条待解析的会话文件。Swift 版是 `struct ScanTarget`（internal，供 extension 共用）。 */
+/** 一条待解析的会话文件。导出让 `CursorScanner+JSONL` 共用。 */
 export interface CursorScanTarget {
   /** `chatSessions/<sid>.jsonl` 或 `emptyWindowChatSessions/<sid>.jsonl` 的绝对路径。 */
   filePath: string
@@ -61,7 +60,7 @@ export interface CursorScanTarget {
 export class CursorScanner implements AgentScanner {
   readonly category = 'cursor' as const
 
-  /** Swift 版的 `customStorageURL`。测试用它指到夹具目录（`init(storageURL:)`）。 */
+  /** 测试通过 `ScannerOptions.storagePath` 注入的夹具目录；`null` 表示走真实用户目录。 */
   private readonly customStoragePath: string | null
 
   constructor(options: ScannerOptions = {}) {
@@ -154,7 +153,7 @@ export class CursorScanner implements AgentScanner {
       jsonlTargets.push({ filePath: sessionFile, projectPath: null, editingDirPath: null })
     }
 
-    // 解析 JSONL。Swift 版用 `withTaskGroup` 并发，这里是纯同步解析，循环即可。
+    // 解析 JSONL。纯同步的 CPU/IO，逐条循环即可。
     for (const target of jsonlTargets) {
       const item = parseJsonlSession(target)
       if (item !== null) items.push(item)
@@ -261,9 +260,9 @@ export class CursorScanner implements AgentScanner {
   /**
    * 清空一个 `state.vscdb` 的聊天数据（`composer.composerData` 与 aichat chatdata）。
    *
-   * ⚠️ Swift 版同样**没有在任何地方调用**这个方法（`cleanAll()` 走的是
-   * `VSCDBHelper.clearAllChatSessions`）。这里原样保留以维持文件对照，
-   * 不要以为它已经接进了清理流程。
+   * ⚠️ **未被任何地方调用的旁路**：`cleanAll()` 走的是 `core/vscdb` 的
+   * `clearAllChatSessions`，不是这里。保留是为了说明「清空一个库」另有实现，
+   * 不要误以为它已经接进了清理流程。
    */
   clearStateDatabase(dbPath: string): void {
     clearStateDatabaseChatData(dbPath)
@@ -293,7 +292,7 @@ function removeAndCount(path: string, recreate = false): number {
   return size
 }
 
-/** `realpath` 规范化；路径不存在时退回 `resolve` 的标准化结果（对齐 Swift 的 `.standardized`）。 */
+/** `realpath` 规范化；路径不存在时退回 `resolve` 的标准化结果。 */
 function canonical(path: string): string {
   const normalized = resolve(path)
   try {

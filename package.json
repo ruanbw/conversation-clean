@@ -19,7 +19,7 @@
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "port:status": "node scripts/port-status.mjs",
+    "check:scanners": "node scripts/scanner-health.mjs",
     "dist": "npm run build && electron-builder --mac --publish never",
     "dist:dir": "npm run build && electron-builder --dir --publish never"
   },

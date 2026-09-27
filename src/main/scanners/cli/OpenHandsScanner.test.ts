@@ -12,8 +12,8 @@ import { OpenHandsScanner } from './OpenHandsScanner'
  * 自包含：夹具全部现造在 `os.tmpdir()` 下（`mkdtempSync`），不依赖任何其它测试文件；
  * 最后一个只读用例扫本机真实的 `~/.openhands` / `~/.open-devin`（不存在就跳过）。
  *
- * 注意：Swift 版注入 `storageURL` 之后，**扫描用的目录来自注入值本身**（不是 realpath 之后的
- * `storageURL`），所以这里断言 `associatedPaths` 一律用 `rawRoot` 而不是 `scanner.storagePath`。
+ * 注意：注入 `storagePath` 之后，**扫描用的目录来自注入值本身**（不是 realpath 之后的
+ * `storagePath`），所以这里断言 `associatedPaths` 一律用 `rawRoot` 而不是 `scanner.storagePath`。
  */
 
 let rawRoot = ''
@@ -32,7 +32,7 @@ function writeText(path: string, text: string): void {
   writeFileSync(path, text, 'utf8')
 }
 
-/** 与 Swift 测试 `testMockOpenHandsScanner` 逐条对齐的夹具。 */
+/** 与用例逐条对齐的夹具。 */
 function buildFixture(base: string): void {
   mkdirSync(join(base, 'sessions'), { recursive: true })
   mkdirSync(join(base, 'logs'), { recursive: true })
@@ -152,7 +152,7 @@ describe('OpenHandsScanner · storagePath', () => {
   })
 
   it('注入路径会被 realpath 规范化，但扫描用的是注入的原始路径', () => {
-    // storagePath 走 canonicalPath，associatedPaths 走 custom 本身 —— 与 Swift 版同源不同值。
+    // storagePath 走 canonicalPath，associatedPaths 走 custom 本身 —— 两者同源不同值。
     expect(scanner.storagePath).toBe(realpathSync(rawRoot))
     expect(scanner.storagePath).not.toBe(rawRoot) // macOS 的 /var → /private/var
     expect(scanner.isInstalled).toBe(true)
@@ -258,7 +258,7 @@ describe('OpenHandsScanner · 删除', () => {
     expect(existsSync(join(rawRoot, 'logs', 'openhands-server.log'))).toBe(true)
   })
 
-  it('数据根之外的路径被 isSafeToDelete 拦下（但 freedBytes 照记，与 Swift 版一致）', async () => {
+  it('数据根之外的路径被 isSafeToDelete 拦下（但 freedBytes 照记）', async () => {
     const outside = join(outsideDir, 'not-ours.txt')
     writeText(outside, 'x'.repeat(64))
     const item = {

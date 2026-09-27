@@ -285,7 +285,7 @@ describe('storagePath / isInstalled', () => {
 })
 
 describe('scan', () => {
-  it('枚举 projects / sessions，字段、倒序与 associatedPaths 都按 Swift 版来', async () => {
+  it('枚举 projects / sessions，字段、倒序与 associatedPaths 都按既定口径', async () => {
     const fx = buildFixture('scan')
     const items = await new ClaudeCodeScanner({ storagePath: fx.root }).scan()
 
@@ -306,7 +306,7 @@ describe('scan', () => {
 
     // associatedPaths：主文件 → subagent 子目录 → file-history/<sid> → plans/<sid>。
     // 预索引层枚举的是这三个目录的**直接子项**（即每个会话一个目录），
-    // 不是目录里的文件 —— 与 Swift 的 preIndexAssociatedDirectories 一致。
+    // 不是目录里的文件 —— 预索引层只收子目录，文件交给扩展名守卫处理。
     const [main, subagent, ...rest] = s1.associatedPaths
     expect(main).toBe(fx.jsonl[SID1])
     expect(subagent).toBe(fx.subagent[SID1])
@@ -433,7 +433,7 @@ describe('delete', () => {
 
     // 第一刀：只删 S1。alpha 的 entries 剩一条、根数组剩一条；
     // beta / gamma / delta 三个索引里没有 S1，内容不变
-    // （但会被重新 pretty-print 写回 —— Swift 版也总是重写，这里只比结构）。
+    // （但会被重新 pretty-print 写回 —— 总是重写，这里只比结构）。
     const untouched = {
       beta: readJsonlIndex(join(fx.root, 'projects', '-Users-me-beta', 'sessions-index.json')),
       gamma: readJsonlIndex(join(fx.root, 'projects', '-Users-me-gamma', 'sessions-index.json')),
@@ -512,7 +512,7 @@ describe('delete 开关', () => {
     // 快照文件原样保留。
     expect(existsSync(join(fx.root, 'file-history', SID1, 'a.bin'))).toBe(true)
     expect(existsSync(join(fx.root, 'file-history', SID1, 'b.bin'))).toBe(true)
-    // `plans` 不在快照目录名单里（与 Swift 版同口径），照删不误。
+    // `plans` 不在快照目录名单里，照删不误。
     expect(existsSync(join(fx.root, 'plans', SID1))).toBe(false)
     // 会话本体照删。
     expect(existsSync(fx.jsonl[SID1] as string)).toBe(false)

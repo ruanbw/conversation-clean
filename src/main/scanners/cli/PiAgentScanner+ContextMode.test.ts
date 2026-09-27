@@ -13,7 +13,7 @@ import { pruneACPSessionMap } from './PiAgentScanner+ACPSessionMap'
 /**
  * Pi Agent 的 context-mode 双层索引同步测试。
  *
- * 对照 `scripts/tests/PiAgentContextModeTests.swift`：
+ * 钉住 context-mode 双层索引与会话删除的同步关系：
  * 造真实的 SQLite 索引库（当前 schema / 旧 schema / fts5 内容库）+ `stats-pid-*.json`
  * + `pi-acp/session-map.json`，然后验证删会话时：
  *   · 会话文件与子代理嵌套目录都消失；
@@ -67,7 +67,7 @@ function withDb(path: string, body: (db: DatabaseSync) => void): void {
   }
 }
 
-/** 只读打开跑一条标量查询（Swift 测试里的 `scalarCount`）。 */
+/** 只读打开跑一条标量查询。 */
 function scalarCount(dbPath: string, sql: string): number {
   const db = openReadOnly(dbPath)
   if (!db) throw new Error(`打不开 ${dbPath}`)
@@ -101,7 +101,7 @@ interface Ctx {
   unrelatedJsonl: string
 }
 
-/** 搭出与 Swift `testMockPiAgentContextModeSync` 等价的夹具。 */
+/** 两条会话 + 旧版布局的子代理嵌套目录 + 各层索引库与 ACP 映射的夹具。 */
 function buildContextModeFixture(): Ctx {
   const projectDir = dir('agent', 'sessions', '--Users-mock-cm--')
   const cmSessionsDir = dir('context-mode', 'sessions')
@@ -392,9 +392,9 @@ describe('PiAgentScanner · context-mode 双层索引同步', () => {
 
 describe('PiAgentScanner · 快照开关与索引同步的关系', () => {
   /**
-   * Swift 版 `delete()` 里那段注释点名的行为：
-   * 「关掉快照开关时只删会话文件。上面的 sessionFilePaths 仍用完整的 associatedPaths ——
-   * context-mode 索引行属于『会话存在性』，不是快照，留着反而会让 Pi 界面列出空会话。」
+   * 关掉快照开关时只删会话文件。删除路径仍按完整的 `associatedPaths` 计算 ——
+   * context-mode 索引行属于「会话存在性」而不是快照，
+   * 留着反而会让 Pi 界面列出空会话。
    *
    * 真实布局里 `associatedPaths` 装的是会话子目录本身，所以这里手工构造一条
    * `ConversationItem`，让「快照目录」直接出现在 `associatedPaths` 上。

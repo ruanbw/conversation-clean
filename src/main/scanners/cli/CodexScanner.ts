@@ -28,11 +28,9 @@ import {
 import { cleanEmptyDirectories } from '@main/core/fsutil'
 
 /**
- * Codex 扫描器。
+ * Codex 扫描器：扫 `~/.codex`（`CODEX_HOME` 可覆盖）下的 CLI 会话。
  *
- * 源文件：`ConversationClean/Scanners/CLIAgents/CodexScanner.swift`。
- *
- * Codex 的数据布局（默认 `~/.codex`，`CODEX_HOME` 可覆盖）：
+ * 磁盘布局：
  * ```
  * ~/.codex/
  *   session_index.jsonl      # 会话索引：id / filename / title / cwd / updated_at
@@ -42,19 +40,18 @@ import { cleanEmptyDirectories } from '@main/core/fsutil'
  *   cache/  tmp/             # 缓存（cleanAll 补删）
  *   .codex-global-state.json # 全局状态：活跃会话 / 最近会话（删除时同步）
  * ```
- * 会话正文 `.jsonl` 本身就是**唯一**的会话本体，没有快照目录，
- * 所以 `cleanFileHistorySnapshots` 开关对 Codex 不产生任何影响（照抄 Swift 版行为）。
+ * 会话正文 `.jsonl` 本身就是**唯一**的会话本体，没有文件改动快照目录，
+ * 所以 `cleanFileHistorySnapshots` 开关对 Codex 不产生任何影响。
  */
 
-/** Swift `withTaskGroup` 的默认并发度（CPU 核心数）。 */
+/** 解析会话的并发度：取 CPU 核心数。 */
 const PARSE_CONCURRENCY = Math.max(1, cpus().length)
 
-/** 只读会话文件前 64KB —— 与 Swift `FileHandle.readData(ofLength: 64 * 1024)` 一致。 */
+/** 只读会话文件前 64KB：标题 / cwd / 首条 prompt 都在文件开头。 */
 const HEADER_BYTE_LIMIT = 64 * 1024
 
 /**
- * 头部最多解析多少行。
- * Swift 版是 `if lineCount > 40 { stop = true }`：**第 41 行解析完就停**，
+ * 头部最多解析多少行：**第 41 行解析完就停**。
  * 所以 `messageCount` 的上界是 41，标题 / cwd 也只看前 41 行。
  */
 const MAX_HEADER_LINES = 41
@@ -85,8 +82,8 @@ export class CodexScanner implements AgentScanner {
 
   /**
    * `CODEX_HOME` → `~/.codex`，并做一次 realpath 规范化。
-   * 与 Swift 版的 `canonicalPathKey` 一致：`/var` → `/private/var` 这类别名不解析，
-   * 侧栏显示的路径会跟用户在 Finder 里点开的不一致。
+   * 必要原因是 `/var` → `/private/var` 这类别名：不解析的话侧栏显示的路径
+   * 会跟用户在 Finder 里点开的不一致，删除时也会因为路径对不上而漏掉。
    */
   get storagePath(): string {
     if (this.customStoragePath !== undefined) return canonicalPath(this.customStoragePath)
@@ -95,7 +92,7 @@ export class CodexScanner implements AgentScanner {
     return canonicalPath(join(homedir(), '.codex'))
   }
 
-  /** Swift: `FileManager.default.fileExists(atPath: storageURL.path)`。存在**文件**也算装过。 */
+  /** 存在**文件**（而非目录）也算装过 —— 只要这个路径有东西就要能扫。 */
   get isInstalled(): boolean {
     return pathExists(this.storagePath)
   }
@@ -119,8 +116,7 @@ export class CodexScanner implements AgentScanner {
 
     if (targets.length === 0) return []
 
-    // Swift 用 `withTaskGroup` 并发解析；这里用有界并发的 `mapLimit`，
-    // 上限取 CPU 核心数（`withTaskGroup` 的默认并发度），语义一致。
+    // 有界并发（`mapLimit`）解析，上限取 CPU 核心数；IO 密集，并发拉满即可。
     const items = await mapLimit(targets, PARSE_CONCURRENCY, (target) =>
       this.parseCodexSession(target)
     )
@@ -151,7 +147,7 @@ export class CodexScanner implements AgentScanner {
       if (removeIfExists(path)) freed += size
     }
 
-    // Swift 版在 delete() 之后又调了一次；幂等（没有可改的内容就不落盘），照抄。
+    // delete() 里已经同步过一次；这里再来一遍是幂等的（没有可改的内容就不落盘）。
     this.cleanGlobalState(root, new Set(items.map((item) => item.sessionId)))
     return freed
   }
@@ -185,7 +181,7 @@ export class CodexScanner implements AgentScanner {
       let updatedAt: Date | null = null
       const ts = firstNumber(json.updated_at, json.timestamp)
       if (ts !== undefined) {
-        // Swift: `ts > 1_000_000_000_000 ? ts / 1000.0 : ts`（毫秒 / 秒混写都见过）
+        // 毫秒 / 秒混写都见过，用 1e12 阈值区分
         updatedAt = new Date(ts > 1_000_000_000_000 ? ts : ts * 1000)
       }
 
@@ -280,7 +276,7 @@ export class CodexScanner implements AgentScanner {
       for (const key of ['activeSessionId', 'active_session_id', 'currentSessionId', 'active_thread_id']) {
         const current = json[key]
         if (typeof current === 'string' && excludingSessionIds.has(current)) {
-          json[key] = null // Swift 写的是 NSNull，落盘即 JSON null
+          json[key] = null // 落盘即 JSON null
           modified = true
         }
       }
@@ -334,7 +330,7 @@ export class CodexScanner implements AgentScanner {
       }
 
       if (modified) {
-        // Swift: `JSONSerialization(.prettyPrinted, .sortedKeys)` —— 键排序后落盘，diff 友好。
+        // 键排序后缩进落盘，diff 友好（改完的全局状态文件要能被人 review）。
         writeTextAtomic(statePath, stringifySortedJson(json))
       }
     }
@@ -345,7 +341,7 @@ export class CodexScanner implements AgentScanner {
   /**
    * 解析一个会话文件。
    *
-   * 标题兜底顺序（Swift 原样）：索引 title → 头部里的首条用户 prompt → `Codex 会话 <id 前 8 位>`。
+   * 标题兜底顺序：索引 title → 头部里的首条用户 prompt → `Codex 会话 <id 前 8 位>`。
    * 项目路径兜底顺序：索引 cwd → 头部任意一行的 `cwd` / `project` / `working_directory`。
    * 时间：索引 `updated_at` / `timestamp` → 文件 mtime。
    */
@@ -355,7 +351,7 @@ export class CodexScanner implements AgentScanner {
     const defaultId = basename(file, extname(file))
     const sessionId = indexInfo?.id ?? defaultId
 
-    // Swift: `attributesOfItem(.size)`，取不到才回落到递归 sizeOf。
+    // 先取 stat 里的 size（快），取不到才回落到递归 sizeOf。
     const size = fileSize(file) || sizeOfPath(file)
     const mtime = mtimeMs(file)
     const updatedAt = indexInfo?.updatedAt ?? (mtime !== undefined ? new Date(mtime) : new Date())
@@ -392,7 +388,7 @@ export class CodexScanner implements AgentScanner {
         }
       }
     }
-    // Swift 的 lineCount 统计的是**读到多少行**（含解析失败的行），不是解析成功多少行。
+    // 这里的行数统计是**读到多少行**（含解析失败的行），不是解析成功多少行。
     const messageCount = headerLines.length
 
     let title: string
@@ -432,7 +428,7 @@ export class CodexScanner implements AgentScanner {
 
 type JsonRecord = Record<string, unknown>
 
-/** Swift 的 `canonicalPathKey`：`/var` → `/private/var`；解析失败就原样返回。 */
+/** 规范化符号链接别名（`/var` → `/private/var`）；解析失败就原样返回。 */
 function canonicalPath(path: string): string {
   try {
     return realpathSync(path)
@@ -470,8 +466,8 @@ function firstNumber(...values: unknown[]): number | undefined {
 }
 
 /**
- * Swift `String.enumerateLines` 的等价物：按 `\r\n` / `\r` / `\n` 切分，
- * 且**不以换行结尾时不会再产出一个空行**。空串 → 空数组。
+ * 按 `\r\n` / `\r` / `\n` 三种换行切分，
+ * 且**不以换行结尾时不会再产出一个空行**（空尾行是半截写入的产物，不算一条记录）。空串 → 空数组。
  */
 function enumerateLines(content: string): string[] {
   if (content.length === 0) return []
@@ -508,7 +504,7 @@ function readHeadBytes(path: string, byteLimit: number): string {
   }
 }
 
-/** 递归收集 `root` 下的 `.jsonl` 文件，跳过隐藏项（对应 Swift 的 `.skipsHiddenFiles`）。 */
+/** 递归收集 `root` 下的 `.jsonl` 文件，跳过隐藏项。 */
 function collectJsonlFiles(root: string): string[] {
   const out: string[] = []
   const walk = (dir: string, depth: number): void => {
@@ -525,7 +521,7 @@ function collectJsonlFiles(root: string): string[] {
       if (entry.isDirectory()) {
         walk(child, depth + 1)
       } else if (extname(entry.name) === '.jsonl') {
-        // Swift 的守卫只判 `pathExtension == "jsonl"`，软链也是这么算进来的。
+        // 守卫只判 `pathExtension == "jsonl"`，指向 jsonl 的软链也会被算进来。
         out.push(child)
       }
     }
@@ -534,7 +530,7 @@ function collectJsonlFiles(root: string): string[] {
   return out
 }
 
-/** Swift `Data.write(to:options:.atomic)`：先写临时文件再 rename。 */
+/** 原子写：先写临时文件再 rename（避免写一半被读到 / 截断原文件）。 */
 function writeTextAtomic(path: string, content: string): void {
   const tmp = `${path}.tmp`
   try {

@@ -7,13 +7,12 @@ import { sizeOfPath } from '@main/core/scanner'
 import { RooCodeScanner } from './RooCodeScanner'
 
 /**
- * RooCodeScanner 的移植验收用例。
+ * RooCodeScanner 验收用例：storagePath 的解析、scan 的字段抽取、delete 的索引同步、
+ * cleanAll 的清理范围。
  *
- * 验收标准来自 `scripts/tests/RooContinueTests.swift`（MockRooCodeScan）：
- * 1 个任务、分类 `.rooCode`、标题取 `say == "task"` 的 text、
- * cwd 从正文里的 `Current Working Directory (...)` 抠出、messageCount、删除后重扫为空。
- * 另外补上 Swift 用例没覆盖但端口必须保证的：Roo 自己的环境变量 / 默认目录、
- * taskHistory 索引同步、两个开关的相反分支。
+ * 盖住的行为：1 个任务、分类 `.rooCode`、标题取 `say == "task"` 的 text、
+ * cwd 从正文里的 `Current Working Directory (...)` 抠出、messageCount、删除后重扫为空；
+ * 另外还钉住了 Roo 自己的环境变量 / 默认目录、taskHistory 索引同步与两个开关的相反分支。
  *
  * 本文件自包含：`$HOME` 指向一次性临时目录，夹具全部在 `os.tmpdir()` 下现场造。
  */
@@ -55,7 +54,7 @@ function readText(path: string): string {
 
 const ROO_TASK = 'roo-task-001'
 
-/** 复刻 `RooContinueTests.swift` 的 Roo Code 夹具（多了 checkpoints / taskHistory / cache）。 */
+/** Roo Code 夹具（多了 checkpoints / taskHistory / cache）。 */
 function buildRooFixture(root: string, options: { withCheckpoints?: boolean } = {}): void {
   const tasksDir = join(root, 'tasks')
   const stateDir = join(root, 'state')
@@ -169,7 +168,7 @@ describe('RooCodeScanner · storagePath / isInstalled', () => {
   })
 })
 
-describe('RooCodeScanner · scan（对应 RooContinueTests.swift 的 MockRooCodeScan）', () => {
+describe('RooCodeScanner · scan', () => {
   it('解析任务、抠出 cwd、带上快照目录', async () => {
     const root = makeTempDir('cc-roo-scan-')
     buildRooFixture(root)

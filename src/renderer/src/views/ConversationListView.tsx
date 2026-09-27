@@ -22,9 +22,8 @@ import styles from './ConversationListView.module.css'
 /**
  * 会话列表。
  *
- * 移植自 `ConversationClean/Views/ConversationListView.swift`。视觉按 `ui-a-precision.html`，
- * 修掉的四处：
- *   ① 系统 `List` → 自绘虚拟化。行完全自绘，选中态用「2px 靛蓝竖条 + 极淡靛蓝底」
+ * 视觉基线 `design-demos/ui-a-precision.html`，四处取舍：
+ *   ① 不用任何现成的列表组件，自绘虚拟化。行完全自绘，选中态用「2px 靛蓝竖条 + 极淡靛蓝底」
  *      内嵌在行里（不占布局，不会把文字推歪）。
  *   ② 62px 的会话 ID 列删掉 —— 它用三级字，肉眼几乎看不见，却占着右对齐数字区里
  *      最宽的一格，把体积挤到了一边。纯浪费的视觉预算。
@@ -37,7 +36,7 @@ import styles from './ConversationListView.module.css'
  * 测不到高度时（jsdom、尚未布局）退化为全量渲染 —— 宁可多画，也不要白屏。
  */
 
-/** 排序模式。Swift 是文件私有的 `ListSortMode`（默认 `.size`）。 */
+/** 排序模式。默认 `size`：这是清理工具，占用空间比时间新更值得排前面。 */
 export const SORT_MODES = ['date', 'size', 'msgs'] as const
 export type SortMode = (typeof SORT_MODES)[number]
 
@@ -56,7 +55,7 @@ const SORT_OPTIONS: { value: SortMode; label: string }[] = SORT_MODES.map((mode)
 const ROW_HEIGHT = 32
 const OVERSCAN = 6
 
-/** Swift 用 `@AppStorage("listSortMode")` / `@AppStorage("searchText")`，键名照搬。 */
+/** 排序与搜索词的 localStorage 持久化键。 */
 const LS_SORT = 'listSortMode'
 const LS_SEARCH = 'searchText'
 
@@ -68,7 +67,7 @@ export function ConversationListView() {
   const searchText = state.searchText
   const isBusy = state.isScanning || state.isCleaning
 
-  // 搜索词持久化（Swift 的 `@AppStorage("searchText")`）。挂载时回填一次。
+  // 搜索词持久化。挂载时回填一次。
   useEffect(() => {
     const saved = readString(LS_SEARCH)
     if (saved.length > 0 && state.searchText.length === 0) actions.setSearchText(saved)
@@ -98,13 +97,13 @@ export function ConversationListView() {
   const [scrollTop, setScrollTop] = useState(0)
   const viewportH = useViewportHeight(scrollRef)
 
-  // 列表默认吃掉键盘焦点（对应 Swift 的 `.focusable()`）——
+  // 列表默认吃掉键盘焦点 ——
   // 否则 ↑↓ 只有一个需要点一下列表才生效的隐藏前提。
   useEffect(() => {
     scrollRef.current?.focus()
   }, [])
 
-  // 选中行变化时把它滚进视野（Swift 的 `proxy.scrollTo(id, anchor: .center)`）。
+  // 选中行变化时把它滚进视野（居中）。
   useEffect(() => {
     const id = state.selectedConversationId
     const el = scrollRef.current

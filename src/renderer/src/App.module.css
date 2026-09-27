@@ -3,7 +3,6 @@
    —— 应用外壳：顶栏 + 三栏容器 + 设置遮罩。
 
    视觉基线 design-demos/ui-a-precision.html 的 `.top` / `.cols`。
-   移植自 `ConversationClean/ContentView.swift`。
 
    这几条原先寄居在 `components/Splitter.module.css` 里 —— 分配文件清单里
    当时没有 `App.module.css`。CSS Modules 的类名按文件生成，把外壳类写在

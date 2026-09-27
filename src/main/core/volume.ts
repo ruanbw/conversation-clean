@@ -7,18 +7,14 @@ import type { VolumeInfo } from '@shared/types'
 /**
  * 宿主卷的容量与已用量。
  *
- * 移植自 Swift 版 `Views/CleanConfirmSheet.swift` 末尾的 `struct VolumeInfo.current()`，
- * 那里读的是 `URLResourceValues` 的 `volumeTotalCapacityKey` /
- * `volumeAvailableCapacityForImportantUsageKey`。Node 侧对应 `fs.statfsSync`：
- * `blocks` / `bsize` 给总容量，`bavail` 给「普通用户可用量」。
+ * 口径：总容量 = `statfs` 的 `blocks * bsize`，已用 = 总容量 − `bavail * bsize`。
+ * 用 `bavail` 而不是 `bfree`：`bavail` 不含 root 保留块，比真实可用量更保守，
+ * 方向上安全 —— 宁可少报可用量。（Finder「可用空间」用的是更宽的口径，
+ * 已扣掉 purgeable；`statfs` 没有对应字段，这段差异是已知且可接受的。）
  *
  * **为什么必须读真值**：原型里的 `VOL = {cap:994GiB, used:912GiB}` 是写死的演示数字。
  * 拿它去承诺用户「清理后 91.750% 已用」是在拿一条不存在的卷撒谎。
  * 读不到就返回 `null`，UI 整块不渲染 —— 宁可少一节，也不能用假分母编占比。
- *
- * 口径说明：Swift 版优先用 `...ForImportantUsage`（与 Finder「可用空间」同口径，
- * 已扣掉 purgeable），Node 没有对应字段，退回 `bavail`。
- * `bavail` 比 `bfree` 保守（不含 root 保留块），方向上是安全的 —— 宁可少报可用量。
  *
  * 结果进程内缓存：卷容量在一次应用生命周期里不会变，而确认弹层每开一次就问一次。
  */
@@ -46,7 +42,7 @@ function readVolumeInfo(): VolumeInfo | null {
 
   const capacity = Number(stats.blocks) * Number(stats.bsize)
   const available = Number(stats.bavail) * Number(stats.bsize)
-  // 这两个守卫照抄 Swift：读不到有效值时宁可返回 nil，也不要造一个假分母。
+  // 读不到有效值时宁可返回 null，也不要造一个假分母。
   if (!Number.isFinite(capacity) || capacity <= 0) return null
   if (!Number.isFinite(available) || available <= 0 || available > capacity) return null
 
@@ -99,11 +95,10 @@ let nameCache = new Map<string, string>()
 /**
  * 卷名。
  *
- * 根卷 `/` 的卷名（「Macintosh HD」之类）在文件系统层面取不到，
- * Swift 版用 `volumeNameKey`（URLResourceValues 的私有能力），Node 没有。
- * 退而求其次：`diskutil info -plist <mount>` 能拿到，但那是 spawn 一次进程。
+ * 根卷 `/` 的卷名（「Macintosh HD」之类）在文件系统层面取不到：
+ * 挂载点是 `/`，末段是空串。`diskutil info -plist <mount>` 能拿到，但那是 spawn 一次进程。
  * 所以先看挂载点末段（`/Volumes/Macintosh HD` → `Macintosh HD`，最准），
- * 末段不可用（根卷 `/`）时才 spawn 一次 `diskutil`，并且结果缓存。
+ * 末段不可用（根卷 `/`）时才 spawn 一次 `diskutil`，并且结果按挂载点缓存。
  */
 function volumeName(mountPath: string): string {
   const cachedName = nameCache.get(mountPath)

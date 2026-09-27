@@ -5,18 +5,20 @@ import { CATEGORY_GLYPHS } from '@shared/types'
 /**
  * Agent 字形库 —— 侧栏、列表、检视器、设置路径页共用同一套线稿符号。
  *
- * 移植自 Swift 版 `Views/AgentIconView.swift`。那里指向 SF Symbols，
- * 这里改成自绘 SVG，理由和那份文件里写的一样：**真实 app 图标优先，字形只是兜底**。
- * 优先取 `state.agentIcons[category]`（主进程解析好的 app 图标 dataURL），
- * 解析不到才画这里的线稿。
+ * 定位：**真实 app 图标优先，字形只是兜底**。优先取 `state.agentIcons[category]`
+ * （主进程解析好的 app 图标 dataURL），解析不到才画这里的线稿。
  *
  * 铁律：一律线性。每个 glyph 都是 `fill="none" stroke="currentColor" stroke-width="1.6"`，
- * 整套 UI 只靠 1.6px 描边建立识别度；一旦混入 `.fill` 变体，描边语言就断了，
+ * 整套 UI 只靠 1.6px 描边建立识别度；一旦混入填充变体，描边语言就断了，
  * 侧栏 / 标题行 / 检视器 / 设置路径页会各自用不同粗细的符号。
  *
+ * category → 字形 key 的映射（`CATEGORY_GLYPHS`）放在 `shared/types.ts` 而不是这里：
+ * 主进程与渲染进程都要用同一份映射，两边各写一份必然漂。
+ *
  * 两处**刻意**不与其他 Agent 同形，理由都是「同形等于没有区分」：
- *   · Aider 复用 terminal 会与 Claude Code 完全撞脸，这里给 terminalClock。
- *   · Zed AI 是 textbox（文本光标意象），不是填充版方块。
+ *   · Aider 用 terminalClock 而不与 Claude Code 同用 terminal —— 真实侧栏里
+ *     这两款会同时出现，撞脸等于没有区分。
+ *   · Zed AI 是 textbox（文本光标意象），不是方块。
  */
 const GLYPHS: Record<string, string> = {
   // 托盘：全部会话
@@ -94,7 +96,6 @@ export function AgentGlyph({ category, size = 14, glyph, className, style }: Age
 /**
  * Agent 标记：**真实 app 图标优先，线稿字形兜底**。
  *
- * 与 Swift 版 `AgentIconView` 的逻辑一一对应：
  * `icons[category]` 是主进程解析好的 app 图标 dataURL（CLI Agent 与
  * VS Code 扩展没有独立 app，值为 null），此时画 <img>；否则画 `AgentGlyph`。
  *

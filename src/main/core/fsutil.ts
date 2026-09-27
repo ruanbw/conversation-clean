@@ -4,16 +4,20 @@ import { join, sep } from 'node:path'
 import { CleanPrefs } from './prefs'
 
 /**
- * 跨扫描器共享的文件系统原语。
+ * 跨扫描器共享的文件系统原语：求体积、删文件 / 删目录、回收空目录。
  *
- * 移植自 Swift 版 `Core/AgentScannerProtocol.swift` 的 `enum FileSizeHelper`
- * 与 `Core/FileSystem/DirectoryCleaner.swift`。
- *
- * Swift 版 `sizeOf` 用 `FileManager.enumerator(options: [.skipsHiddenFiles])`，
- * 这里对应 `readdirSync` + 手动跳过 `.` 前缀项，语义一致。
+ * 体积计算与「删空目录」都只在这里实现一份：十几个扫描器各写一遍必然漂移，
+ * 尤其「回收空项目目录」开关必须处处生效，不能靠每处都记得判。
  */
 
-/** 递归求一个文件或目录的字节数。目录跳过隐藏项；不存在返回 0。 */
+/**
+ * 递归求一个文件或目录的字节数。不存在返回 0。
+ *
+ * 目录枚举**跳过 `.` 前缀项**：`.git` / `.DS_Store` 不属于会话正文，
+ * 算进体积会让「预计释放」虚高，递归进 `.git` 还要白白慢一大截。
+ * 一律用 `lstat` 而不是 `stat`：符号链接既不算目录也不算文件，直接跳过，
+ * 跟随会在目录树有环时无限递归。
+ */
 export function sizeOfPath(path: string): number {
   let stats
   try {

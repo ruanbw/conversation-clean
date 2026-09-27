@@ -7,16 +7,16 @@ import { useCleanActions, useCleanState, cleanStore } from '../state/cleanStore'
 import styles from './OverviewView.module.css'
 
 /**
- * 详情栏未选中态。移植自 Swift 版 `Views/OverviewView.swift`。
+ * 详情栏未选中态。
  *
  * 这一栏的语义是「现在该从谁开始删」：全库按体积降序的 Top 5 大户 + Agent 占用分布。
  * 点一行直接选中它（`setSelectedConversationId`），详情栏随之切到该会话的元数据。
  *
  * 全部数据取自 `state.conversations`（**全库**，不是当前筛选结果）——
- * 与 Swift 版一致：这里回答的是「先删谁」，不是「当前分类里谁最大」。
+ * 这里回答的是「先删谁」，不是「当前分类里谁最大」。
  *
- * 硬约束：全部自绘。系统 `Divider()` 的颜色、`ContentUnavailableView` 的插画、
- * 按钮的系统外观，一个都不留。
+ * 硬约束：全部自绘 —— 分隔线、插画、按钮的外观都由本项目自己定，
+ * 不借用任何平台控件的默认外观。
  *
  * 图标：统一走 `components/DrawnControls.tsx` 的 `DrawnIcon`（与主窗口其余视图
  * 同一套 1.6px 描边字形），本文件不再内联第二份 SVG。
@@ -24,7 +24,11 @@ import styles from './OverviewView.module.css'
 
 const TOP_N = 5
 
-/** 分布色阶：同 hue 250° 的 8 级明度阶梯（tokens.css 的 `--d1`~`--d8`）。 */
+/**
+ * 分布色阶：同 hue 250° 的 8 级明度阶梯（tokens.css 的 `--d1`~`--d8`），
+ * 而不是彩虹色。一条堆叠条里同色相的明暗差能把「相邻两段」读出来，
+ * 换成不同色相反而变成一块拼图。
+ */
 function distColorVar(index: number): string {
   const level = Math.min(Math.max(index, 0), 7)
   return `var(--d${level + 1})`
@@ -218,6 +222,8 @@ function BiggestRow({
   onSelect: () => void
 }) {
   const share = percentOf(item.sizeInBytes, total)
+  // 0 字节也进榜：它仍是一条真会话，压暗（`bigRowZero` / `bigSizeZero`）即可，
+  // 直接滤掉会让「Top 5」在一堆 0 KB 时忽然变空。
   const zero = item.sizeInBytes <= 0
 
   return (

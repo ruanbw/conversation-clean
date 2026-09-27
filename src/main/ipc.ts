@@ -30,7 +30,7 @@ import {
  * 再去 `src/shared/types.ts` 的 `RendererApi` 加签名，最后在 preload 挂上。
  */
 export function registerIpcHandlers(): void {
-  // 注册表完整性：少一个分类就是移植漏了，启动时立刻能看出来。
+  // 注册表完整性：少注册一个分类，启动时立刻能看出来。
   const problems = validateRegistry()
   if (problems.length > 0) {
     console.error('[registry] 扫描器注册表有问题：\n  ' + problems.join('\n  '))
@@ -98,8 +98,7 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle(IPC.revealPath, (_event, path: string): boolean => {
     if (typeof path !== 'string' || path.length === 0) return false
-    // 「在 Finder 中显示」：选中该文件而不是只打开父目录，
-    // 与 Swift 版 `NSWorkspace.selectFile(_:inFileViewerRootedAtPath:)` 一致。
+    // 「在 Finder 中显示」：选中该文件而不是只打开父目录。
     // 路径不存在时 shell 也会打开父目录，所以这里照样调用，只是回报 false。
     const exists = pathIsOnDisk(path)
     shell.showItemInFolder(path)

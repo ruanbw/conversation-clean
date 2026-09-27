@@ -24,7 +24,7 @@ import {
 /**
  * Claude Code 会话扫描器。
  *
- * 移植自 `ConversationClean/Scanners/CLIAgents/ClaudeCodeScanner.swift`。
+ * 数据根：`CLAUDE_HOME` > `~/.claude`（测试可注入）。
  *
  * Claude Code 是 15 款 Agent 里目录结构最复杂的一个：会话正文在
  * `projects/<mangled-cwd>/<sessionId>.jsonl`，另外还有三类**旁挂**产物
@@ -33,21 +33,31 @@ import {
  * `sessions-index.json` 也必须同步裁剪，否则 Agent 侧会留下查不到的幽灵会话。
  */
 
-/** 预索引的旁挂目录名，顺序即 `associatedPaths` 里的追加顺序。 */
+/**
+ * 预索引的旁挂目录名，顺序即 `associatedPaths` 里的追加顺序。
+ *
+ * 只有 `file-history` 属于「文件改动快照」，会进 `CleanPrefs` 的快照白名单；
+ * `plans` / `session-env` 是会话的元数据，不在名单里，所以「保留文件快照」开关
+ * 关掉时它们**照样会被删** —— 这是有意的，它们随会话生效才有意义。
+ */
 const ASSOCIATED_DIR_NAMES = ['file-history', 'plans', 'session-env'] as const
 
 /** 一键清空时额外处理的目录：`cache` 不是快照，`backups` / `shell-snapshots` 是。 */
 const CLEAN_ALL_EXTRA_DIRS = ['cache', 'backups', 'shell-snapshots'] as const
 
 /**
- * 会话头最多解析多少行。
+ * 会话头最多解析多少行（闭区间，即第 1~51 行）。
  *
- * Swift 版在 `enumerateLines` 里 `lineIdx > 50` 时 `stop` —— 计数器在自增之后比较，
- * 所以实际处理第 1~51 行。这里对齐为 51。
+ * `cwd` / `gitBranch` / `slug` / 首条 user prompt 全在文件最前面，再往后翻
+ * 收益趋零；而 N 条会话的头解析是并发跑的，多读一行就是多一轮 IO。
  */
 const HEADER_LINE_LIMIT = 51
 
-/** JSONL 头解析上限，与 Swift 的 `FileHandle.readData(ofLength: 64 * 1024)` 一致。 */
+/**
+ * JSONL 头解析的字节上限。
+ *
+ * 单条会话动辄几百 MB，绝不能整读；64KB 足够覆盖上面那几个头字段。
+ */
 const HEADER_BYTE_LIMIT = 64 * 1024
 
 /** 一个待解析的会话文件。 */
@@ -85,8 +95,9 @@ export class ClaudeCodeScanner implements AgentScanner {
   private readonly root: string
 
   constructor(options: ScannerOptions = {}) {
-    // Swift 版三条来源（自定义 URL / `CLAUDE_HOME` / `~/.claude`）之后统一做一次
-    // realpath；`resolveStoragePath` 负责后两条，自定义路径在这里补上同一层规范化。
+    // 三条来源（注入路径 / `CLAUDE_HOME` / `~/.claude`）之后统一做一次 realpath；
+    // `resolveStoragePath` 负责后两条，注入路径在这里补上同一层规范化 ——
+    // 少了它，删会话时算出来的路径会和扫描时列出来的路径对不上（`/var` → `/private/var`）。
     this.root =
       options.storagePath !== undefined
         ? canonical(options.storagePath)
@@ -97,7 +108,7 @@ export class ClaudeCodeScanner implements AgentScanner {
     return this.root
   }
 
-  /** Swift 版是 `fileExists`（不分文件 / 目录），这里同样用 `pathExists`。 */
+  /** 安装判定：只看数据根在不在，不区分文件 / 目录。 */
   get isInstalled(): boolean {
     return pathExists(this.root)
   }
@@ -153,8 +164,8 @@ export class ClaudeCodeScanner implements AgentScanner {
    * 枚举 `projects` 下各 project 目录里的 `.jsonl` 与 `sessions` 下的 `.jsonl`，
    * 按 sessionId 去重。
    *
-   * 同一 sessionId 只会保留先遇到的那一个；Swift 用 `Set` 在收集阶段就去重，
-   * 这里保持一致（先收集再去重，不要等解析阶段再过滤）。
+   * 同一 sessionId 只会保留先遇到的那一个（`projects/` 早于 `sessions/`）。
+   * 用 `Set` 在**收集阶段**去重，不要拖到解析阶段再过滤：解析一次要探盘 + 读 64KB 头。
    */
   private collectTargets(): SessionTarget[] {
     const targets: SessionTarget[] = []
@@ -192,8 +203,8 @@ export class ClaudeCodeScanner implements AgentScanner {
   /**
    * 预先算好 `file-history` / `plans` / `session-env` 三个目录下的条目。
    *
-   * Swift 版在每条会话里现调 `sizeOf`，N 条会话就把同一批目录递归 stat N 遍；
-   * 这里提前按 sessionId 聚合一次，解析时只查 Map。
+   * 提前按 sessionId 聚合一次，解析时只查 Map。反过来做（每条会话现算体积）
+   * 会把同一批目录递归 stat N 遍，几千条会话时是分钟级的无谓 IO。
    */
   private preIndexAssociatedDirectories(): AssociatedArtifacts {
     const pathsBySessionId = new Map<string, string[]>()
@@ -202,7 +213,7 @@ export class ClaudeCodeScanner implements AgentScanner {
     for (const dirName of ASSOCIATED_DIR_NAMES) {
       const targetDir = join(this.root, dirName)
       if (!isDirectory(targetDir)) continue
-      // Swift 版是 `contentsOfDirectory` 不过滤文件 / 目录，只跳隐藏项。
+      // 不过滤文件 / 目录，只跳隐藏项：这三个目录里两种形态都存在，统一收进来。
       for (const name of listEntryNames(targetDir)) {
         if (name.length === 0) continue
         const path = join(targetDir, name)
@@ -372,7 +383,7 @@ export class ClaudeCodeScanner implements AgentScanner {
 
     const retained: string[] = []
     for (const line of enumerateLines(content)) {
-      // 解析失败 / 没有 sessionId 的行一律保留 —— Swift 的 guard 分支也是 append(line)。
+      // 解析失败 / 没有 sessionId 的行一律保留：我们认不出来的行不该被我们的清理毁掉。
       let json: unknown
       try {
         json = JSON.parse(line)
@@ -420,8 +431,9 @@ export class ClaudeCodeScanner implements AgentScanner {
    * · `{"sessions": {sid: …}}`             —— 字典
    * · 其它字典（键即 sessionId）
    *
-   * 裁剪后为空 → 删文件；读不出来 / 解析失败 → 同样删文件（Swift 版就是这么干的）。
-   * 数组元素缺 `sessionId` 与 `id` 的一律丢弃 —— Swift 的 filter 也是这个口径。
+   * 裁剪后为空 → 删文件；读不出来 / 解析失败 → 同样删文件（认不出的索引留着
+   * 只会让 Agent 侧继续显示点进去是空的幽灵会话）。
+   * 数组元素缺 `sessionId` 与 `id` 的一律丢弃 —— 认不出归属的元素没法判重，留着必然是幽灵。
    */
   private cleanSingleSessionsIndex(filePath: string, excludingSessionIds: Set<string>): void {
     let parsed: unknown
@@ -497,8 +509,9 @@ export class ClaudeCodeScanner implements AgentScanner {
   /** 一键清空：把所有 `sessions-index.json` 干掉。 */
   private removeAllSessionsIndices(): void {
     const projectsDir = join(this.root, 'projects')
-    // Swift 版这里有 `guard projects 目录存在` 的早退，因此 `projects` 不存在时
-    // 根 `sessions-index.json` 也会被跳过。照抄这个行为。
+    // 早退条件是 `projects/` 存在：它不存在时根 `sessions-index.json` 会被一起漏删。
+    // 这是已知的漏网场景（清空时若 `projects/` 已被先删，根索引就留下来了），
+    // 要补就在补根索引那一步，不要动这个早退。
     if (!isDirectory(projectsDir)) return
 
     for (const name of listDirectories(projectsDir)) {
@@ -569,7 +582,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * 等价于 Swift 的 `String.enumerateLines`：按换行切分，**不产生尾部空行**。
+ * 按换行切分，**不产生尾部空行**。
  * `""` → `[]`，`"a\n"` → `["a"]`，`"a\n\n"` → `["a", ""]`。
  */
 function enumerateLines(content: string): string[] {
@@ -601,7 +614,7 @@ function extractFirstUserPrompt(entry: SessionHeaderEntry): string | null {
   return null
 }
 
-/** 标题 / 摘要里换行压成空格。Swift 版是 `replacingOccurrences(of: "\n", with: " ")`。 */
+/** 标题 / 摘要里换行压成空格（侧栏是单行渲染）。 */
 function flattenNewlines(text: string): string {
   return text.replace(/\n/g, ' ')
 }
@@ -617,7 +630,7 @@ function filterKeys(
   return out
 }
 
-/** `JSONSerialization` 的 `.sortedKeys`：递归按键名排序后再序列化。 */
+/** 递归按键名排序后再序列化，保证重写出来的文件是稳定的（diff 干净）。 */
 function sortKeysDeep(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(sortKeysDeep)
   if (isPlainObject(value)) {
@@ -628,7 +641,7 @@ function sortKeysDeep(value: unknown): unknown {
   return value
 }
 
-/** 对应 Swift 的 `write(to:atomically:true)`：先写同目录隐藏临时文件再 rename。 */
+/** 原子写：先写同目录隐藏临时文件再 rename，中途崩溃不会留下半截 JSON。 */
 function writeFileAtomic(path: string, content: string): void {
   const tmp = join(dirname(path), `.${basename(path)}.${process.pid}.tmp`)
   try {
@@ -639,7 +652,7 @@ function writeFileAtomic(path: string, content: string): void {
     try {
       writeFileSync(path, content, 'utf8')
     } catch {
-      /* 与 Swift 的 `try?` 一致：写不进去就算了 */
+      /* 写不进去就算了：单份索引写失败不该让整批删除报错。 */
     }
   }
 }

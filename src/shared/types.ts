@@ -4,9 +4,12 @@
  * 主进程（扫描器 / 清理）、preload（IPC 桥）、渲染进程（React）三方都从这里取类型。
  * 任何一方要改字段，先改这里，再改调用方 —— 不允许在别处另立一份结构相同的 interface。
  *
- * 移植自 Swift 版 `ConversationClean/Models/ConversationItem.swift`。
- * 唯一的结构性差异：`Date` 变成 ISO 8601 字符串（`updatedAt`），
- * 因为 IPC 的结构化克隆不支持 Date 对象，且字符串在 JSON 落盘 / 比较 / 传输上都更省事。
+ * 唯一的结构性取舍：磁盘上明明有 `Date`，契约里 `updatedAt` 却是 ISO 8601 字符串。
+ * 约束来自 IPC：主进程 → preload → 渲染进程走结构化克隆，`Date` 对象过不去。
+ * 而这个字段还要原样进 JSON 缓存、跨次启动比较、和别的分类一起按字典序倒序排。
+ * 一条记录里只有时间戳这一处会被人直接读（检视器的「最后更新」），
+ * ISO 字符串同时满足「能穿过 IPC」「能直接存 JSON」「字典序 == 时间序」三件事，epoch 毫秒只满足第一件：
+ * 它是数字，`"1789…"` 与 `"27…"` 谁新谁旧要人再换算一遍，要显示还得另包一层格式化。
  */
 
 /** 16 个分类 = 15 款 Agent + `all` 汇总项。顺序即侧栏顺序，改这里等于改侧栏。 */
@@ -90,7 +93,7 @@ export const CATEGORY_APP_BUNDLES: Record<AgentCategory, string[]> = {
 }
 
 /**
- * 字形键。Swift 版指向 SF Symbols，Electron 版指向自绘 SVG 精灵图里的 key。
+ * 字形键。指向自绘 SVG 精灵图里的 key（取图见 `components/AgentGlyph.tsx`）。
  *
  * 铁律：一律线性描边，1.6px stroke + `fill: none`。
  * 一旦混入填充变体，侧栏 / 标题行 / 检视器 / 设置路径页会各自用不同粗细的符号。
@@ -146,7 +149,12 @@ export interface AgentInfo {
   totalBytes: number
 }
 
-/** 设置面板 4 个开关。键名与 Swift 版 `CleanPrefs.Key` 逐字一致，便于对照。 */
+/**
+ * 设置面板 4 个开关。
+ *
+ * 键名是**落盘契约**，不是随手起的标识：它们写进用户目录下的 prefs 文件，
+ * 改一个键名等于静默丢弃所有用户已保存的偏好设置。要加开关就加新键，不要改旧键。
+ */
 export interface Prefs {
   autoScanOnLaunch: boolean
   confirmBeforeClean: boolean

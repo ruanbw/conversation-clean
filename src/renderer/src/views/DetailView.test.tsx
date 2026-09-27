@@ -167,7 +167,7 @@ describe('DetailView · 元数据渲染', () => {
     expect(valueOf('关联文件')).toBe('1')
     expect(valueOf('最后更新')).toBe('2026-09-27 19:54')
     expect(valueOf('Git 分支')).toBe('main')
-    // 项目路径按 Swift 基准显示**全路径**（home 已缩写成 ~），换行不截断；
+    // 项目路径显示**全路径**（home 已缩写成 ~），换行不截断；
     // title 上带同一份完整值
     expect(valueOf('项目路径')).toBe('~/projects/conversation-clean')
     const projectCell = metaCard.querySelector('[title]')
@@ -213,7 +213,7 @@ describe('DetailView · 元数据渲染', () => {
     await act(async () => {
       fireEvent.click(rows[0] as HTMLElement)
     })
-    // 复制的是**展示用**的路径（home 已缩写成 ~），与 Swift 版一致
+    // 复制的是**展示用**的路径（home 已缩写成 ~）
     expect(api.copyText).toHaveBeenCalledWith('~/projects/conversation-clean/.session')
   })
 })

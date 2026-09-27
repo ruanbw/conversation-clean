@@ -54,9 +54,9 @@ App Sandbox 的 `.entitlements` 概念在 Electron 下不存在，隔离改由 `
 
 路径一律 `realpath` 规范化一次：`/var` → `/private/var` 这类别名不解析，侧栏显示的路径会跟 Finder 里点开的不一致，删除时也会出现「文件明明存在却删不掉」。
 
-**SQLite 索引层。** `core/vscdb.ts` 用 **Node 内建的 `node:sqlite`（`DatabaseSync`）**，不是 `better-sqlite3`：后者是原生模块，每次升 Electron 都要按新 ABI 重建；`node:sqlite` 在 Node 22.5+ 与 Electron 44（内嵌 Node 24.21）里都有，装依赖时不用管它。它覆盖 `state.vscdb` 的 10 个索引 key（`chat.ChatSessionStore.index` / `memento/interactive-session%` / `interactive.sessions` / `workbench.panel.chat%` / `agentSessions.{state,model}.cache` / `composer.composerData` / `workbench.panel.aichat…chatdata`）与 Copilot `session-store.db` 的 6 张关系表。三条约定：扫描一律 `readOnly: true`（IDE 可能正持有这个库）；改完索引立刻 `VACUUM`（SQLite 删行不缩文件）；文件不存在或表结构不对一律静默返回 —— 索引清理是清理流程的**补充**而非前置条件，索引坏了不该让文件删除也失败。
+**SQLite 索引层。** `core/vscdb.ts` 用 **Node 内建的 `node:sqlite`（`DatabaseSync`）**，不是 `better-sqlite3`：后者是原生模块，每次升 Electron 都要按新 ABI 重建；`node:sqlite` 在 Node 22.5+ 与 Electron 44（内嵌 Node 24.21）里都有，装依赖时不用管它。它覆盖 `state.vscdb` 的 8 组索引 key（`chat.ChatSessionStore.index` / `memento/interactive-session%` / `interactive.sessions` / `workbench.panel.chat%` / `agentSessions.state.cache` / `agentSessions.model.cache` / `composer.composerData` / `workbench.panel.aichat…chatdata`）与 Copilot `session-store.db` 的 6 张关系表。三条约定：扫描一律 `readOnly: true`（IDE 可能正持有这个库）；改完索引立刻 `VACUUM`（SQLite 删行不缩文件）；文件不存在或表结构不对一律静默返回 —— 索引清理是清理流程的**补充**而非前置条件，索引坏了不该让文件删除也失败。
 
-**状态中枢。** `src/renderer/src/state/cleanStore.ts` 是全应用唯一的状态来源，对应 Swift 版的 `@MainActor class CleanViewModel`。三条不变量：**不缓存派生数据**（`filteredConversations` / `categoryStats` / `totalSize` 在 selector 里现算，不存在两个状态不同步的中间帧）；**派生值必须返回同一引用**，否则 `useSyncExternalStore` 认为状态一直在变，陷入无限重渲染；**搜索词 120ms 防抖**（与 Swift 版 `debounce(for: .milliseconds(120))` 一致），一次全盘扫描可能有上万条会话，每敲一个键就重算全量过滤会掉帧，但防抖值优先、无防抖值才用即时值，所以「Esc 立刻清空搜索」不会慢半拍。列宽与当前分类记在 `localStorage`；4 个设置开关记在主进程 userData 下的 `preferences.json`，每次读都重新走一遍文件而不是缓存成只读值，否则运行中改开关要重启才生效。
+**状态中枢。** `src/renderer/src/state/cleanStore.ts` 是全应用唯一的状态来源。三条不变量：**不缓存派生数据**（`filteredConversations` / `categoryStats` / `totalSize` 在 selector 里现算，不存在两个状态不同步的中间帧）；**派生值必须返回同一引用**，否则 `useSyncExternalStore` 认为状态一直在变，陷入无限重渲染；**搜索词 120ms 防抖**（一次全盘扫描可能有上万条会话，每敲一个键就重算全量过滤会掉帧，但防抖值优先、无防抖值才用即时值，所以「Esc 立刻清空搜索」不会慢半拍；防抖值必须是 state 而不是 store 私有字段，只通知 listener 不换快照会被 `useSyncExternalStore` 当成“没变化”而跳过重渲染）。列宽与当前分类记在 `localStorage`；4 个设置开关记在主进程 userData 下的 `preferences.json`，每次读都重新走一遍文件而不是缓存成只读值，否则运行中改开关要重启才生效。
 
 ---
 
@@ -67,8 +67,8 @@ conversation-clean/
 ├── package.json · electron.vite.config.ts · electron-builder.yml · vitest.config.ts
 ├── tsconfig.json / .node.json / .web.json     # node 查主进程与 shared，web 查渲染进程与 shared
 ├── build/ · design-demos/ · out/               # 图标资源 / UI 设计稿 / 构建产物（release/ 打包时才生成）
-├── docs/                                       # app-screenshot.png · porting-guide.md · migration-notes.md
-├── scripts/                                    # port-status.mjs 移植探针 + run_tests.sh（Swift 基准，原样保留）
+├── docs/                                       # app-screenshot.png · dev-guide.md · known-issues.md · prototype.html
+├── scripts/                                    # scanner-health.mjs 扫描器自检 + mosaic_readme_shot.py 截图打码
 ├── src/
 │   ├── shared/      types.ts（16 个分类 / 字形映射 / IPC 契约）· format.ts（1024 进制格式化）
 │   ├── main/
@@ -93,10 +93,9 @@ conversation-clean/
 │   │            components/（DrawnControls / Splitter / AgentGlyph）
 │   │            views/（Sidebar / ConversationList / Detail / Overview / Settings / CleanConfirmSheet）
 │   └── test-support/                           # 夹具工厂：文件系统 + mock state.vscdb
-└── ConversationClean/ + .xcodeproj/            # Swift 源码与工程：只读行为基准，不参与构建
 ```
 
-视图样式一律走 **CSS Modules**（`XxxView.module.css`）：多个文件并行开发时共用全局 class 名必然撞车。`ConversationClean/`（40 个 `.swift`，12,299 行）与 `scripts/tests/*.swift` **原样保留在仓库里**，作为移植的唯一行为基准与对照，不是死代码。删不删是产品决定，不是移植决定。
+视图样式一律走 **CSS Modules**（`XxxView.module.css`）：多个文件并行开发时共用全局 class 名必然撞车。颜色 / 间距 / 字号一律 `var(--token)`，值集中在 `styles/tokens.css`；渲染进程里**不许**出现裸 `<svg>` 字形，统一走 `DrawnControls` 的 `DrawnIcon` 或 `AgentGlyph.tsx`（`App.test.ts` 会 grep 并让测试失败——就地画一个 1.5px 的图标而其余都是 1.6px，这种偏差截图上看不出来）。
 
 ---
 
@@ -139,12 +138,22 @@ Vitest 5，**30 个测试文件 / 548 个用例**，全部串行（`fileParallel
 
 ---
 
-## 🔀 移植说明
+## ⚠️ 已知问题与刻意取舍
 
-这一版从 **Swift 6 + SwiftUI（12,299 行）整体移植**到 Electron 44 + React 19 + TypeScript：非测试代码 18,933 行，测试 12,181 行。完整清单见 **[`docs/migration-notes.md`](docs/migration-notes.md)** —— 逐条记了「哪里不是照抄、为什么」，以及哪些 Swift 缺陷被刻意保留；移植规范与命令见 [`docs/porting-guide.md`](docs/porting-guide.md)。最值得注意的几条：
+代码里有不少地方**看着像 bug，但改掉就错**。完整清单见 **[`docs/known-issues.md`](docs/known-issues.md)**，
+开发约定与扫描器写法见 [`docs/dev-guide.md`](docs/dev-guide.md)。最值得注意的几条：
 
-- **[刻意] 索引数组删空时删 key，Swift 写回空数组。** `cleanAgentSessionsCache` / `cleanComposerData` / `cleanAiChatData` 删到不剩元素时删掉整个 `ItemTable` key。两条路径对 IDE 行为等价，而删 key 更干净 —— `VACUUM` 之后文件真的变小。`vscdb.test.ts` 有专门一组断言钉住它。
-- **[照抄] Zed 的 `delete` 刻意绕开 `deleteItemsWithPaths`。** 走通用流程会把 `threads/threads.db` 当成关联路径删掉 —— 那是整个线程库的本体。同理 **Zed 与 OpenHands 都不回收空目录**，设置里的「回收空项目目录」对这两款完全无效（测试已把这个无效性钉住）。看着像 bug，但修 bug 是另一次改动。
-- **[刻意] 确认弹层的目标集合钉在打开那一刻。** Swift 版读的是**活的** `filteredConversations`，面板开着时切分类，用户在弹层上看着一个数、点确认删的却是另一批。TS 版用 `estimateCategory` 把分类钉死 —— 这一条是修真实缺陷，不是照抄。
-- **[已修] 移植中修掉的两个真 bug。** `preferences.json` 内容完全合法但是个字面量（`null`）时 `parsed[key]` 抛 `TypeError`，整条 `prefs:get` IPC 全挂；ISO 时间戳正则只接受 `Z?` 而不接受 `+08:00`，任何记录本地时区偏移的 Agent 会整条丢失 `updatedAt`。
-- **Swift 源码保留作基准。** `ConversationClean/`、`.xcodeproj/`、`scripts/run_tests.sh`、`scripts/tests/*.swift` 原样留着，任何「两版行为不一致」的争论都能当场打开对照文件。
+- **Zed 的 `delete` 刻意绕开 `deleteItemsWithPaths`。** Zed 的会话正文在 `threads/threads.db`（SQLite）里而不是独立文件，
+  走通用流程会把整个线程库当关联路径删掉。同理 Zed 与 OpenHands 都不回收空目录，
+  设置里的「回收空项目目录」对这两款 Agent 无效（测试已把这个无效性钉住）。
+- **15 个扫描器没有共用一条删除流水线。** 各家 Agent 的「一条会话占哪些文件」根本不同，
+  强行统一必然要么误删要么漏删。公共部分收在 `core/scanner.ts`，差异部分各写各的。
+- **Cursor 的 JSONL 与索引来源之间不去重**，同一条会话会出现两条。两条的 id 不是同一个 id 空间，
+  强行匹配会误合并 —— 宁可重复也不误合并。
+- **确认弹层的目标集合钉在打开那一刻**（`estimateCategory`）。面板是「整类清理」语义，
+  期间切分类不该改它的目标集合，否则用户在弹层上看着一个「预计释放」、点确认删的却是另一批。
+- **索引数组删到不剩元素时删掉整个 `ItemTable` key**（`cleanAgentSessionsCache` / `cleanComposerData` /
+  `cleanAiChatData`）。对 IDE 行为等价，而删 key 更干净 —— `VACUUM` 之后文件真的变小。
+  `vscdb.test.ts` 有专门一组断言钉住它。
+- **列宽上下限在 TS 与 CSS 里各有一份**，用 `App.test.ts` 逐条比对钉住。漏掉这个测试的代价是
+  「改了 CSS 忘了改 TS」，而且只在手动拖窗口时偶发，测试和 typecheck 都不报。

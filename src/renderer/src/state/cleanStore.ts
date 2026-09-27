@@ -11,23 +11,21 @@ import { DEFAULT_PREFS } from '@shared/types'
 /**
  * 全应用唯一的状态中枢。
  *
- * 移植自 Swift 版 `ViewModels/CleanViewModel.swift`（`@MainActor class` + `@Published`）。
- * SwiftUI 的 `@Published` 在这里是 `useSyncExternalStore`：
- * 订阅一个外部 store，`getSnapshot` 返回不可变快照，React 自己决定重渲染。
+ * 这里用 `useSyncExternalStore` 订阅一个外部 store：`getSnapshot` 返回不可变快照，
+ * React 拿 `Object.is` 比对两次快照、自己决定要不要重渲染。
  *
- * 三条不变量（与 Swift 版逐条对应，改动时不要破坏）：
+ * 三条不变量（改动时不要破坏）：
  *
  * 1. **不缓存派生数据。** `filteredConversations` / `categoryStats` / `totalSize`
- *    在 `getSnapshot()` 里现算，Swift 版是 `didSet` 里同步重算 ——
- *    效果一样，但这里连「同步」这一步都没有，不存在两个状态不同步的中间帧。
+ *    在 `getSnapshot()` 里现算 —— 连「同步重算」这一步都没有，
+ *    不存在两个状态不同步的中间帧。
  *
  * 2. **`selectedConversation` 现取。** 它不是状态而是 selector：
  *    会话被清理后自动变 `null`，视图侧不需要写任何同步代码。
  *
  * 3. **焦点请求用自增计数而不是 boolean。** ⌘F 的语义是「请把搜索框拉到焦点」，
  *    不是「当前是否聚焦」—— 用户已经在搜索框里时按 ⌘F，boolean 不会变化，
- *    视图收不到通知，光标也不会重新全选。Swift 版用 `searchFocusRequest: Int`，
- *    这里保持一致。
+ *    视图收不到通知，光标也不会重新全选。所以它必须是自增计数，不是 boolean。
  */
 
 export type CleanTarget = 'selected' | 'allInCurrentCategory'
@@ -42,7 +40,7 @@ export interface ColumnWidths {
   list: number
 }
 
-/** 三栏列宽的记忆键。Swift 版用 `@AppStorage`，这里用 localStorage。 */
+/** 三栏列宽的记忆键。记在 localStorage（渲染进程侧，主进程不参与）。 */
 const LS_COLUMN_WIDTHS = 'cc.columnWidths'
 /** 当前分类的记忆键。扫描完会做一次「未安装则回落 all」的校正。 */
 const LS_SELECTED_CATEGORY = 'cc.selectedCategory'
@@ -187,7 +185,7 @@ class CleanStore {
   /**
    * 当前可见的会话列表。
    *
-   * 搜索词有 120ms 防抖（与 Swift 版 `debounce(for: .milliseconds(120))` 一致）：
+   * 搜索词有 120ms 防抖：
    * 一次全盘扫描可能有上万条会话，每敲一个键就重算全量过滤会明显掉帧。
    * 注意口径：防抖值优先，无防抖值时才用即时值 —— 所以「按 Esc 立刻清空搜索」
    * 不会因为防抖还在跑而慢半拍。
@@ -538,7 +536,7 @@ class CleanStore {
     this.set({ columnWidths: widths })
   }
 
-  // MARK: - 说明文案（与 Swift 版 computed property 一一对应）
+  // MARK: - 说明文案
 
   /** 「回收空项目目录」关掉时，侧栏那句说明文字要跟着变。 */
   get emptyFolderPolicyText(): string {

@@ -250,7 +250,7 @@ function makeBareFixture(): { root: string; chatSessionsDir: string; sessionFile
 // MARK: - 用例
 
 describe('WindsurfScanner · mock 夹具', () => {
-  it('三个来源合并成列表，字段按 Swift 版的兜底顺序解析', async () => {
+  it('三个来源合并成列表，字段按兜底顺序解析', async () => {
     const fx = makeFixture()
     const scanner = new WindsurfScanner({ storagePath: fx.root })
 

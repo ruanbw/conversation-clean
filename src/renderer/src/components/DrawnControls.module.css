@@ -1,6 +1,6 @@
 /* ============================================================
    DrawnControls.module.css —— 自绘控件库
-   移植自 ConversationClean/Views/DrawnControls.swift + SettingsView 的 DrawnSwitch。
+   这里的控件全部自绘：原生 `button` / `input` 只作布局与事件容器，外观一点不露。
 
    铁律：颜色 / 间距 / 字号一律 `var(--token)`，不许裸 hex / px 字号。
    仅有的裸 px 是**几何常量**（开关 30×17、勾选 1.5px 描边这类），
@@ -10,7 +10,7 @@
 /* 组件几何常量集中声明在用到的类上（CSS 变量会继承给子元素）。
    tokens.css 只给了圆角 / 间距 / 字号 / 行高，没给这些盒子尺寸。 */
 .btn {
-  --btn-compact-h: 22px; /* Swift: DrawnButtonStyle(compact:) 22pt */
+  --btn-compact-h: 22px; /* 紧凑变体，比标准 26px 矮 4px */
 }
 
 /* ---------- 通用按钮 ---------- */
@@ -40,7 +40,7 @@
   opacity: 0.4;
 }
 
-/* 变体：flat / dangerQuiet 无底色，靠一层低透明度覆盖模拟 hover（与 Swift 版同） */
+/* 变体：flat / dangerQuiet 无底色，靠一层低透明度覆盖模拟 hover */
 .flat:hover:not(:disabled),
 .dangerQuiet:hover:not(:disabled) {
   background: var(--accent-hover);
@@ -225,7 +225,7 @@
 /* ---------- 搜索框 ---------- */
 
 .search {
-  /* Swift: DrawnSearchField frame(height: 28) */
+  /* 比标准控件矮：搜索框是高频输入位，视觉上要更轻 */
   height: 28px;
   display: flex;
   align-items: center;
@@ -315,7 +315,7 @@
 /* ---------- 占比条 ---------- */
 
 .share {
-  /* Swift: ShareBar(height: 4) */
+  /* 占比条：高 4px，行内混排时不抢标题的视觉重量 */
   --bar-h: 4px;
   position: relative;
   flex: 0 0 auto;

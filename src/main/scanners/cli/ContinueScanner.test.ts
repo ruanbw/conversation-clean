@@ -17,9 +17,9 @@ import { CleanPrefs } from '@main/core/scanner'
 import { ContinueScanner } from './ContinueScanner'
 
 /**
- * 移植自 `scripts/tests/RooContinueTests.swift` 的 `testMockContinueScanner`
- * 与 `testRealContinueScannerReadOnly`，并补上 Swift 测试没覆盖到的分支
- * （日期兜底、parts 数组、同名目录、两个开关的正反两面）。
+ * Continue 扫描器用例：storagePath 的解析、scan 的字段抽取、delete 的目录边界、
+ * cleanAll 的清理范围，以及末尾的只读实机用例。
+ * 其中还盖住了日期兜底、parts 数组、同名目录与两个开关的正反两面。
  *
  * 全部夹具都在 `os.tmpdir()` 下现造，测试自包含、不依赖任何其它文件。
  * `process.env.HOME` 在模块加载时就指向一个沙箱目录，`CleanPrefs` 才会把
@@ -86,7 +86,7 @@ beforeEach(() => {
   CleanPrefs.patch({ ...DEFAULT_PREFS })
 })
 
-/** Swift `testMockContinueScanner` 的夹具：2 个会话 + index/ + cache/ + 绝不能删的 config.json */
+/** 夹具：2 个会话 + index/ + cache/ + 绝不能删的 config.json */
 function buildMockRoot(): { root: string; s1: string; s2: string; config: string } {
   const root = tempRoot()
   const sessions = join(root, 'sessions')
@@ -164,7 +164,7 @@ describe('ContinueScanner.storagePath', () => {
 })
 
 describe('ContinueScanner.scan', () => {
-  it('夹具目录：2 条会话，字段与 Swift 断言逐条一致，且只读不落盘', async () => {
+  it('夹具目录：2 条会话，字段逐条对上，且只读不落盘', async () => {
     const { root, s1 } = buildMockRoot()
     const scanner = new ContinueScanner({ storagePath: root })
     expect(scanner.isInstalled).toBe(true)
@@ -253,7 +253,7 @@ describe('ContinueScanner.scan', () => {
         history: [{ role: 'user', content: 'a' }, { role: 'assistant', content: 'b' }]
       })
     )
-    // 非整数不算 messageCount（Swift `as? Int` 会失败）
+    // 非整数不算 messageCount（非整数不是合法计数）
     write(join(sessions, 'float-count.json'), JSON.stringify({ messageCount: 1.5, history: [] }))
 
     const items = await new ContinueScanner({ storagePath: root }).scan()
@@ -271,7 +271,7 @@ describe('ContinueScanner.scan', () => {
       ['custom-space', '2026-09-20 14:30:00', new Date(2026, 8, 20, 14, 30, 0).toISOString()],
       ['epoch-ms', 1789500000000, '2026-09-15T19:20:00.000Z'],
       ['epoch-s', 1789500000, '2026-09-15T19:20:00.000Z'],
-      // 数字字符串没有 > 0 判断（Swift 的已知行为），照抄
+      // 数字字符串没有 > 0 判断："0" 会被当成 1970 年
       ['epoch-str', '1789500000000', '2026-09-15T19:20:00.000Z'],
       // 解析不出来 / 非正数 → 文件 mtime
       ['garbage', 'not a date', '2026-01-02T03:04:05.000Z'],
@@ -359,7 +359,7 @@ describe('ContinueScanner.delete', () => {
     const items = await scanner.scan()
     await scanner.delete(items)
     expect(existsSync(nested)).toBe(false)
-    // sessions 本身不在回收范围内（Swift 只清子目录）
+    // sessions 本身不在回收范围内（只清子目录）
     expect(existsSync(join(root, 'sessions'))).toBe(true)
   })
 

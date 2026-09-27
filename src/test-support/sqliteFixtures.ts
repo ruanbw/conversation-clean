@@ -1,11 +1,8 @@
 /**
  * SQLite 夹具工厂：用 `node:sqlite` 造 mock `state.vscdb` / `session-store.db`。
  *
- * 移植自 Swift 版 `scripts/tests/VSCDBIndexSyncTests.swift` 的建库段落
- * （那里直接 `sqlite3_open` + 手写 `CREATE TABLE` / `INSERT`；
- * 这里用 Node 24 内建的 `node:sqlite` `DatabaseSync`，SQL 完全一致）。
- * 另收编了 `Fixtures.swift` 的 `Fixture.sqlite(at:failureMessage:_:)`：
- * 「打开 → 建表写入 → 关闭」这段样板在这里收口成一行调用。
+ * 建表 / 插入的 SQL 与 VS Code、Copilot 的实际结构一致；
+ * 「打开 → 建表写入 → 关闭」这段样板收口成 `withSqlite()` 一行调用。
  *
  * 只导出辅助函数，不含 `describe` / `test`。
  */
@@ -36,7 +33,7 @@ export function b64(text: string): string {
   return Buffer.from(text, 'utf8').toString('base64')
 }
 
-/** 打开（必要时创建）库、执行 `body`、关闭。对应 Swift `Fixture.sqlite(at:failureMessage:_:)`。 */
+/** 打开（必要时创建）库、执行 `body`、关闭。 */
 export function withSqlite<T>(dbPath: string, body: (db: DatabaseSync) => T): T {
   ensureDir(dirname(dbPath))
   const db = new DatabaseSync(dbPath)
@@ -230,10 +227,10 @@ export function writeWorkspaceJson(
   return writeJsonFile(`${workspaceDir(root, hash)}/workspace.json`, { folder })
 }
 
-// MARK: - Swift 版 8 个索引 key 的标准载荷
+// MARK: - 8 个索引 key 的标准载荷
 
 /**
- * 复刻 `VSCDBIndexSyncTests.swift` 里那 8 个索引 key 的初始载荷。
+ * VS Code 系 8 个索引 key 的标准载荷。
  *
  * 这是「删掉 sid1、sid2 必须完好无损」这条断言的原始素材，
  * 后续各 VS Code 系扫描器的用例直接 `createStateVscdb(path, defaultIndexFixture(sid1, sid2))` 即可，

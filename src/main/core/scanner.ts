@@ -18,9 +18,7 @@ import { sizeOfPath, removeIfExists, removeIfEmptyDirectory } from './fsutil'
 /**
  * 扫描器协议 + 跨扫描器共享的解析原语。
  *
- * 移植自 Swift 版 `Core/AgentScannerProtocol.swift` 的 `protocol AgentScanner`。
- * Swift 里协议实现是 class + async func；这里是普通对象 + `Promise`，
- * 但**语义完全一致**：`scan` 只读，`delete` / `cleanAll` 才落盘。
+ * 实现是普通对象 + `Promise`：`scan` 只读，`delete` / `cleanAll` 才落盘。
  *
  * 约定（所有实现都必须遵守）：
  * 1. `scan()` 内部**绝不**修改任何文件。连 mtime 都不许写。
@@ -43,13 +41,13 @@ export interface AgentScanner {
   cleanAll(): Promise<number>
 }
 
-/** 扫描器构造选项：允许测试注入临时目录，替代 Swift 的 `init(storageURL:)`。 */
+/** 扫描器构造选项：允许测试注入临时目录。 */
 export interface ScannerOptions {
   /** 覆盖默认数据目录。测试用它指到夹具目录。 */
   storagePath?: string
 }
 
-// MARK: - 基础 IO 原语（全部跳过隐藏项，与 Swift `.skipsHiddenFiles` 对齐）
+// MARK: - 基础 IO 原语（目录 / 文件枚举一律跳过 `.` 前缀项）
 
 export function isDirectory(path: string): boolean {
   try {
@@ -160,8 +158,8 @@ export function readJsonLines<T = unknown>(path: string): T[] {
  * 读一个 JSONL 文件的**前 N 字节**并逐行解析。
  *
  * Claude Code / Pi Agent 这类会话文件动辄几十 MB，而标题、cwd、gitBranch
- * 全在头几行 —— 扫全量是纯浪费。Swift 版用 `FileHandle.readData(ofLength: 64 * 1024)`，
- * 这里用同一个 64KB 上限。末行可能被截断，`readJsonLines` 会自动跳过。
+ * 全在头几行 —— 扫全量是纯浪费，所以默认只读前 64KB。
+ * 末行可能被截断，解析失败的那行自动跳过。
  */
 export function readJsonLinesHead<T = unknown>(path: string, byteLimit = 64 * 1024): T[] {
   let fd: number | undefined
@@ -196,7 +194,7 @@ export function readJsonLinesHead<T = unknown>(path: string, byteLimit = 64 * 10
 
 // MARK: - 杂项
 
-/** 有界并发的 map。Swift 版用 `withTaskGroup` 全并发，几千个文件时会打爆 fd。 */
+/** 有界并发的 map。不限并发时几千个文件会同时打开 fd，直接打爆。 */
 export async function mapLimit<T, R>(
   items: readonly T[],
   limit: number,
@@ -264,8 +262,9 @@ export function makeItem(input: {
 /**
  * 解析数据根目录：`storagePath` 覆盖 > 环境变量 > `~/` 下的默认目录。
  *
- * 与 Swift 版一致地做一次 `realpath`：`/var` → `/private/var` 这类别名不解析，
+ * 一定要做一次 `realpath`：`/var` → `/private/var` 这类别名不解析的话，
  * 侧栏显示的路径会跟 Finder 里点开的不一致，删除时也会出现「文件明明存在却删不掉」。
+ * realpath 失败（路径还不存在）就原样返回。
  */
 export function resolveStoragePath(
   fallbackSegments: string[],

@@ -28,9 +28,9 @@ import { clearAllChatSessions, removeChatSessions } from '@main/core/vscdb'
 /**
  * Windsurf 会话扫描器。
  *
- * 移植自 Swift 版 `ConversationClean/Scanners/VSCodeFamily/WindsurfScanner.swift`。
+ * 数据根：`WINDSURF_HOME` > `~/Library/Application Support/Windsurf`（测试可注入）。
  *
- * Windsurf 的会话分**三个来源**，Swift 版就是分三段扫的，顺序与合并规则照抄：
+ * Windsurf 的会话分**三个来源**，扫描时按这个顺序分三段扫、然后合并去重：
  *
  * 1. `User/workspaceStorage/<hash>/chatSessions/*.jsonl`
  *    —— 工作区会话正文；同名的 `chatEditingSessions/<sid>/` 是文件改动快照。
@@ -39,7 +39,7 @@ import { clearAllChatSessions, removeChatSessions } from '@main/core/vscdb'
  * 3. `~/.codeium/windsurf/{cascades,cascade,chats}/`
  *    —— Codeium CLI 侧的 Cascade 会话，每个一个目录或一个 `.json`。
  *
- * `state.vscdb` **不在 scan 里读**（Swift 版也没有读）：它只是 delete 时的清理目标。
+ * `state.vscdb` **不在 scan 里读**：它只是 delete 时的清理目标。
  * 索引行留着，Windsurf 的聊天下拉框就会一直显示「点进去是空的」的幽灵会话，
  * 所以 `delete` / `cleanAll` 必须把 9 个索引 key 一起改掉（`core/vscdb.ts` 已经全包了）。
  */
@@ -81,9 +81,9 @@ export class WindsurfScanner implements AgentScanner {
    * Codeium CLI 的数据目录。
    *
    * 注入目录时先找 `<custom>/.codeium/windsurf`、再找 `<custom>/codeium/windsurf`；
-   * 都找不到（或没注入）就一律回落到 `~/.codeium/windsurf` —— 端口照抄 Swift 版的这个回落。
+   * 都找不到（或没注入）就一律回落到 `~/.codeium/windsurf`。
    *
-   * 已知风险（照抄 Swift）：注入目录下没有 `.codeium/windsurf` 时会回落到**真实的**
+   * 已知风险：注入目录下没有 `.codeium/windsurf` 时会回落到**真实的**
    * `~/.codeium/windsurf`，于是夹具的 `delete` / `cleanAll` 可能去动用户真目录。
    * 写单测时必须在夹具里建一个 `.codeium/windsurf`。
    */
@@ -299,7 +299,7 @@ interface ScanTarget {
   editingDir: string | null
 }
 
-/** Cascade 会话目录的三种叫法（Swift 版 `cascadeFolders`）。 */
+/** Cascade 会话目录的三种叫法（历史版本叫法不统一，三个都扫）。 */
 const CASCADE_FOLDERS = ['cascades', 'cascade', 'chats'] as const
 
 /** cleanAll 额外清的四类（比扫描的三类多一个 `memories`）。 */
@@ -308,7 +308,7 @@ const CODEIUM_CLEAN_FOLDERS = ['cascades', 'chats', 'memories', 'cascade'] as co
 /** Cascade 目录里可能承载元数据的三个文件名，按优先级。 */
 const CASCADE_META_FILES = ['meta.json', 'cascade.json', 'session.json'] as const
 
-// MARK: - 通用小工具（与 Trae 版逐字重复，Swift 版也是两份复制品）
+// MARK: - 通用小工具（与 Trae 版逐字重复，两份是刻意各留一份的）
 
 function canonical(path: string): string {
   try {
@@ -328,7 +328,7 @@ function firstString(...values: unknown[]): string | null {
   return null
 }
 
-/** 对应 Swift 的 `as? String` + `!isEmpty`（sessionId / customTitle 都要求非空）。 */
+/** 取非空字符串（sessionId / customTitle 都要求非空，空串当没有）。 */
 function nonEmptyString(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null
 }
@@ -337,7 +337,7 @@ function asNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
-/** 对应 Swift 的 `as? [[String: Any]]`：数组里有任何一项不是字典就整体当作 nil。 */
+/** 取「数组里的每一项都是对象」的值；有一项不是就整体当 null。 */
 function asRecordArray(value: unknown): Record<string, unknown>[] | null {
   if (!Array.isArray(value)) return null
   for (const element of value) if (!isRecord(element)) return null
@@ -379,7 +379,7 @@ function createDirectory(path: string): void {
   try {
     mkdirSync(path, { recursive: true })
   } catch {
-    // Swift 版是 `try?`：建不回来也不让整个 cleanAll 失败。
+    // 建不回来也不让整个 cleanAll 失败。
   }
 }
 
@@ -394,8 +394,7 @@ function addSession(map: Map<string, Set<string>>, key: string, sessionId: strin
 /**
  * 解析一条 Windsurf 会话正文。
  *
- * 端口照抄 Swift 的判定顺序：
- * 标题 = 首条用户提示 > 自定义标题 > `"Windsurf 对话"`；
+ * 字段优先级：首条用户提示 > 自定义标题 > `"Windsurf 对话"`；
  * 摘要 = 首条用户提示（换行压成空格）> 标题；
  * 时间 = `creationDate`（epoch 毫秒，> 0）> 文件 mtime > 此刻。
  */
@@ -510,7 +509,7 @@ function parseJsonlSession(target: ScanTarget): ConversationItem | null {
   })
 }
 
-/** 从一条 request 里取用户提示文本，字段优先级与 Swift 版逐字一致。 */
+/** 从一条 request 里取用户提示文本；`message.text` > 拼接 `message.parts` > `message` 本身。 */
 function extractPromptText(req: Record<string, unknown>): string | null {
   const message = req['message']
   if (isRecord(message)) {
@@ -577,9 +576,9 @@ function extractProjectPath(workspaceJSONPath: string): string | null {
  * 一个条目 = 一个会话：目录形态读 `meta.json` / `cascade.json` / `session.json`，
  * 文件形态读条目自己的 `.json`。都没有标题时回落到 `Windsurf Cascade 会话 <sid 前 8 位>`。
  *
- * 已知问题（照抄 Swift）：命中了元数据文件但里面既没有 `title` 也没有 `prompt`/`name` 时，
+ * 已知问题：命中了元数据文件但里面既没有 `title` 也没有 `prompt`/`name` 时，
  * 标题会退化成空字符串（该分支没有 JSONL 那句 `length === 0` 兜底），UI 上会显示一条空标题。
- * 按「端口不修 bug」的规矩原样保留。
+ * 不修是因为修它要改标题构造的全部分支，收益只是一条罕见数据的显示效果。
  */
 function scanCodeiumWindsurfDirectory(codeiumDir: string): ConversationItem[] {
   const items: ConversationItem[] = []

@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { CleanPrefs, listDirectories, pathExists, readJson, removeIfExists } from '@main/core/scanner'
 
 /**
- * pi-acp 会话映射表同步 —— 移植自 `PiAgentScanner+ACPSessionMap.swift`。
+ * pi-acp 会话映射表同步。
  *
  * `~/.pi/pi-acp/session-map.json` 是 ACP 客户端侧边栏的会话索引：
  *
@@ -21,8 +21,7 @@ import { CleanPrefs, listDirectories, pathExists, readJson, removeIfExists } fro
  *
  * - `sessionIds`：本次删掉的会话 id 集合（来自 `ConversationItem.sessionId`）。
  * - `deletedPaths`：本次删掉的**完整** `associatedPaths` 集合 —— 注意这里不经过
- *   `CleanPrefs.deletionPathsFor` 过滤，快照开关关着时也照样算进去，
- *   与 Swift 版 `delete()` 里那段注释一致。
+ *   `CleanPrefs.deletionPathsFor` 过滤，快照开关关着时也照样算进去。
  *
  * 裁剪后若一条不剩，整个文件删掉；否则原子回写。
  */
@@ -77,8 +76,7 @@ export function pruneACPSessionMap(
 /**
  * 回收 `agent/sessions/` 下不再含任何 `.jsonl` 的项目目录。
  *
- * 「回收空项目目录」关掉时磁盘上保留空 project 目录 —— 开关判据写在最前面，
- * 与 Swift 版一致。
+ * 「回收空项目目录」关掉时磁盘上保留空 project 目录 —— 开关判据写在最前面。
  */
 export function cleanEmptyProjectDirectories(sessionsDir: string): void {
   if (!CleanPrefs.cleanEmptyProjectFolders) return
@@ -86,7 +84,7 @@ export function cleanEmptyProjectDirectories(sessionsDir: string): void {
 
   for (const name of listDirectories(sessionsDir)) {
     const dir = join(sessionsDir, name)
-    // Swift 的判据是「目录里没有任何 `.jsonl`」，而不是「目录为空」：
+    // 判据是「目录里没有任何 `.jsonl`」，而不是「目录为空」：
     // 残留的子目录 / 索引文件不算数，只要会话文件走光就回收这个项目目录。
     if (listSessionFiles(dir).length === 0) removeIfExists(dir)
   }
@@ -98,8 +96,7 @@ export function cleanEmptyProjectDirectories(sessionsDir: string): void {
  * 目录下的 `.jsonl` 条目名。
  *
  * 这里刻意**不**用 `listFiles(dir, '.jsonl')`：那个原语会过滤掉非文件项并跳过隐藏项，
- * 而 Swift 的判据是朴素的 `contents.filter { $0.hasSuffix(".jsonl") }` ——
- * 目录里连一个 jsonl 都没有就回收，含隐藏 jsonl 也回收。
+ * 这里只要后缀匹配 —— 目录里连一个 jsonl 都没有就回收，含隐藏 jsonl 也回收。
  */
 function listSessionFiles(dir: string): string[] {
   let entries: string[]
@@ -126,7 +123,7 @@ function writeJsonAtomic(path: string, value: unknown): void {
   }
 }
 
-/** 递归按 key 排序，让回写结果稳定可比对（Swift 那边是 `JSONSerialization .sortedKeys`）。 */
+/** 递归按 key 排序，让回写结果稳定可比对。 */
 function sortKeysDeep(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(sortKeysDeep)
   if (isRecord(value)) {

@@ -124,7 +124,7 @@ function navRow(category: string): HTMLElement {
 }
 
 describe('SidebarView · 分类导航', () => {
-  it('未安装的 Agent 置灰但仍列出来（Swift 版是直接不列）', () => {
+  it('未安装的 Agent 置灰但仍列出来', () => {
     const cursor = navRow('cursor')
     expect(cursor.getAttribute('data-installed')).toBe('false')
     expect(cursor.className).toContain('navRowDim')
@@ -169,7 +169,7 @@ describe('SidebarView · 分类导航', () => {
     expect(navRow('claudeCode')).toBeTruthy()
     expect(navRow('all')).toBeTruthy()
 
-    // 开关状态记忆到 localStorage（Swift 的 @AppStorage("hideEmptyCategories")）
+    // 开关状态记忆到 localStorage（键名就是 hideEmptyCategories）
     expect(localStorage.getItem('hideEmptyCategories')).toBe('1')
   })
 })
@@ -198,7 +198,7 @@ describe('SidebarView · 体检卡与路径卡', () => {
     expect(screen.getByText('未在本机检测到该 Agent 的存储目录。')).toBeTruthy()
     expect(screen.getByText('~/.cursor')).toBeTruthy()
 
-    // 与 Swift 一致：存储路径存在就允许「在 Finder 中打开」（目录可能已被删，
+    // 存储路径存在就允许「在 Finder 中打开」（目录可能已被删，
     // 交给 Finder 自己报错比在 UI 里猜一层更准）。
     const api = (window as unknown as { api: { openPath: ReturnType<typeof vi.fn> } }).api
     fireEvent.click(screen.getByText('在 Finder 中打开').closest('button') as HTMLElement)

@@ -1,10 +1,9 @@
 /**
  * `core/scanner.ts` 共享原语 + `core/fsutil.ts` 的测试。
  *
- * Swift 版没有独立的单测文件（这些原语是 `AgentScannerProtocol.swift` 与
- * `FileSystem/DirectoryCleaner.swift` 里的私有方法），但它们**全部**被
- * `scripts/tests/VSCDBIndexSyncTests.swift` 等 mock 用例间接覆盖过。
- * 这里把它们逐个拆出来直接钉住行为，扫描器子代理写各自用例时可以放心依赖。
+ * 这些原语是各扫描器共同依赖的地基（目录 / 文件枚举、JSON 与 JSONL 解析、
+ * 时间、删除记账、空目录回收），这里逐个把行为钉住，
+ * 扫描器各自的用例可以直接依赖它们。
  *
  * `prefs.ts` 会往 `userData` 写 `preferences.json`，这里同样 mock 掉 `electron`，
  * 让它落到临时目录 —— 否则测试会污染用户家目录。
@@ -90,7 +89,7 @@ describe('listDirectories —— 跳过隐藏项', () => {
     expect(listDirectories(root).sort()).toEqual(['alpha', 'beta'])
   })
 
-  it('跳过 `.` 前缀项（对应 Swift 的 skipsHiddenFiles）', () => {
+  it('跳过 `.` 前缀项', () => {
     ensureDir(join(root, 'alpha'))
     ensureDir(join(root, '.hidden'))
     writeFile(join(root, '.DS_Store'), '')
