@@ -138,7 +138,9 @@ TestEntry("Formatting", testFormatting),
 - [ ] **Step 3: 运行，确认通过**
 
 Run: `./scripts/run_tests.sh 2>&1 | tail -30`
-Expected: 退出码 0，输出里出现 `Formatting` 这一节且无失败断言。
+Expected: 输出里出现 `Formatting` 这一节（**必须是第一节**，紧跟套件大标题之后），
+该节 0 条 FAIL。套件整体此时仍会在中途崩溃（退出码 132）——那是 Step 3 要修的，
+不是本步的问题。本步只要求 `Formatting` 那一节跑到了、且全过。
 
 - [ ] **Step 4: 变异检查——证明测试不是空转**
 
@@ -169,10 +171,28 @@ APP_SOURCES=$(find "$APP_DIR/Models" "$APP_DIR/Core" "$APP_DIR/Scanners" -name '
 
 - [ ] **Step 7: 验证**
 
-Run: `./scripts/run_tests.sh 2>&1 | tail -5` → 退出码 0
+Run: `./scripts/run_tests.sh 2>&1 | tail -20`
+Expected: 退出码 0 或 1（**不再是 132**），`Formatting` 一节 0 FAIL，
+`Formatting` 是第一节，real 测试 FAIL 数 ≤ 5。
+
 Run: `xcodebuild -scheme ConversationClean -configuration Debug build 2>&1 | tail -3` → `** BUILD SUCCEEDED **`
 
-- [ ] **Step 8: 提交**
+- [ ] **Step 8: 提交（两次）**
+
+第一次 —— 崩溃修复单独提交，与本 task 其余部分分开：
+
+```bash
+git add scripts/tests/OpenVikingTests.swift scripts/tests/CodexTests.swift scripts/tests/PiAgentTests.swift scripts/tests/AntigravityTests.swift scripts/tests/ClaudeCodeTests.swift
+git commit -m "fix(tests): 修掉 0..<(count-1) 在 count 为 0 时的崩溃
+
+5 处同样的写法，count 为 0 时构成 0..<(-1)，在进入循环之前就 trap
+（Range requires lowerBound <= upperBound），导致套件中途退出 132、
+后续用例全部不执行。当前实际崩在 OpenVikingTests，另 4 处是 latent。
+
+断言语义未变：count 为 0 时循环本就不该执行。"
+```
+
+第二次 —— 本 task 的主体：
 
 ```bash
 git add ConversationClean/Core/Formatting.swift ConversationClean/DesignSystem/CCTheme.swift scripts/tests/FormattingTests.swift scripts/tests/TestSupport/TestRegistry.swift scripts/run_tests.sh
@@ -182,7 +202,9 @@ Fmt 是扫描器测试套件与 UI 的唯一耦合点（run_tests.sh glob 了 De
 而设计系统即将整体删除。它是纯格式化逻辑，搬进已在 glob 里的 Core/ 即可解耦。
 
 新增 FormattingTests 钉住 1024 进制这条关键属性：同一条 2411724 字节，
-1000 进制会打成 2.4 MB，1024 进制打成 2.3 MB——后者才与 du/df 一致。"
+1000 进制会打成 2.4 MB，1024 进制打成 2.3 MB——后者才与 du/df 一致。
+注册为 suite 第一项：套件中途曾崩溃，注册在末尾的用例执行不到，
+一个永不运行的测试比没有测试更危险。"
 ```
 
 ---
